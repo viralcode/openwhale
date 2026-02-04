@@ -210,6 +210,63 @@ These are the built-in capabilities the AI can use. You don't need to configure 
 
 ---
 
+## Memory System
+
+OpenWhale has a powerful memory system (inspired by OpenClaw) that remembers context across conversations and restarts.
+
+### Storage Location
+```
+~/.openwhale/memory/
+├── MEMORY.md           # Long-term facts
+├── 2024-01-15.md       # Daily notes  
+└── vector.db           # Vector embeddings for semantic search
+```
+
+### Slash Commands
+| Command | What it does |
+|---------|-------------|
+| `/memory` | View your memory files |
+| `/status` | Show session info |
+| `/reset` | Clear session, start fresh |
+| `/history` | Show recent messages |
+
+### Embeddings (Vector Search)
+
+OpenWhale supports **semantic search** over your memories — find related content by meaning, not just keywords.
+
+**Three embedding providers (just like OpenClaw):**
+
+1. **Local (no API key!)** — Uses `node-llama-cpp` with a 300MB GGUF model
+   - Downloads automatically on first use
+   - Runs entirely on your machine
+   - Model: `embeddinggemma-300M-Q8_0`
+
+2. **OpenAI** — If `OPENAI_API_KEY` is set
+   - Model: `text-embedding-3-small`
+   - Best accuracy, requires API key
+
+3. **Gemini** — If `GOOGLE_API_KEY` is set
+   - Model: `text-embedding-004`
+   - Good free alternative
+
+**Auto-selection order:** Local → OpenAI → Gemini
+
+### Using Memory via Chat
+
+Ask the AI to:
+- *"Remember that my favorite color is blue"* → Saves to MEMORY.md
+- *"Add to today's notes: meeting at 3pm"* → Saves to daily log
+- *"Search my memory for project ideas"* → Vector search
+- *"Index my memory files"* → Re-index for search
+- *"Show memory status"* → See embedding provider info
+
+### Session Persistence
+
+Conversations are saved to JSONL transcripts, so you can:
+- Continue where you left off after restarts
+- Keep context across multiple messages
+- Review past conversations
+
 ## Skills
 
 Skills are integrations with external services. They need API keys to work.

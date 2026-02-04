@@ -18,10 +18,17 @@ import { toolRegistry } from "../tools/index.js";
 import { skillRegistry } from "../skills/base.js";
 import type { ToolCallContext } from "../tools/base.js";
 import {
-    getOrCreateSession,
+    getOrCreateSessionLegacy,
     addMessage,
     clearSession,
 } from "./index.js";
+import {
+    getSessionContext,
+    recordUserMessage,
+    recordAssistantMessage,
+    finalizeExchange,
+} from "./session-manager.js";
+import { getMemoryContext } from "../memory/memory-files.js";
 
 // ============== TYPES ==============
 
@@ -206,8 +213,15 @@ export async function processMessage(
     dashboardMessages.push(userMsg);
     persistMessage(userMsg);
 
-    // Also store in session for cross-client persistence
-    getOrCreateSession(sessionId, "dashboard");
+    // Get or create persistent session with history
+    const sessionCtx = getSessionContext("dashboard", "dm", sessionId);
+    const { session } = sessionCtx;
+
+    // Record to JSONL transcript
+    recordUserMessage(session.sessionId, content);
+
+    // Also store in legacy session for compatibility
+    getOrCreateSessionLegacy(sessionId, "dashboard");
     addMessage(sessionId, "user", content);
 
     // Build tools list
@@ -295,6 +309,12 @@ Skill Tools: ${skillToolNames.length > 0 ? skillToolNames.join(", ") : "None con
 You are a fully authenticated AI assistant. All integrations are configured and ready.
 Do NOT apologize for previous errors or claim you lack access. Just execute the task.`;
 
+    // Load memory context and append to system prompt
+    const memoryContext = getMemoryContext();
+    const fullSystemPrompt = memoryContext
+        ? systemPrompt + "\n\n" + memoryContext
+        : systemPrompt;
+
     const context: ToolCallContext = {
         sessionId,
         workspaceDir: process.cwd(),
@@ -313,7 +333,7 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
             const response = await aiProvider!.complete({
                 model,
                 messages: msgHistory,
-                systemPrompt,
+                systemPrompt: fullSystemPrompt,
                 tools: tools as any,
                 maxTokens: 4096,
                 stream: false,
@@ -410,7 +430,11 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
         dashboardMessages.push(assistantMsg);
         persistMessage(assistantMsg);
 
-        // Store in session
+        // Record to JSONL transcript
+        recordAssistantMessage(session.sessionId, finalContent);
+        finalizeExchange(session.sessionKey);
+
+        // Store in legacy session
         addMessage(sessionId, "assistant", finalContent);
 
         return assistantMsg;

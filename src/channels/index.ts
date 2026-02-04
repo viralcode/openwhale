@@ -64,6 +64,11 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         const { createAnthropicProvider } = await import("../providers/anthropic.js");
         const { toolRegistry } = await import("../tools/index.js");
         const { skillRegistry } = await import("../skills/base.js");
+        const { getSessionContext, handleSlashCommand, recordUserMessage, recordAssistantMessage, finalizeExchange } = await import("../sessions/session-manager.js");
+        const { getMemoryContext, initializeMemory } = await import("../memory/memory-files.js");
+
+        // Initialize memory files on startup
+        initializeMemory();
 
         const authDir = join(homedir(), ".openwhale", "whatsapp-auth");
         const credsFile = join(authDir, "creds.json");
@@ -194,8 +199,26 @@ OR use 'code_exec' to run code directly without saving.
 For emails use gmail_*, for GitHub use github_*, for weather use weather_*.
 Current time: ${new Date().toLocaleString()}`;
 
+                            // Get or create persistent session
+                            const sessionCtx = getSessionContext("whatsapp", isGroup ? "group" : "dm", fromDigits);
+                            const { session, history, isNewSession } = sessionCtx;
+
+                            console.log(`[WhatsApp] Session: ${session.sessionId} (new: ${isNewSession}, history: ${history.length} msgs)`);
+
+                            // Handle slash commands
+                            const cmdResult = handleSlashCommand(msg.content, session);
+                            if (cmdResult.handled) {
+                                if (cmdResult.response) {
+                                    await sendWhatsAppMessage(fromRaw, cmdResult.response);
+                                }
+                                return;
+                            }
+
+                            // Record user message to transcript
+                            recordUserMessage(session.sessionId, msg.content);
+
                             const context = {
-                                sessionId: `whatsapp-${fromRaw}-${Date.now()}`,
+                                sessionId: session.sessionId,
                                 workspaceDir: process.cwd(),
                                 sandboxed: false,
                             };
@@ -203,8 +226,15 @@ Current time: ${new Date().toLocaleString()}`;
                             // Track last screenshot for sending via WhatsApp
                             let lastScreenshotBase64: string | null = null;
 
-                            // Simple string-based messages (works with Anthropic)
+                            // Load memory context for system prompt
+                            const memoryContext = getMemoryContext();
+                            const systemPromptWithMemory = memoryContext
+                                ? systemPrompt + "\n\n" + memoryContext
+                                : systemPrompt;
+
+                            // Build messages with conversation history
                             const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+                                ...history,  // Previous conversation
                                 { role: "user", content: msg.content },
                             ];
 
@@ -218,7 +248,7 @@ Current time: ${new Date().toLocaleString()}`;
                                 const response = await aiProvider.complete({
                                     model: currentModel,
                                     messages,
-                                    systemPrompt,
+                                    systemPrompt: systemPromptWithMemory,
                                     tools,
                                     maxTokens: 2000,
                                     stream: false,
@@ -321,6 +351,13 @@ Current time: ${new Date().toLocaleString()}`;
                             }
 
                             console.log(`[WhatsApp]   📤 Replying: "${reply.slice(0, 50)}..."`);
+
+                            // Record assistant reply to transcript
+                            recordAssistantMessage(session.sessionId, reply);
+
+                            // Finalize the exchange
+                            finalizeExchange(session.sessionKey);
+
                             await sendWhatsAppMessage(fromRaw, reply);
                         } catch (error: any) {
                             console.error(`[WhatsApp] AI error: ${error.message}`);

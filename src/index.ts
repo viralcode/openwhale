@@ -19,6 +19,7 @@ import { initializeChannels } from "./channels/index.js";
 import { toolRegistry } from "./tools/index.js";
 import { registerAllSkills, skillRegistry } from "./skills/index.js";
 import { apiRateLimiter, authRateLimiter } from "./security/rate-limit.js";
+import { initializeExtensionLoader } from "./tools/extension-loader.js";
 
 const log = createLogger("main");
 
@@ -44,6 +45,9 @@ async function main() {
 
     // Initialize channels (Telegram, Discord, Slack, etc.)
     await initializeChannels(db, config);
+
+    // Initialize extension loader (hot-loads persistent extensions)
+    await initializeExtensionLoader();
 
     // Log available tools
     log.info(`Tools registered: ${toolRegistry.list().length}`, {

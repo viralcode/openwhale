@@ -13,6 +13,7 @@ import { memoryTool } from "./memory.js";
 import { codeExecTool } from "./code-exec.js";
 import { screenshotTool } from "./screenshot.js";
 import { cameraTools } from "./camera.js";
+import { extendTool } from "./extend.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -27,6 +28,7 @@ toolRegistry.register(nodesTool);
 toolRegistry.register(memoryTool);
 toolRegistry.register(codeExecTool);
 toolRegistry.register(screenshotTool);
+toolRegistry.register(extendTool);
 
 // Register camera tools
 for (const tool of cameraTools) {
@@ -49,3 +51,4 @@ export { memoryTool } from "./memory.js";
 export { codeExecTool } from "./code-exec.js";
 export { screenshotTool } from "./screenshot.js";
 export { cameraTools } from "./camera.js";
+export { extendTool } from "./extend.js";
