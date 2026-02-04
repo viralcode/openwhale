@@ -129,18 +129,6 @@ Your session is saved in `~/.openwhale/whatsapp-auth/` so you don't need to scan
 5. Invite bot to your server using the OAuth2 URL generator
 6. Restart OpenWhale
 
-### Slack
-
-1. Create a Slack app at [api.slack.com](https://api.slack.com/apps)
-2. Add Bot Token Scopes: `chat:write`, `app_mentions:read`, `im:history`
-3. Install to workspace and copy the Bot OAuth Token
-4. Add to `.env`:
-   ```bash
-   SLACK_BOT_TOKEN=xoxb-your-token
-   SLACK_SIGNING_SECRET=your-signing-secret
-   ```
-5. Set up Event Subscriptions pointing to `http://your-server/api/slack/events`
-
 ---
 
 ## Tools
