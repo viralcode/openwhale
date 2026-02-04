@@ -1,7 +1,16 @@
 /**
- * Session Management - User sessions, history, and token tracking
+ * Session Management - Persistent User Sessions with JSONL Transcripts
+ * 
+ * This module provides OpenClaw-style session persistence for all channels.
+ * Sessions are stored in ~/.openwhale/sessions/ with JSONL transcripts.
  */
 
+// Re-export new persistent session management
+export * from "./session-store.js";
+export * from "./transcript.js";
+export * from "./session-manager.js";
+
+// Legacy compatibility exports (for existing code)
 export interface Session {
     id: string;
     userId: string;
@@ -20,14 +29,14 @@ export interface SessionMessage {
     tokenCount?: number;
 }
 
-// In-memory session storage
+// Legacy in-memory session storage (kept for backward compatibility)
 const sessions = new Map<string, Session>();
 const sessionMessages = new Map<string, SessionMessage[]>();
 
 /**
- * Create or get a session for a user
+ * Create or get a session for a user (legacy API - now wraps persistent sessions)
  */
-export function getOrCreateSession(userId: string, channel: string): Session {
+export function getOrCreateSessionLegacy(userId: string, channel: string): Session {
     const existingId = `${channel}_${userId}`;
 
     let session = sessions.get(existingId);
@@ -44,21 +53,14 @@ export function getOrCreateSession(userId: string, channel: string): Session {
         };
         sessions.set(existingId, session);
         sessionMessages.set(existingId, []);
-        console.log(`[Sessions] Created: ${existingId}`);
+        console.log(`[Sessions] Created in-memory: ${existingId}`);
     }
 
     return session;
 }
 
 /**
- * Get a session by ID
- */
-export function getSession(id: string): Session | undefined {
-    return sessions.get(id);
-}
-
-/**
- * Add a message to session history
+ * Add a message to session history (legacy)
  */
 export function addMessage(
     sessionId: string,
@@ -87,7 +89,7 @@ export function addMessage(
 }
 
 /**
- * Get message history for a session
+ * Get message history for a session (legacy)
  */
 export function getMessages(sessionId: string, limit?: number): SessionMessage[] {
     const messages = sessionMessages.get(sessionId) || [];
@@ -100,7 +102,7 @@ export function getMessages(sessionId: string, limit?: number): SessionMessage[]
 }
 
 /**
- * Clear session history
+ * Clear session history (legacy)
  */
 export function clearSession(sessionId: string): boolean {
     const session = sessions.get(sessionId);
@@ -115,7 +117,7 @@ export function clearSession(sessionId: string): boolean {
 }
 
 /**
- * Close a session completely
+ * Close a session completely (legacy)
  */
 export function closeSession(sessionId: string): boolean {
     sessions.delete(sessionId);
@@ -124,7 +126,7 @@ export function closeSession(sessionId: string): boolean {
 }
 
 /**
- * List active sessions
+ * List active sessions (legacy)
  */
 export function listActiveSessions(maxAgeMinutes?: number): Session[] {
     const cutoff = maxAgeMinutes
@@ -137,7 +139,7 @@ export function listActiveSessions(maxAgeMinutes?: number): Session[] {
 }
 
 /**
- * Update session metadata
+ * Update session metadata (legacy)
  */
 export function updateSessionMetadata(
     sessionId: string,
@@ -150,7 +152,7 @@ export function updateSessionMetadata(
 }
 
 /**
- * Get session summary
+ * Get session summary (legacy)
  */
 export function getSessionSummary(sessionId: string): string | null {
     const session = sessions.get(sessionId);
@@ -172,7 +174,7 @@ export function getSessionSummary(sessionId: string): string | null {
 }
 
 /**
- * Get all messages for a specific channel (whatsapp, telegram, discord, etc.)
+ * Get all messages for a specific channel (legacy)
  */
 export function getMessagesByChannel(channel: string): Array<{ sessionId: string; messages: SessionMessage[] }> {
     const result: Array<{ sessionId: string; messages: SessionMessage[] }> = [];
@@ -190,7 +192,7 @@ export function getMessagesByChannel(channel: string): Array<{ sessionId: string
 }
 
 /**
- * Get flat list of all messages for a channel with metadata
+ * Get flat list of all messages for a channel with metadata (legacy)
  */
 export function getChannelHistory(channel: string): Array<SessionMessage & { sessionId: string; userId: string }> {
     const result: Array<SessionMessage & { sessionId: string; userId: string }> = [];

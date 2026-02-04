@@ -37,29 +37,81 @@ Think of it as Claude, GPT-4, or DeepSeek with arms and legs.
 
 ## Getting Started
 
+### Prerequisites
+
+- **Node.js 22+** — Required for the runtime
+- **pnpm** — Recommended package manager (handles native modules better)
+
+```bash
+# Install pnpm if you don't have it
+npm install -g pnpm
+```
+
+### Quick Start
+
 ```bash
 # Clone it
 git clone https://github.com/viralcode/openwhale.git
 cd openwhale
 
-# Install dependencies
-npm install
+# Install dependencies (use pnpm, not npm!)
+pnpm install
+
+# Allow native modules to build (important!)
+pnpm approve-builds
 
 # Set up your environment
 cp .env.example .env
 # Add your API keys to .env
 
 # Run it
-npm run dev
+pnpm run dev
 ```
 
-Or if you're a Docker person:
+### Docker (Recommended for Production)
 
 ```bash
 docker-compose up -d
 ```
 
 That's it. Hit `http://localhost:18789/health` to make sure it's alive.
+
+---
+
+## Troubleshooting
+
+### `better-sqlite3` bindings error
+
+```
+Error: Could not locate the bindings file.
+```
+
+This happens when using `npm` instead of `pnpm`, or when native modules weren't built properly.
+
+**Fix:**
+```bash
+# Remove existing node_modules
+rm -rf node_modules package-lock.json
+
+# Use pnpm instead
+pnpm install
+pnpm approve-builds   # Select all packages when prompted
+pnpm run dev
+```
+
+### Docker build fails with "pnpm-lock.yaml is absent"
+
+Make sure you pulled the latest version of the repository which includes the lockfile:
+```bash
+git pull origin main
+```
+
+### Native module build errors on macOS
+
+Some packages require Xcode Command Line Tools:
+```bash
+xcode-select --install
+```
 
 ---
 
@@ -158,7 +210,124 @@ These are the built-in capabilities the AI can use. You don't need to configure 
 
 ---
 
-## Skills
+## Memory System
+
+OpenWhale has a powerful memory system (inspired by OpenClaw) that remembers context across conversations and restarts.
+
+### Storage Location
+```
+~/.openwhale/memory/
+├── MEMORY.md           # Long-term facts
+├── 2024-01-15.md       # Daily notes  
+└── vector.db           # Vector embeddings for semantic search
+```
+
+### Slash Commands
+| Command | What it does |
+|---------|-------------|
+| `/memory` | View your memory files |
+| `/status` | Show session info |
+| `/reset` | Clear session, start fresh |
+| `/history` | Show recent messages |
+
+### Embeddings (Vector Search)
+
+OpenWhale supports **semantic search** over your memories — find related content by meaning, not just keywords.
+
+**Three embedding providers (just like OpenClaw):**
+
+1. **Local (no API key!)** — Uses `node-llama-cpp` with a 300MB GGUF model
+   - Downloads automatically on first use
+   - Runs entirely on your machine
+   - Model: `embeddinggemma-300M-Q8_0`
+
+2. **OpenAI** — If `OPENAI_API_KEY` is set
+   - Model: `text-embedding-3-small`
+   - Best accuracy, requires API key
+
+3. **Gemini** — If `GOOGLE_API_KEY` is set
+   - Model: `text-embedding-004`
+   - Good free alternative
+
+**Auto-selection order:** Local → OpenAI → Gemini
+
+### Using Memory via Chat
+
+Ask the AI to:
+- *"Remember that my favorite color is blue"* → Saves to MEMORY.md
+- *"Add to today's notes: meeting at 3pm"* → Saves to daily log
+- *"Search my memory for project ideas"* → Vector search
+- *"Index my memory files"* → Re-index for search
+- *"Show memory status"* → See embedding provider info
+
+### Session Persistence
+
+Conversations are saved to JSONL transcripts, so you can:
+- Continue where you left off after restarts
+- Keep context across multiple messages
+- Review past conversations
+
+---
+
+## Extensions
+
+OpenWhale can extend itself! Create custom automations via chat that persist and run on schedules.
+
+### Storage
+Extensions are stored as TypeScript files in `~/.openwhale/extensions/`
+
+### Creating Extensions via Chat
+
+Just ask the AI:
+- *"Create an extension that reminds me to drink water every hour"*
+- *"Make an extension that checks Bitcoin price at 9 AM and sends it to WhatsApp"*
+- *"Create a daily standup reminder extension"*
+
+### Extension Actions
+
+| Action | What it does |
+|--------|-------------|
+| `create` | Create a new extension with code and optional schedule |
+| `list` | List all extensions |
+| `get` | View an extension's code |
+| `update` | Modify an extension |
+| `delete` | Remove an extension |
+| `enable/disable` | Toggle an extension |
+| `run` | Execute an extension manually |
+
+### Extension Structure
+
+Each extension has:
+```json
+{
+  "name": "daily_reminder",
+  "description": "Sends a daily reminder",
+  "version": "1.0.0",
+  "enabled": true,
+  "schedule": "0 9 * * *",
+  "channels": ["whatsapp"]
+}
+```
+
+### Scheduled Extensions
+
+Use cron expressions for scheduled execution:
+- `0 9 * * *` — Daily at 9 AM
+- `0 */2 * * *` — Every 2 hours
+- `0 9 * * 1-5` — Weekdays at 9 AM
+
+### Example
+
+```javascript
+// Extension code (runs daily)
+const response = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+const data = await response.json();
+return `Bitcoin price: $${data.data.amount}`;
+```
+
+Extensions automatically send their return value to configured channels!
+
+---
 
 Skills are integrations with external services. They need API keys to work.
 
