@@ -37,29 +37,81 @@ Think of it as Claude, GPT-4, or DeepSeek with arms and legs.
 
 ## Getting Started
 
+### Prerequisites
+
+- **Node.js 22+** — Required for the runtime
+- **pnpm** — Recommended package manager (handles native modules better)
+
+```bash
+# Install pnpm if you don't have it
+npm install -g pnpm
+```
+
+### Quick Start
+
 ```bash
 # Clone it
 git clone https://github.com/viralcode/openwhale.git
 cd openwhale
 
-# Install dependencies
-npm install
+# Install dependencies (use pnpm, not npm!)
+pnpm install
+
+# Allow native modules to build (important!)
+pnpm approve-builds
 
 # Set up your environment
 cp .env.example .env
 # Add your API keys to .env
 
 # Run it
-npm run dev
+pnpm run dev
 ```
 
-Or if you're a Docker person:
+### Docker (Recommended for Production)
 
 ```bash
 docker-compose up -d
 ```
 
 That's it. Hit `http://localhost:18789/health` to make sure it's alive.
+
+---
+
+## Troubleshooting
+
+### `better-sqlite3` bindings error
+
+```
+Error: Could not locate the bindings file.
+```
+
+This happens when using `npm` instead of `pnpm`, or when native modules weren't built properly.
+
+**Fix:**
+```bash
+# Remove existing node_modules
+rm -rf node_modules package-lock.json
+
+# Use pnpm instead
+pnpm install
+pnpm approve-builds   # Select all packages when prompted
+pnpm run dev
+```
+
+### Docker build fails with "pnpm-lock.yaml is absent"
+
+Make sure you pulled the latest version of the repository which includes the lockfile:
+```bash
+git pull origin main
+```
+
+### Native module build errors on macOS
+
+Some packages require Xcode Command Line Tools:
+```bash
+xcode-select --install
+```
 
 ---
 
