@@ -63,6 +63,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         const { markMessageProcessed } = await import("../db/message-dedupe.js");
         const { createAnthropicProvider } = await import("../providers/anthropic.js");
         const { toolRegistry } = await import("../tools/index.js");
+        const { skillRegistry } = await import("../skills/base.js");
 
         const authDir = join(homedir(), ".openwhale", "whatsapp-auth");
         const credsFile = join(authDir, "creds.json");
@@ -145,15 +146,32 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                                 },
                             });
 
+                            // Add skill tools (gmail, github, weather, etc.)
+                            const skillTools = skillRegistry.getAllTools();
+                            for (const skillTool of skillTools) {
+                                tools.push({
+                                    name: skillTool.name,
+                                    description: skillTool.description,
+                                    parameters: skillTool.parameters || { type: "object", properties: {}, required: [] },
+                                });
+                            }
+
+                            // Build skill tool names for system prompt
+                            const skillToolNames = skillTools.map(t => t.name);
+
                             const systemPrompt = `You are OpenWhale, an AI assistant responding via WhatsApp.
-Available tools: exec (run shell commands), file, browser, screenshot, code_exec, web_fetch, and more.
+You have FULL access to all tools. You are authenticated and connected.
 User's number: ${fromRaw}. Keep responses concise.
+
+Available base tools: exec, file, browser, screenshot, code_exec, web_fetch, memory
+${skillToolNames.length > 0 ? `Available skill tools: ${skillToolNames.join(", ")}` : ""}
 
 IMPORTANT: To send a screenshot to the user:
 1. First use the 'screenshot' tool to capture the screen
 2. Then immediately use 'whatsapp_send_image' with a caption to send it
 
-When asked to run commands, take screenshots, etc - use the appropriate tool immediately.
+When asked about emails, use gmail tools. When asked about GitHub, use github tools.
+When asked about weather, use weather tools. Use the appropriate tool immediately.
 Current time: ${new Date().toLocaleString()}`;
 
                             const context = {
@@ -223,18 +241,35 @@ Current time: ${new Date().toLocaleString()}`;
                                             continue;
                                         }
 
-                                        // Execute regular tool
-                                        const result = await toolRegistry.execute(toolCall.name, toolCall.arguments, context);
+                                        // Try regular tool first
+                                        const baseTool = allTools.find(t => t.name === toolCall.name);
 
-                                        // Special case: screenshot - store base64 for sending
-                                        if (toolCall.name === "screenshot" && result.metadata?.base64) {
-                                            lastScreenshotBase64 = result.metadata.base64 as string;
-                                            console.log(`[WhatsApp]   📸 Screenshot captured (${lastScreenshotBase64.length} chars)`);
-                                            toolResults.push({ name: toolCall.name, result: "Screenshot captured! Now use whatsapp_send_image to send it." });
+                                        if (baseTool) {
+                                            // Execute regular tool
+                                            const result = await toolRegistry.execute(toolCall.name, toolCall.arguments, context);
+
+                                            // Special case: screenshot - store base64 for sending
+                                            if (toolCall.name === "screenshot" && result.metadata?.base64) {
+                                                lastScreenshotBase64 = result.metadata.base64 as string;
+                                                console.log(`[WhatsApp]   📸 Screenshot captured (${lastScreenshotBase64.length} chars)`);
+                                                toolResults.push({ name: toolCall.name, result: "Screenshot captured! Now use whatsapp_send_image to send it." });
+                                            } else {
+                                                const resultStr = (result.content || result.error || "").slice(0, 2000);
+                                                toolResults.push({ name: toolCall.name, result: resultStr });
+                                                console.log(`[WhatsApp]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+                                            }
                                         } else {
-                                            const resultStr = (result.content || result.error || "").slice(0, 2000);
-                                            toolResults.push({ name: toolCall.name, result: resultStr });
-                                            console.log(`[WhatsApp]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+                                            // Try skill tool
+                                            const skillTool = skillTools.find(t => t.name === toolCall.name);
+                                            if (skillTool) {
+                                                const result = await skillTool.execute(toolCall.arguments as Record<string, unknown>, context);
+                                                const resultStr = (result.content || result.error || "").slice(0, 2000);
+                                                toolResults.push({ name: toolCall.name, result: resultStr });
+                                                console.log(`[WhatsApp]   ✅ ${toolCall.name} (skill): ${resultStr.slice(0, 100)}...`);
+                                            } else {
+                                                toolResults.push({ name: toolCall.name, result: `Unknown tool: ${toolCall.name}` });
+                                                console.log(`[WhatsApp]   ❌ Unknown tool: ${toolCall.name}`);
+                                            }
                                         }
                                     } catch (err) {
                                         const errMsg = err instanceof Error ? err.message : String(err);
