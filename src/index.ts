@@ -11,7 +11,7 @@ import { createAuthRoutes } from "./gateway/routes/auth.js";
 import { createAgentRoutes } from "./gateway/routes/agent.js";
 import { createProviderRoutes } from "./gateway/routes/providers.js";
 import { createAdminRoutes } from "./gateway/routes/admin.js";
-import { createDashboardRoutes } from "./dashboard/routes.js";
+import { createDashboardRoutes, loadConfigsFromDB } from "./dashboard/routes.js";
 import { loadConfig } from "./config/loader.js";
 import { createLogger } from "./utils/logger.js";
 import { initializeProviders } from "./providers/index.js";
@@ -33,10 +33,13 @@ async function main() {
     const db = createDatabase(config.database);
     log.info("Database connected", { type: config.database.type });
 
+    // Load skill/provider configs from database FIRST (sets env vars)
+    await loadConfigsFromDB(db);
+
     // Initialize providers
     initializeProviders();
 
-    // Register all skills - BEFORE channels and dashboard so env vars can be set
+    // Register all skills - env vars should now be set from loadConfigsFromDB
     registerAllSkills();
 
     // Initialize channels (Telegram, Discord, Slack, etc.)

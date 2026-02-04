@@ -148,6 +148,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
 
                             // Add skill tools (gmail, github, weather, etc.)
                             const skillTools = skillRegistry.getAllTools();
+                            console.log(`[WhatsApp] Skill tools available: ${skillTools.length} (${skillTools.map(t => t.name).join(", ")})`);
                             for (const skillTool of skillTools) {
                                 tools.push({
                                     name: skillTool.name,

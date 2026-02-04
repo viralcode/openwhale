@@ -37,7 +37,7 @@ const channelConfigs = new Map<string, { enabled: boolean; connected: boolean; s
 
 // ============ DATABASE PERSISTENCE HELPERS ============
 
-async function loadConfigsFromDB(db: DrizzleDB) {
+export async function loadConfigsFromDB(db: DrizzleDB) {
     try {
         // Load providers
         const providers = await db.select().from(providerConfig);
