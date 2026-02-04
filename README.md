@@ -355,5 +355,5 @@ MIT — do whatever you want with it.
 ---
 
 <p align="center">
-  <sub>Made with ☕ and questionable sleep schedules</sub>
+  Built with ❤️ by <a href="https://jijojohn.me">Jijo John</a>
 </p>
