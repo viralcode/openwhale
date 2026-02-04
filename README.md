@@ -12,6 +12,12 @@
   Built for folks who want their AI to actually <em>do things</em> — not just chat.
 </p>
 
+<p align="center">
+  <strong>🚧 Active Development</strong> — This project is being actively built. Expect frequent updates!<br/>
+  <strong>🌐 OpenWhale Website</strong> — Coming soon<br/>
+  <strong>☁️ OpenWhale Hosting</strong> — Managed hosting coming soon
+</p>
+
 ---
 
 ## What is this?
