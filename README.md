@@ -267,7 +267,67 @@ Conversations are saved to JSONL transcripts, so you can:
 - Keep context across multiple messages
 - Review past conversations
 
-## Skills
+---
+
+## Extensions
+
+OpenWhale can extend itself! Create custom automations via chat that persist and run on schedules.
+
+### Storage
+Extensions are stored as TypeScript files in `~/.openwhale/extensions/`
+
+### Creating Extensions via Chat
+
+Just ask the AI:
+- *"Create an extension that reminds me to drink water every hour"*
+- *"Make an extension that checks Bitcoin price at 9 AM and sends it to WhatsApp"*
+- *"Create a daily standup reminder extension"*
+
+### Extension Actions
+
+| Action | What it does |
+|--------|-------------|
+| `create` | Create a new extension with code and optional schedule |
+| `list` | List all extensions |
+| `get` | View an extension's code |
+| `update` | Modify an extension |
+| `delete` | Remove an extension |
+| `enable/disable` | Toggle an extension |
+| `run` | Execute an extension manually |
+
+### Extension Structure
+
+Each extension has:
+```json
+{
+  "name": "daily_reminder",
+  "description": "Sends a daily reminder",
+  "version": "1.0.0",
+  "enabled": true,
+  "schedule": "0 9 * * *",
+  "channels": ["whatsapp"]
+}
+```
+
+### Scheduled Extensions
+
+Use cron expressions for scheduled execution:
+- `0 9 * * *` — Daily at 9 AM
+- `0 */2 * * *` — Every 2 hours
+- `0 9 * * 1-5` — Weekdays at 9 AM
+
+### Example
+
+```javascript
+// Extension code (runs daily)
+const response = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot');
+const data = await response.json();
+return `Bitcoin price: $${data.data.amount}`;
+```
+
+Extensions automatically send their return value to configured channels!
+
+---
 
 Skills are integrations with external services. They need API keys to work.
 
