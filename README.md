@@ -23,15 +23,17 @@ Think of it as Claude, GPT-4, or DeepSeek with arms and legs.
 ## Why OpenWhale?
 
 - **It's agentic** — not just a chatbot. It can use tools, run commands, send messages, and interact with the real world.
-- **Use any model** — Claude, GPT-4, DeepSeek, Groq, Ollama, you name it. Switch whenever you want.
+- **Use any model** — Claude, GPT-4, DeepSeek, Groq, Gemini, Ollama. Switch whenever you want.
 - **Runs anywhere** — Docker, bare metal, your Raspberry Pi. Whatever works for you.
 - **Actually secure** — JWT auth, API keys, rate limiting, audit logs. The boring stuff that matters.
+
+---
 
 ## Getting Started
 
 ```bash
 # Clone it
-git clone https://github.com/yourname/openwhale.git
+git clone https://github.com/viralcode/openwhale.git
 cd openwhale
 
 # Install dependencies
@@ -53,48 +55,206 @@ docker-compose up -d
 
 That's it. Hit `http://localhost:18789/health` to make sure it's alive.
 
-## What can it do?
+---
 
-### Chat with any model
-Talk to Claude, GPT-4, DeepSeek, or Groq through one unified interface. Switch models mid-conversation if you want.
+## Dashboard
 
-### Message people for you
-Connect WhatsApp, Telegram, Discord, or Slack. Have the AI respond to messages, send notifications, or just handle your DMs while you're busy.
+OpenWhale comes with a web dashboard for managing everything without touching the terminal.
 
-### Use real tools
-- 📁 Read and write files
-- 💻 Execute code and shell commands
-- 🌐 Browse the web and take screenshots
-- 📅 Manage calendars and tasks
-- 🎵 Control Spotify
-- 📝 Interact with Notion, Trello, GitHub
-- 🔐 Fetch secrets from 1Password
-- ...and more
+**Access it at:** `http://localhost:18789/dashboard`
 
-### Skills system
-Modular skills for different services. GitHub, Gmail, Calendar, Weather — each skill handles authentication and gives the AI new abilities.
+### What you can do from the dashboard:
 
-## Configuration
+- **Chat** — Talk to the AI with full tool support
+- **Connect channels** — Link WhatsApp, Telegram, Discord by scanning QR codes or adding tokens
+- **Manage providers** — Add API keys for Claude, GPT-4, Gemini, etc.
+- **Configure skills** — Enable GitHub, Notion, Weather, Google services
+- **View message history** — See all conversations across channels
+- **Monitor system** — Check connected channels, active sessions, audit logs
 
-Put your API keys in `.env`:
+### Setup Wizard
+
+First time running? The dashboard walks you through:
+1. Checking prerequisites (Node, Python, FFmpeg)
+2. Adding your AI provider keys
+3. Connecting messaging channels
+4. Enabling skills
+
+---
+
+## Connecting Channels
+
+OpenWhale can send and receive messages through multiple platforms. Here's how to set them up:
+
+### WhatsApp
+
+The easiest one — works with your personal WhatsApp account.
+
+**Via Dashboard:**
+1. Go to `http://localhost:18789/dashboard`
+2. Navigate to Channels → WhatsApp
+3. Click "Connect"
+4. Scan the QR code with your phone (WhatsApp → Linked Devices → Link a Device)
+5. Done! Messages to your number will be handled by the AI
+
+**Via CLI:**
+```bash
+npm run cli whatsapp login    # Shows QR code in terminal
+npm run cli whatsapp status   # Check if connected
+npm run cli whatsapp logout   # Disconnect
+```
+
+Your session is saved in `~/.openwhale/whatsapp-auth/` so you don't need to scan again.
+
+### Telegram
+
+1. Create a bot with [@BotFather](https://t.me/botfather) on Telegram
+2. Copy the bot token
+3. Add to `.env`:
+   ```bash
+   TELEGRAM_BOT_TOKEN=your-bot-token
+   ```
+4. Restart OpenWhale
+5. Message your bot — the AI will respond
+
+### Discord
+
+1. Create a bot at [Discord Developer Portal](https://discord.com/developers/applications)
+2. Enable "Message Content Intent" under Bot settings
+3. Copy the bot token
+4. Add to `.env`:
+   ```bash
+   DISCORD_BOT_TOKEN=your-bot-token
+   ```
+5. Invite bot to your server using the OAuth2 URL generator
+6. Restart OpenWhale
+
+### Slack
+
+1. Create a Slack app at [api.slack.com](https://api.slack.com/apps)
+2. Add Bot Token Scopes: `chat:write`, `app_mentions:read`, `im:history`
+3. Install to workspace and copy the Bot OAuth Token
+4. Add to `.env`:
+   ```bash
+   SLACK_BOT_TOKEN=xoxb-your-token
+   SLACK_SIGNING_SECRET=your-signing-secret
+   ```
+5. Set up Event Subscriptions pointing to `http://your-server/api/slack/events`
+
+---
+
+## Tools
+
+These are the built-in capabilities the AI can use. You don't need to configure anything — they just work.
+
+| Tool | What it does |
+|------|-------------|
+| **exec** | Run shell commands on your machine |
+| **file** | Read, write, list files and directories |
+| **browser** | Open URLs, take screenshots, interact with web pages |
+| **screenshot** | Capture your screen or specific windows |
+| **code_exec** | Run Python/JavaScript code in a sandbox |
+| **web_fetch** | Fetch content from URLs (APIs, web pages) |
+| **memory** | Remember things across conversations |
+| **cron** | Schedule tasks to run at specific times |
+| **canvas** | Generate and manipulate images |
+| **tts** | Text-to-speech (say things out loud) |
+| **image** | Analyze and process images |
+| **nodes** | Work with structured data and knowledge graphs |
+
+---
+
+## Skills
+
+Skills are integrations with external services. They need API keys to work.
+
+### GitHub
+Access repositories, issues, pull requests.
+```bash
+GITHUB_TOKEN=ghp_your_token
+```
+Create a token at [github.com/settings/tokens](https://github.com/settings/tokens) with `repo` scope.
+
+### Weather
+Current conditions and forecasts.
+```bash
+OPENWEATHERMAP_API_KEY=your_key
+```
+Get a free key at [openweathermap.org](https://openweathermap.org/api).
+
+### Notion
+Manage pages and databases.
+```bash
+NOTION_API_KEY=secret_your_key
+```
+Create an integration at [notion.so/my-integrations](https://www.notion.so/my-integrations).
+
+### Google Services
+Calendar, Gmail, Drive, and Tasks — all in one.
+
+1. Create a project in [Google Cloud Console](https://console.cloud.google.com/)
+2. Enable Calendar, Gmail, Drive, and Tasks APIs
+3. Create OAuth credentials (Desktop app)
+4. Download `credentials.json` to `~/.openwhale/google/credentials.json`
+5. Run OpenWhale and visit the Google auth URL shown in logs
+6. Authorize access — tokens are saved automatically
+
+### 1Password
+Securely fetch passwords and secrets.
+```bash
+OP_CONNECT_TOKEN=your_connect_token
+OP_CONNECT_HOST=http://localhost:8080
+```
+Requires [1Password Connect](https://developer.1password.com/docs/connect/) server.
+
+### Apple Notes & Reminders (macOS only)
+Works automatically on Mac — no config needed. The AI can read/write your Notes and Reminders.
+
+### Spotify
+Control playback, search music, manage playlists.
+```bash
+SPOTIFY_CLIENT_ID=your_client_id
+SPOTIFY_CLIENT_SECRET=your_client_secret
+```
+Create an app at [developer.spotify.com](https://developer.spotify.com/dashboard).
+
+### Trello
+Manage boards, lists, and cards.
+```bash
+TRELLO_API_KEY=your_key
+TRELLO_TOKEN=your_token
+```
+Get keys at [trello.com/app-key](https://trello.com/app-key).
+
+---
+
+## AI Providers
+
+Add the keys for whichever AI services you want to use. You can use multiple.
 
 ```bash
-# Pick your AI providers
+# Anthropic Claude (recommended)
 ANTHROPIC_API_KEY=sk-ant-...
+
+# OpenAI GPT-4
 OPENAI_API_KEY=sk-...
-DEEPSEEK_API_KEY=...
-GROQ_API_KEY=...
+
+# Google Gemini
 GOOGLE_API_KEY=...
 
-# Auth
-JWT_SECRET=your-secret-here-at-least-32-characters
+# DeepSeek
+DEEPSEEK_API_KEY=...
 
-# Database (SQLite works great for starters)
-DATABASE_URL=file:./data/openwhale.db
+# Groq (fast inference)
+GROQ_API_KEY=...
 
-# Optional: Use PostgreSQL instead
-# DATABASE_URL=postgresql://user:pass@localhost:5432/openwhale
+# Ollama (local models, no key needed)
+OLLAMA_HOST=http://localhost:11434
 ```
+
+Switch models on the fly in the dashboard or CLI.
+
+---
 
 ## CLI
 
@@ -108,11 +268,21 @@ npm run chat
 npm run cli providers  # See which AI providers are connected
 npm run cli tools      # List available tools
 npm run cli channels   # Check messaging channels
+npm run cli skills     # See skill status
 
-# Connect WhatsApp
-npm run cli whatsapp login   # Scan the QR code
+# WhatsApp management
+npm run cli whatsapp login   # Scan QR code
 npm run cli whatsapp status  # Check connection
+npm run cli whatsapp logout  # Disconnect
+
+# Background daemon (keeps running after terminal closes)
+npm run cli daemon install   # Install as system service
+npm run cli daemon start     # Start daemon
+npm run cli daemon status    # Check if running
+npm run cli daemon stop      # Stop daemon
 ```
+
+---
 
 ## API
 
@@ -126,25 +296,65 @@ curl -X POST http://localhost:18789/api/agent/chat/completions \
   -d '{"messages": [{"role": "user", "content": "Hello!"}]}'
 ```
 
-There's also a dashboard at `http://localhost:18789/dashboard` for managing users, API keys, and seeing what's going on.
+### Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /health` | Health check |
+| `POST /auth/register` | Create account |
+| `POST /auth/login` | Get access token |
+| `POST /api/agent/chat/completions` | Chat (with tools) |
+| `GET /api/providers` | List AI providers |
+| `GET /api/channels` | List channels |
+| `GET /dashboard` | Web dashboard |
+
+---
 
 ## Project Structure
 
 ```
 src/
-├── agents/      # Multi-agent routing
+├── agents/      # Multi-agent routing and orchestration
 ├── auth/        # JWT, API keys, sessions
-├── channels/    # WhatsApp, Telegram, Discord, Slack
+├── channels/    # WhatsApp, Telegram, Discord, Slack adapters
 ├── cli.ts       # Interactive terminal interface
+├── daemon/      # Background service (launchd on macOS)
 ├── dashboard/   # Web admin panel
-├── db/          # SQLite/PostgreSQL with Drizzle
+├── db/          # SQLite/PostgreSQL with Drizzle ORM
 ├── gateway/     # Hono-based HTTP API
-├── providers/   # Anthropic, OpenAI, DeepSeek, Groq, Ollama
-├── security/    # Rate limiting, RBAC, audit logs
-├── skills/      # GitHub, Notion, Spotify, Calendar, etc.
+├── integrations/# Google APIs (Calendar, Gmail, Drive, Tasks)
+├── providers/   # Anthropic, OpenAI, Google, Groq, Ollama
+├── security/    # Rate limiting, RBAC, audit logs, sandboxing
 ├── sessions/    # Persistent conversation history
+├── skills/      # GitHub, Notion, Spotify, Weather, Apple, etc.
 └── tools/       # File, browser, code execution, screenshots
 ```
+
+---
+
+## Configuration
+
+All settings go in `.env`:
+
+```bash
+# Server
+GATEWAY_PORT=18789
+GATEWAY_HOST=0.0.0.0
+
+# Database (SQLite by default)
+DATABASE_URL=file:./data/openwhale.db
+# Or PostgreSQL:
+# DATABASE_URL=postgresql://user:pass@localhost:5432/openwhale
+
+# Security — CHANGE THIS!
+JWT_SECRET=change-me-to-something-random-at-least-32-chars
+SECURITY_MODE=local  # or 'strict' for production
+
+# Logging
+LOG_LEVEL=info
+```
+
+---
 
 ## Contributing
 
