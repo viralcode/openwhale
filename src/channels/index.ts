@@ -132,9 +132,26 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                                 parameters: toolRegistry.zodToJsonSchema(tool.parameters),
                             }));
 
+                            // Add whatsapp_send_image tool for sending screenshots
+                            tools.push({
+                                name: "whatsapp_send_image",
+                                description: "Send an image via WhatsApp. After taking a screenshot, call this to send it to the user.",
+                                parameters: {
+                                    type: "object",
+                                    properties: {
+                                        caption: { type: "string", description: "Caption for the image" },
+                                    },
+                                    required: [],
+                                },
+                            });
+
                             const systemPrompt = `You are OpenWhale, an AI assistant responding via WhatsApp.
 Available tools: exec (run shell commands), file, browser, screenshot, code_exec, web_fetch, and more.
 User's number: ${fromRaw}. Keep responses concise.
+
+IMPORTANT: To send a screenshot to the user:
+1. First use the 'screenshot' tool to capture the screen
+2. Then immediately use 'whatsapp_send_image' with a caption to send it
 
 When asked to run commands, take screenshots, etc - use the appropriate tool immediately.
 Current time: ${new Date().toLocaleString()}`;
@@ -144,6 +161,9 @@ Current time: ${new Date().toLocaleString()}`;
                                 workspaceDir: process.cwd(),
                                 sandboxed: false,
                             };
+
+                            // Track last screenshot for sending via WhatsApp
+                            let lastScreenshotBase64: string | null = null;
 
                             // Simple string-based messages (works with Anthropic)
                             const messages: Array<{ role: "user" | "assistant"; content: string }> = [
@@ -181,10 +201,41 @@ Current time: ${new Date().toLocaleString()}`;
                                     console.log(`[WhatsApp]   🔧 Tool: ${toolCall.name}`);
 
                                     try {
+                                        // Special case: whatsapp_send_image
+                                        if (toolCall.name === "whatsapp_send_image") {
+                                            if (lastScreenshotBase64) {
+                                                const imageBuffer = Buffer.from(lastScreenshotBase64, "base64");
+                                                console.log(`[WhatsApp]   📸 Sending screenshot (${imageBuffer.length} bytes)`);
+                                                const args = toolCall.arguments as { caption?: string };
+                                                const result = await sendWhatsAppMessage(fromRaw, {
+                                                    image: imageBuffer,
+                                                    caption: args.caption || "Screenshot from OpenWhale",
+                                                });
+                                                if (result.success) {
+                                                    toolResults.push({ name: toolCall.name, result: "Screenshot sent successfully!" });
+                                                    console.log(`[WhatsApp]   ✅ Screenshot sent!`);
+                                                } else {
+                                                    toolResults.push({ name: toolCall.name, result: `Error: ${result.error}` });
+                                                }
+                                            } else {
+                                                toolResults.push({ name: toolCall.name, result: "No screenshot available. Take a screenshot first." });
+                                            }
+                                            continue;
+                                        }
+
+                                        // Execute regular tool
                                         const result = await toolRegistry.execute(toolCall.name, toolCall.arguments, context);
-                                        const resultStr = (result.content || result.error || "").slice(0, 2000);
-                                        toolResults.push({ name: toolCall.name, result: resultStr });
-                                        console.log(`[WhatsApp]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+
+                                        // Special case: screenshot - store base64 for sending
+                                        if (toolCall.name === "screenshot" && result.metadata?.base64) {
+                                            lastScreenshotBase64 = result.metadata.base64 as string;
+                                            console.log(`[WhatsApp]   📸 Screenshot captured (${lastScreenshotBase64.length} chars)`);
+                                            toolResults.push({ name: toolCall.name, result: "Screenshot captured! Now use whatsapp_send_image to send it." });
+                                        } else {
+                                            const resultStr = (result.content || result.error || "").slice(0, 2000);
+                                            toolResults.push({ name: toolCall.name, result: resultStr });
+                                            console.log(`[WhatsApp]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+                                        }
                                     } catch (err) {
                                         const errMsg = err instanceof Error ? err.message : String(err);
                                         toolResults.push({ name: toolCall.name, result: `Error: ${errMsg}` });
