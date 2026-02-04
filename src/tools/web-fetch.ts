@@ -6,7 +6,10 @@ const WebFetchParamsSchema = z.object({
     method: z.enum(["GET", "POST", "PUT", "DELETE", "PATCH"]).optional().default("GET"),
     headers: z.record(z.string()).optional().describe("Optional headers to include"),
     body: z.string().optional().describe("Request body for POST/PUT/PATCH"),
-    extractText: z.boolean().optional().default(true).describe("Extract text content from HTML"),
+    extractText: z.preprocess(
+        (val) => val === "true" || val === true,
+        z.boolean()
+    ).optional().default(true).describe("Extract text content from HTML"),
 });
 
 type WebFetchParams = z.infer<typeof WebFetchParamsSchema>;
