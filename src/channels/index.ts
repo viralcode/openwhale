@@ -164,12 +164,12 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
 You have FULL access to all tools. You are authenticated and connected.
 User's number: ${fromRaw}. Keep responses concise.
 
-Available base tools: exec, file, browser, screenshot, code_exec, web_fetch, memory
+Available base tools: exec, file, browser, screenshot, camera_snap, code_exec, web_fetch, memory
 ${skillToolNames.length > 0 ? `Available skill tools: ${skillToolNames.join(", ")}` : ""}
 
-IMPORTANT: To send a screenshot to the user:
-1. First use the 'screenshot' tool to capture the screen
-2. Then immediately use 'whatsapp_send_image' with a caption to send it
+IMPORTANT: To send images to the user:
+- For SCREENSHOT: Use 'screenshot' then 'whatsapp_send_image'
+- For CAMERA PHOTO: Use 'camera_snap' then 'whatsapp_send_image'
 
 When asked about emails, use gmail tools. When asked about GitHub, use github tools.
 When asked about weather, use weather tools. Use the appropriate tool immediately.
@@ -249,11 +249,12 @@ Current time: ${new Date().toLocaleString()}`;
                                             // Execute regular tool
                                             const result = await toolRegistry.execute(toolCall.name, toolCall.arguments, context);
 
-                                            // Special case: screenshot - store base64 for sending
-                                            if (toolCall.name === "screenshot" && result.metadata?.base64) {
+                                            // Special case: screenshot or camera_snap - store base64 for sending
+                                            if ((toolCall.name === "screenshot" || toolCall.name === "camera_snap") && result.metadata?.base64) {
                                                 lastScreenshotBase64 = result.metadata.base64 as string;
-                                                console.log(`[WhatsApp]   📸 Screenshot captured (${lastScreenshotBase64.length} chars)`);
-                                                toolResults.push({ name: toolCall.name, result: "Screenshot captured! Now use whatsapp_send_image to send it." });
+                                                const type = toolCall.name === "camera_snap" ? "Camera photo" : "Screenshot";
+                                                console.log(`[WhatsApp]   📸 ${type} captured (${lastScreenshotBase64.length} chars)`);
+                                                toolResults.push({ name: toolCall.name, result: `${type} captured! Now use whatsapp_send_image to send it.` });
                                             } else {
                                                 const resultStr = (result.content || result.error || "").slice(0, 2000);
                                                 toolResults.push({ name: toolCall.name, result: resultStr });

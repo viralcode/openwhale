@@ -12,6 +12,7 @@ import { nodesTool } from "./nodes.js";
 import { memoryTool } from "./memory.js";
 import { codeExecTool } from "./code-exec.js";
 import { screenshotTool } from "./screenshot.js";
+import { cameraTools } from "./camera.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -27,6 +28,12 @@ toolRegistry.register(memoryTool);
 toolRegistry.register(codeExecTool);
 toolRegistry.register(screenshotTool);
 
+// Register camera tools
+for (const tool of cameraTools) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    toolRegistry.register(tool as any);
+}
+
 export { toolRegistry } from "./base.js";
 export type { AgentTool, ToolCallContext, ToolResult, ToolRegistry } from "./base.js";
 export { execTool } from "./exec.js";
@@ -41,3 +48,4 @@ export { nodesTool } from "./nodes.js";
 export { memoryTool } from "./memory.js";
 export { codeExecTool } from "./code-exec.js";
 export { screenshotTool } from "./screenshot.js";
+export { cameraTools } from "./camera.js";
