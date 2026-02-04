@@ -77,14 +77,25 @@ export function isGoogleConfigured(): boolean {
 }
 
 /**
- * Check if we have a valid token
+ * Check if we have a valid token (or can refresh one)
  */
 export function hasValidToken(): boolean {
     // Try to load from file first
     loadCredentialsFromFile();
 
-    if (!googleTokens) return false;
+    if (!googleTokens) {
+        console.log("[Google Auth] hasValidToken: No tokens loaded");
+        return false;
+    }
+
+    // If we have a refresh token, we can always get a new access token
+    if (googleTokens.refresh_token) {
+        return true;
+    }
+
+    // No refresh token, check if access token is still valid
     if (googleTokens.expires_at && Date.now() > googleTokens.expires_at) {
+        console.log("[Google Auth] hasValidToken: Token expired and no refresh token");
         return false;
     }
     return true;
