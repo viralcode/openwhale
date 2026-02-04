@@ -258,11 +258,14 @@ export async function processMessage(
 
     console.log(`[SessionService] Tools available: ${tools.length} (${allTools.length} base + 2 WhatsApp + ${skillTools.length} skill tools)`);
 
-    // Build message history for context
-    const msgHistory = dashboardMessages.slice(-20).map((m) => ({
-        role: m.role as "user" | "assistant",
-        content: m.content,
-    }));
+    // Build message history for context, filtering out empty messages
+    const msgHistory = dashboardMessages
+        .slice(-20)
+        .filter((m) => m.content && m.content.trim().length > 0)
+        .map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+        }));
 
     // Build dynamic system prompt with available skills
     const skillToolNames = skillTools.map(t => t.name);

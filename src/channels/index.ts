@@ -132,21 +132,81 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                                 parameters: toolRegistry.zodToJsonSchema(tool.parameters),
                             }));
 
-                            const systemPrompt = `You are OpenWhale, an always-on AI assistant responding via WhatsApp.
-You have access to tools: exec, file, browser, screenshot, code_exec, memory, and more.
-The user's number is: ${fromRaw}. Keep responses concise for mobile.
-Be helpful and proactive. Execute tools when asked.`;
+                            const systemPrompt = `You are OpenWhale, an AI assistant responding via WhatsApp.
+Available tools: exec (run shell commands), file, browser, screenshot, code_exec, web_fetch, and more.
+User's number: ${fromRaw}. Keep responses concise.
 
-                            const response = await aiProvider.complete({
-                                model: currentModel,
-                                messages: [{ role: "user", content: msg.content }],
-                                systemPrompt,
-                                tools,
-                                maxTokens: 2000,
-                                stream: false,
-                            });
+When asked to run commands, take screenshots, etc - use the appropriate tool immediately.
+Current time: ${new Date().toLocaleString()}`;
 
-                            let reply = response.content || "Done!";
+                            const context = {
+                                sessionId: `whatsapp-${fromRaw}-${Date.now()}`,
+                                workspaceDir: process.cwd(),
+                                sandboxed: false,
+                            };
+
+                            // Simple string-based messages (works with Anthropic)
+                            const messages: Array<{ role: "user" | "assistant"; content: string }> = [
+                                { role: "user", content: msg.content },
+                            ];
+
+                            let reply = "";
+                            let iterations = 0;
+                            const maxIterations = 10;
+
+                            while (iterations < maxIterations) {
+                                iterations++;
+
+                                const response = await aiProvider.complete({
+                                    model: currentModel,
+                                    messages,
+                                    systemPrompt,
+                                    tools,
+                                    maxTokens: 2000,
+                                    stream: false,
+                                });
+
+                                console.log(`[WhatsApp]   ↳ AI iteration ${iterations}: content=${response.content?.length || 0} chars, toolCalls=${response.toolCalls?.length || 0}`);
+
+                                // No tool calls = we have final response
+                                if (!response.toolCalls || response.toolCalls.length === 0) {
+                                    reply = response.content || "Done!";
+                                    break;
+                                }
+
+                                // Execute tool calls
+                                const toolResults: Array<{ name: string; result: string }> = [];
+
+                                for (const toolCall of response.toolCalls) {
+                                    console.log(`[WhatsApp]   🔧 Tool: ${toolCall.name}`);
+
+                                    try {
+                                        const result = await toolRegistry.execute(toolCall.name, toolCall.arguments, context);
+                                        const resultStr = (result.content || result.error || "").slice(0, 2000);
+                                        toolResults.push({ name: toolCall.name, result: resultStr });
+                                        console.log(`[WhatsApp]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+                                    } catch (err) {
+                                        const errMsg = err instanceof Error ? err.message : String(err);
+                                        toolResults.push({ name: toolCall.name, result: `Error: ${errMsg}` });
+                                        console.log(`[WhatsApp]   ❌ ${toolCall.name}: ${errMsg}`);
+                                    }
+                                }
+
+                                // Add assistant response with tool names (string-based)
+                                const assistantContent = response.content
+                                    ? `${response.content}\n\n[Tools executed: ${response.toolCalls.map(t => t.name).join(", ")}]`
+                                    : `[Tools executed: ${response.toolCalls.map(t => t.name).join(", ")}]`;
+                                messages.push({ role: "assistant", content: assistantContent });
+
+                                // Add tool results as user message (string-based)
+                                const toolResultsStr = toolResults
+                                    .map(t => `${t.name}: ${t.result}`)
+                                    .join("\n\n");
+                                messages.push({
+                                    role: "user",
+                                    content: `Tool results:\n${toolResultsStr}\n\nProvide final response to user.`
+                                });
+                            }
 
                             // Truncate for WhatsApp
                             if (reply.length > 4000) {

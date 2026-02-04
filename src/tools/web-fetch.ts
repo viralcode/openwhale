@@ -74,6 +74,7 @@ export const webFetchTool: AgentTool<WebFetchParams> = {
             };
         } catch (err) {
             const message = err instanceof Error ? err.message : String(err);
+            console.error(`[web_fetch] Error fetching ${params.url}:`, message);
             return {
                 success: false,
                 content: "",
