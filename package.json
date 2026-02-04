@@ -1,0 +1,75 @@
+{
+  "name": "openwhale",
+  "version": "0.1.0",
+  "description": "Next-gen AI assistant with enterprise security and multi-model support",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "openwhale": "./openwhale.mjs"
+  },
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "cli": "tsx src/cli.ts",
+    "chat": "tsx src/cli.ts chat",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "test:cli": "tsx src/cli.ts test",
+    "lint": "eslint src --ext .ts",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate",
+    "db:studio": "drizzle-kit studio",
+    "docker:build": "docker build -t openwhale .",
+    "docker:up": "docker-compose up -d",
+    "docker:down": "docker-compose down"
+  },
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.32.0",
+    "@hono/node-server": "^1.13.0",
+    "@types/qrcode": "^1.5.6",
+    "@whiskeysockets/baileys": "^7.0.0-rc.9",
+    "arctic": "^2.0.0",
+    "better-sqlite3": "^11.0.0",
+    "dockerode": "^4.0.0",
+    "dotenv": "^17.2.3",
+    "drizzle-orm": "^0.45.1",
+    "googleapis": "^171.2.0",
+    "hono": "^4.6.0",
+    "jose": "^5.9.0",
+    "openai": "^4.70.0",
+    "pino": "^10.3.0",
+    "playwright": "^1.48.0",
+    "qrcode": "^1.5.4",
+    "qrcode-terminal": "^0.12.0",
+    "ws": "^8.18.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/dockerode": "^3.3.31",
+    "@types/node": "^22.0.0",
+    "@types/qrcode-terminal": "^0.12.2",
+    "@types/ws": "^8.5.12",
+    "drizzle-kit": "^0.27.0",
+    "eslint": "^9.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^2.1.0"
+  },
+  "keywords": [
+    "ai",
+    "assistant",
+    "openai",
+    "anthropic",
+    "deepseek",
+    "multi-model",
+    "agent"
+  ],
+  "license": "MIT",
+  "author": ""
+}

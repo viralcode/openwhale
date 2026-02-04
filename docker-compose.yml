@@ -1,0 +1,60 @@
+services:
+  openwhale:
+    build: .
+    ports:
+      - "18789:18789"
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=file:./data/openwhale.db
+      - JWT_SECRET=${JWT_SECRET:-dev-secret-change-in-production}
+      - LOG_LEVEL=debug
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:18789/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Optional: PostgreSQL for production scale
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: openwhale
+      POSTGRES_USER: openwhale
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-openwhale}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    profiles: ["postgres"]
+
+  # Optional: Redis for sessions/rate limiting
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    profiles: ["redis"]
+
+  # Sandbox browser for agent automation
+  browser:
+    image: mcr.microsoft.com/playwright:v1.48.0-jammy
+    environment:
+      - DISPLAY=:99
+    volumes:
+      - browser_data:/home/pwuser/.cache
+    ports:
+      - "9222:9222"
+    command: >
+      bash -c "Xvfb :99 -screen 0 1920x1080x24 &
+               chromium --remote-debugging-port=9222 --no-sandbox"
+    profiles: ["browser"]
+
+volumes:
+  postgres_data:
+  redis_data:
+  browser_data:

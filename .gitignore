@@ -1,0 +1,60 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Data & databases
+data/
+*.db
+*.sqlite
+*.db-journal
+
+# Environment (secrets!)
+.env
+.env.local
+.env.*.local
+.env.production
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# IDE & editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# Drizzle migrations
+drizzle/
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# TypeScript cache
+*.tsbuildinfo
+
+# OpenWhale runtime data
+.openwhale/
+.openwhale-temp/
+.openwhale-whatsapp-auth/
+
+# Docker
+docker-compose.override.yml
+
+# Temp files
+tmp/
+temp/
+*.tmp
