@@ -75,13 +75,13 @@ export class SlackAdapter implements ChannelAdapter {
     }
 
     // Handle incoming Slack events (called from webhook endpoint)
-    handleEvent(event: {
+    async handleEvent(event: {
         type: string;
         user?: string;
         channel?: string;
         text?: string;
         ts?: string;
-    }): void {
+    }): Promise<void> {
         if (event.type === "message" && event.text && event.channel) {
             const incoming: IncomingMessage = {
                 id: event.ts ?? `slack_${Date.now()}`,
@@ -91,6 +91,25 @@ export class SlackAdapter implements ChannelAdapter {
                 content: event.text,
                 timestamp: event.ts ? new Date(parseFloat(event.ts) * 1000) : new Date(),
             };
+
+            // ========== EXTENSION HOOK ==========
+            // Extensions subscribed to "slack" get ALL messages
+            try {
+                const { triggerChannelExtensions } = await import("../tools/extend.js");
+                const extResult = await triggerChannelExtensions("slack", {
+                    from: incoming.from,
+                    content: incoming.content,
+                    metadata: { channel: event.channel }
+                });
+
+                if (extResult.handled) {
+                    console.log(`[Slack] Message handled by extension(s)`);
+                    return; // Skip normal processing
+                }
+            } catch (extErr) {
+                console.error("[Slack] Extension error:", extErr);
+            }
+            // =====================================
 
             for (const handler of this.handlers) {
                 handler(incoming);

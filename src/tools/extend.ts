@@ -79,6 +79,79 @@ export function getLoadedExtensions(): Map<string, { manifest: ExtensionManifest
     return loadedExtensions;
 }
 
+/**
+ * Get extensions subscribed to a specific channel
+ */
+export function getExtensionsByChannel(channel: string): Array<{ name: string; manifest: ExtensionManifest }> {
+    const results: Array<{ name: string; manifest: ExtensionManifest }> = [];
+
+    for (const [name, data] of loadedExtensions) {
+        if (data.manifest.enabled && data.manifest.channels?.includes(channel)) {
+            results.push({ name, manifest: data.manifest });
+        }
+    }
+
+    return results;
+}
+
+/**
+ * Trigger extensions subscribed to a channel when a message comes in
+ * Returns true if any extension handled the message (should skip normal processing)
+ */
+export async function triggerChannelExtensions(
+    channel: string,
+    message: { from: string; content: string; metadata?: Record<string, unknown> }
+): Promise<{ handled: boolean; responses: Array<{ extension: string; response?: string; error?: string }> }> {
+    const extensions = getExtensionsByChannel(channel);
+    const responses: Array<{ extension: string; response?: string; error?: string }> = [];
+    let handled = false;
+
+    if (extensions.length === 0) {
+        return { handled: false, responses: [] };
+    }
+
+    console.log(`[Extensions] Triggering ${extensions.length} extensions for ${channel} message from ${message.from}`);
+
+    for (const ext of extensions) {
+        try {
+            // Set environment variables for the extension to access the message
+            const extPath = join(EXTENSIONS_DIR, ext.name);
+            const messageDataFile = join(extPath, ".incoming_message.json");
+
+            // Write message data for extension to read
+            writeFileSync(messageDataFile, JSON.stringify({
+                channel,
+                from: message.from,
+                content: message.content,
+                metadata: message.metadata,
+                timestamp: new Date().toISOString()
+            }, null, 2));
+
+            // Execute the extension
+            const result = await executeExtension(ext.name);
+
+            if (result.success) {
+                console.log(`[Extensions] ${ext.name} executed successfully`);
+
+                // Check if extension wants to handle this (prevent normal AI processing)
+                if (result.output.includes("[HANDLED]")) {
+                    handled = true;
+                }
+
+                responses.push({ extension: ext.name, response: result.output });
+            } else {
+                console.error(`[Extensions] ${ext.name} failed: ${result.error}`);
+                responses.push({ extension: ext.name, error: result.error });
+            }
+        } catch (err) {
+            console.error(`[Extensions] Error triggering ${ext.name}:`, err);
+            responses.push({ extension: ext.name, error: String(err) });
+        }
+    }
+
+    return { handled, responses };
+}
+
 // Extension action schema
 const ExtendActionSchema = z.discriminatedUnion("action", [
     z.object({
@@ -145,22 +218,126 @@ type ExtendAction = z.infer<typeof ExtendActionSchema>;
  */
 function generateExtensionSDK(extensionName: string, channels: string[]): string {
     const secretsFile = join(EXTENSIONS_DIR, extensionName, "secrets.json");
+    const messageFile = join(EXTENSIONS_DIR, extensionName, ".incoming_message.json");
     return `
 // OpenWhale Extension SDK - Auto-injected
 const __EXTENSION_NAME__ = ${JSON.stringify(extensionName)};
 const __CHANNELS__ = ${JSON.stringify(channels)};
+const __API_BASE__ = "http://localhost:7777/dashboard";
 
 // Simple data storage using JSON file
 const __DATA_FILE__ = ${JSON.stringify(join(EXTENSIONS_DIR, extensionName, "data.json"))};
 const __SECRETS_FILE__ = ${JSON.stringify(secretsFile)};
+const __MESSAGE_FILE__ = ${JSON.stringify(messageFile)};
 import * as __fs from "node:fs";
 
+// Helper for API calls
+async function __apiCall__(endpoint: string, options: { method?: string; body?: unknown } = {}): Promise<any> {
+    const res = await fetch(\`\${__API_BASE__}\${endpoint}\`, {
+        method: options.method || "GET",
+        headers: { "Content-Type": "application/json" },
+        body: options.body ? JSON.stringify(options.body) : undefined
+    });
+    return res.json();
+}
+
+// Load incoming message if exists (set by channel handlers)
+function __getIncomingMessage__(): { channel: string; from: string; content: string; metadata?: Record<string, unknown>; timestamp: string } | null {
+    try {
+        if (__fs.existsSync(__MESSAGE_FILE__)) {
+            const data = JSON.parse(__fs.readFileSync(__MESSAGE_FILE__, "utf8"));
+            // Delete after reading to prevent re-processing
+            __fs.unlinkSync(__MESSAGE_FILE__);
+            return data;
+        }
+    } catch { }
+    return null;
+}
+
 const openwhale = {
+    // Current incoming message (if triggered by channel message)
+    message: __getIncomingMessage__(),
+    
+    // Mark message as handled (prevents normal AI processing)
+    handled: (): void => {
+        console.log("[HANDLED]");
+    },
+    
+    // Reply to the current message sender
+    reply: async (text: string): Promise<{ ok: boolean; result: string }> => {
+        const msg = openwhale.message;
+        if (!msg) {
+            return { ok: false, result: "No incoming message to reply to" };
+        }
+        // Use the appropriate channel tool
+        if (msg.channel === "whatsapp") {
+            return openwhale.tools.whatsapp(msg.from, text);
+        } else if (msg.channel === "telegram") {
+            return openwhale.tools.telegram(msg.from, text);
+        } else if (msg.channel === "discord") {
+            return openwhale.tools.discord(msg.from, text);
+        } else if (msg.channel === "slack") {
+            return openwhale.tools.execute("slack_send", { channel: msg.from, message: text });
+        }
+        return { ok: false, result: \`Unknown channel: \${msg.channel}\` };
+    },
+    
     // Send notification to configured channels
     notify: async (message: string, channel?: string): Promise<void> => {
         const targetChannels = channel ? [channel] : __CHANNELS__;
         for (const ch of targetChannels) {
             console.log(\`[NOTIFY:\${ch}] \${message}\`);
+        }
+    },
+    
+    // ========== TOOL ACCESS ==========
+    // Execute any tool in the system
+    tools: {
+        // Execute any registered tool by name
+        execute: async (toolName: string, args: Record<string, unknown>): Promise<{ ok: boolean; result: string; error?: string }> => {
+            try {
+                const response = await __apiCall__("/api/tools/execute", {
+                    method: "POST",
+                    body: { tool: toolName, args, extensionName: __EXTENSION_NAME__ }
+                });
+                return response;
+            } catch (e) {
+                return { ok: false, result: "", error: String(e) };
+            }
+        },
+        
+        // WhatsApp shortcut
+        whatsapp: async (to: string, message: string): Promise<{ ok: boolean; result: string }> => {
+            return openwhale.tools.execute("whatsapp_send", { to, message });
+        },
+        
+        // Telegram shortcut
+        telegram: async (chatId: string, message: string): Promise<{ ok: boolean; result: string }> => {
+            return openwhale.tools.execute("telegram_send", { chatId, message });
+        },
+        
+        // Discord shortcut
+        discord: async (channelId: string, message: string): Promise<{ ok: boolean; result: string }> => {
+            return openwhale.tools.execute("discord_send", { channelId, message });
+        },
+        
+        // Execute shell command
+        exec: async (command: string): Promise<{ ok: boolean; result: string }> => {
+            return openwhale.tools.execute("exec", { command });
+        },
+        
+        // Send HTTP request
+        fetch: async (url: string, options?: { method?: string; headers?: Record<string, string>; body?: string }): Promise<{ ok: boolean; result: string }> => {
+            return openwhale.tools.execute("web_fetch", { url, ...options });
+        },
+        
+        // List all available tools
+        list: async (): Promise<{ ok: boolean; tools: Array<{ name: string; description: string; category: string }> }> => {
+            try {
+                return await __apiCall__("/api/tools/available");
+            } catch (e) {
+                return { ok: false, tools: [] };
+            }
         }
     },
     
@@ -357,7 +534,7 @@ function scheduleExtension(name: string, manifest: ExtensionManifest): void {
 /**
  * Execute an extension and return output
  */
-async function executeExtension(name: string): Promise<{ success: boolean; output: string; error?: string }> {
+export async function executeExtension(name: string): Promise<{ success: boolean; output: string; error?: string }> {
     const extPath = getExtensionPath(name);
     const indexPath = join(extPath, "index.ts");
 

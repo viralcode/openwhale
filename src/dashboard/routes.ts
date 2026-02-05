@@ -1316,6 +1316,300 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         return c.json({ logs });
     });
 
+    // ============== EXTENSIONS ==============
+
+    // List all extensions
+    dashboard.get("/api/extensions", async (c) => {
+        try {
+            const { getLoadedExtensions, getExtensionsDir } = await import("../tools/extend.js");
+            const { readdirSync, readFileSync, existsSync } = await import("node:fs");
+            const { join } = await import("node:path");
+
+            const extensionsDir = getExtensionsDir();
+            const loadedExtensions = getLoadedExtensions();
+            const extensions: Array<{
+                name: string;
+                description: string;
+                enabled: boolean;
+                schedule?: string;
+                channels?: string[];
+                createdAt: string;
+                updatedAt: string;
+                running: boolean;
+            }> = [];
+
+            if (existsSync(extensionsDir)) {
+                const dirs = readdirSync(extensionsDir, { withFileTypes: true })
+                    .filter(d => d.isDirectory())
+                    .map(d => d.name);
+
+                for (const name of dirs) {
+                    const manifestPath = join(extensionsDir, name, "manifest.json");
+                    if (existsSync(manifestPath)) {
+                        try {
+                            const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+                            const loaded = loadedExtensions.get(name);
+                            extensions.push({
+                                name,
+                                description: manifest.description || "",
+                                enabled: manifest.enabled ?? true,
+                                schedule: manifest.schedule,
+                                channels: manifest.channels,
+                                createdAt: manifest.createdAt || new Date().toISOString(),
+                                updatedAt: manifest.updatedAt || new Date().toISOString(),
+                                running: !!loaded?.scheduledJob
+                            });
+                        } catch { /* skip invalid */ }
+                    }
+                }
+            }
+
+            return c.json({ ok: true, extensions });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Run an extension
+    dashboard.post("/api/extensions/:name/run", async (c) => {
+        const name = c.req.param("name");
+        try {
+            const { executeExtension } = await import("../tools/extend.js");
+            const result = await executeExtension(name);
+            return c.json({ ok: result.success, output: result.output, error: result.error });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Toggle extension enabled/disabled
+    dashboard.post("/api/extensions/:name/toggle", async (c) => {
+        const name = c.req.param("name");
+        try {
+            const { getExtensionsDir, hotReloadExtension } = await import("../tools/extend.js");
+            const { readFileSync, writeFileSync, existsSync } = await import("node:fs");
+            const { join } = await import("node:path");
+
+            const manifestPath = join(getExtensionsDir(), name, "manifest.json");
+            if (!existsSync(manifestPath)) {
+                return c.json({ ok: false, error: "Extension not found" }, 404);
+            }
+
+            const manifest = JSON.parse(readFileSync(manifestPath, "utf-8"));
+            manifest.enabled = !manifest.enabled;
+            manifest.updatedAt = new Date().toISOString();
+            writeFileSync(manifestPath, JSON.stringify(manifest, null, 2));
+
+            await hotReloadExtension(name);
+
+            return c.json({ ok: true, enabled: manifest.enabled });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Hot reload an extension
+    dashboard.post("/api/extensions/:name/reload", async (c) => {
+        const name = c.req.param("name");
+        try {
+            const { hotReloadExtension } = await import("../tools/extend.js");
+            await hotReloadExtension(name);
+            return c.json({ ok: true, message: `Extension ${name} reloaded` });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Delete an extension
+    dashboard.delete("/api/extensions/:name", async (c) => {
+        const name = c.req.param("name");
+        try {
+            const { getExtensionsDir, getLoadedExtensions } = await import("../tools/extend.js");
+            const { rmSync, existsSync } = await import("node:fs");
+            const { join } = await import("node:path");
+
+            const extPath = join(getExtensionsDir(), name);
+            if (!existsSync(extPath)) {
+                return c.json({ ok: false, error: "Extension not found" }, 404);
+            }
+
+            // Stop any scheduled job
+            const loaded = getLoadedExtensions().get(name);
+            if (loaded?.scheduledJob) {
+                clearTimeout(loaded.scheduledJob);
+            }
+            getLoadedExtensions().delete(name);
+
+            // Delete the directory
+            rmSync(extPath, { recursive: true, force: true });
+
+            return c.json({ ok: true, message: `Extension ${name} deleted` });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Get extension source code
+    dashboard.get("/api/extensions/:name/code", async (c) => {
+        const name = c.req.param("name");
+        try {
+            const { getExtensionsDir } = await import("../tools/extend.js");
+            const { readFileSync, existsSync } = await import("node:fs");
+            const { join } = await import("node:path");
+
+            const codePath = join(getExtensionsDir(), name, "index.ts");
+            if (!existsSync(codePath)) {
+                return c.json({ ok: false, error: "Extension code not found" }, 404);
+            }
+
+            const code = readFileSync(codePath, "utf-8");
+            return c.json({ ok: true, code });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+    // ============== TOOL EXECUTION (for extensions) ==============
+
+    // Execute a tool from extension context - FULL ACCESS to all system tools
+    dashboard.post("/api/tools/execute", async (c) => {
+        try {
+            const { tool, args, extensionName } = await c.req.json() as {
+                tool: string;
+                args: Record<string, unknown>;
+                extensionName?: string;
+            };
+
+            if (!tool) {
+                return c.json({ ok: false, error: "Tool name is required" }, 400);
+            }
+
+            // Import registries
+            const { toolRegistry } = await import("../tools/index.js");
+            const { skillRegistry } = await import("../skills/index.js");
+
+            // Create a context for the tool execution
+            const context = {
+                sessionId: extensionName || "extension",
+                userId: "extension",
+                workspaceDir: process.cwd(),
+                sandboxed: false
+            };
+
+            // 1. Try tool registry first (exec, browser, file, etc.)
+            const registeredTool = toolRegistry.get(tool);
+            if (registeredTool) {
+                const result = await toolRegistry.execute(tool, args, context);
+                return c.json({
+                    ok: result.success,
+                    result: result.content,
+                    error: result.error
+                });
+            }
+
+            // 2. Try skill tools (github, weather, notion, etc.)
+            const skillTools = skillRegistry.getAllTools();
+            const skillTool = skillTools.find((st: { name: string }) => st.name === tool);
+            if (skillTool) {
+                const result = await skillTool.execute(args, context);
+                return c.json({
+                    ok: result.success,
+                    result: result.content,
+                    error: result.error
+                });
+            }
+
+            // 3. Try channel functions (whatsapp, telegram, discord, slack)
+            try {
+                if (tool.includes("whatsapp") || tool === "wa_send") {
+                    const { sendWhatsAppMessage } = await import("../channels/whatsapp-baileys.js");
+                    const to = (args.to || args.number || args.phone) as string;
+                    const message = (args.message || args.text || args.body) as string;
+                    const result = await sendWhatsAppMessage(to, message);
+                    return c.json({ ok: result.success, result: result.success ? `Sent to ${to}` : result.error });
+                }
+
+                if (tool.includes("telegram") || tool === "tg_send") {
+                    const chatId = (args.chatId || args.chat_id || args.to) as string;
+                    const message = (args.message || args.text || args.body) as string;
+                    const botToken = process.env.TELEGRAM_BOT_TOKEN;
+                    if (botToken) {
+                        const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ chat_id: chatId, text: message })
+                        });
+                        const data = await res.json() as { ok: boolean; description?: string };
+                        return c.json({ ok: data.ok, result: data.ok ? `Sent to ${chatId}` : data.description });
+                    }
+                    return c.json({ ok: false, error: "TELEGRAM_BOT_TOKEN not configured" });
+                }
+
+                if (tool.includes("discord") || tool === "dc_send") {
+                    const channelId = (args.channelId || args.channel_id || args.to) as string;
+                    const message = (args.message || args.text || args.body) as string;
+                    const botToken = process.env.DISCORD_BOT_TOKEN;
+                    if (botToken) {
+                        const res = await fetch(`https://discord.com/api/v10/channels/${channelId}/messages`, {
+                            method: "POST",
+                            headers: { "Authorization": `Bot ${botToken}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ content: message })
+                        });
+                        const data = await res.json() as { id?: string; message?: string };
+                        return c.json({ ok: !!data.id, result: data.id ? `Sent to ${channelId}` : (data.message || "Failed") });
+                    }
+                    return c.json({ ok: false, error: "DISCORD_BOT_TOKEN not configured" });
+                }
+
+                if (tool.includes("slack") || tool === "slack_send") {
+                    const channel = (args.channel || args.channelId || args.to) as string;
+                    const message = (args.message || args.text || args.body) as string;
+                    const slackToken = process.env.SLACK_BOT_TOKEN;
+                    if (slackToken) {
+                        const res = await fetch("https://slack.com/api/chat.postMessage", {
+                            method: "POST",
+                            headers: { "Authorization": `Bearer ${slackToken}`, "Content-Type": "application/json" },
+                            body: JSON.stringify({ channel, text: message })
+                        });
+                        const data = await res.json() as { ok: boolean; error?: string };
+                        return c.json({ ok: data.ok, result: data.ok ? `Sent to ${channel}` : data.error });
+                    }
+                    return c.json({ ok: false, error: "SLACK_BOT_TOKEN not configured" });
+                }
+            } catch (channelErr) {
+                return c.json({ ok: false, error: `Channel error: ${String(channelErr)}` }, 500);
+            }
+
+            return c.json({ ok: false, error: `Unknown tool: ${tool}. Use /api/tools/available to list all tools.` }, 404);
+        } catch (error) {
+            console.error("[Tool Execute Error]", error);
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // List available tools for extensions
+    dashboard.get("/api/tools/available", async (c) => {
+        try {
+            const { toolRegistry } = await import("../tools/index.js");
+            const { skillRegistry } = await import("../skills/index.js");
+
+            const tools = toolRegistry.list().map((t: { name: string; description: string; category: string }) => ({
+                name: t.name,
+                description: t.description,
+                category: t.category
+            }));
+
+            const skillTools = skillRegistry.getAllTools().map((t: { name: string; description: string }) => ({
+                name: t.name,
+                description: t.description,
+                category: "skill"
+            }));
+
+            return c.json({ ok: true, tools: [...tools, ...skillTools] });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
     // ============== HTML SHELL ==============
 
     dashboard.get("*", (c) => {

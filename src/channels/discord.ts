@@ -204,6 +204,25 @@ export class DiscordAdapter implements ChannelAdapter {
                 },
             };
 
+            // ========== EXTENSION HOOK ==========
+            // Extensions subscribed to "discord" get ALL messages
+            try {
+                const { triggerChannelExtensions } = await import("../tools/extend.js");
+                const extResult = await triggerChannelExtensions("discord", {
+                    from: incoming.from,
+                    content: incoming.content,
+                    metadata: incoming.metadata as Record<string, unknown>
+                });
+
+                if (extResult.handled) {
+                    console.log(`[Discord] Message handled by extension(s)`);
+                    return; // Skip AI processing
+                }
+            } catch (extErr) {
+                console.error("[Discord] Extension error:", extErr);
+            }
+            // =====================================
+
             // Process with AI
             if (this.aiProvider && incoming.content) {
                 await processMessageWithAI({

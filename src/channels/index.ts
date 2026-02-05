@@ -135,9 +135,33 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                         return;
                     }
 
-                    // Only process messages from owner if configured
+                    // ========== EXTENSION HOOK (runs BEFORE owner filter) ==========
+                    // Extensions subscribed to "whatsapp" channel get ALL messages
+                    try {
+                        const { triggerChannelExtensions } = await import("../tools/extend.js");
+                        const extResult = await triggerChannelExtensions("whatsapp", {
+                            from: fromRaw,
+                            content: msg.content,
+                            metadata: msg.metadata as Record<string, unknown>
+                        });
+
+                        if (extResult.handled) {
+                            console.log(`[WhatsApp]   ↳ Message handled by extension(s)`);
+                            markMessageProcessed(messageId, "inbound", fromRaw);
+                            return; // Extension handled it, skip AI processing
+                        }
+
+                        if (extResult.responses.length > 0) {
+                            console.log(`[WhatsApp]   ↳ ${extResult.responses.length} extension(s) processed message`);
+                        }
+                    } catch (extErr) {
+                        console.error("[WhatsApp] Extension error:", extErr);
+                    }
+                    // ================================================================
+
+                    // Only process messages from owner if configured (extensions already ran above)
                     if (ownerNumber && !isSameAsOwner) {
-                        console.log(`[WhatsApp]   ↳ Skipping - not from owner (${ownerNumber})`);
+                        console.log(`[WhatsApp]   ↳ Skipping AI - not from owner (${ownerNumber})`);
                         markMessageProcessed(messageId, "inbound", fromRaw);
                         return;
                     }
@@ -205,6 +229,33 @@ KEY CAPABILITIES:
 - canvas: Create/manipulate 2D graphics.
 - memory: Store and recall context across conversations.
 - nodes: Control IoT devices.
+- extend: Create extensions that monitor channels and auto-reply.
+
+EXTENSION SYSTEM - YOU CAN MONITOR ALL WHATSAPP MESSAGES:
+The 'extend' tool lets you create extensions that can:
+1. Monitor ALL incoming WhatsApp messages - including from anyone, not just the owner!
+2. Auto-reply to specific contacts (like family members, clients, specific phone numbers)
+3. Access openwhale.message (contains: from, content, channel, metadata)
+4. Call openwhale.reply(text) to respond directly to that sender
+5. Call openwhale.handled() to prevent normal AI from also responding
+
+EXAMPLE - Auto-reply to a family member at +15551234567:
+Use 'extend' with action='create', name='wife_auto_reply', channels=['whatsapp'], and code:
+\`\`\`
+if (openwhale.message && openwhale.message.from.includes("5551234567")) {
+    await openwhale.reply("Hi! Jijo is busy right now but will get back to you soon 💙");
+    openwhale.handled();
+}
+\`\`\`
+
+IMPORTANT - EXTENSIONS ARE YOUR FALLBACK:
+If a user asks for something that tools and skills CANNOT do, USE EXTENSIONS:
+- Monitoring channels for specific messages/senders → Extension
+- Auto-replying to specific people → Extension  
+- Custom automations/workflows → Extension
+- Integrating external APIs not covered by skills → Extension
+- Persistent background tasks → Extension with cron schedule
+- Any behavior that needs to run without user prompting → Extension
 
 TO SEND IMAGES via WhatsApp:
 1. Use 'screenshot' or 'camera_snap' to capture

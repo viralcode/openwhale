@@ -174,6 +174,25 @@ export class TelegramAdapter implements ChannelAdapter {
                                 },
                             };
 
+                            // ========== EXTENSION HOOK ==========
+                            // Extensions subscribed to "telegram" get ALL messages
+                            try {
+                                const { triggerChannelExtensions } = await import("../tools/extend.js");
+                                const extResult = await triggerChannelExtensions("telegram", {
+                                    from: incoming.from,
+                                    content: incoming.content,
+                                    metadata: incoming.metadata as Record<string, unknown>
+                                });
+
+                                if (extResult.handled) {
+                                    console.log(`[Telegram] Message handled by extension(s)`);
+                                    continue; // Skip AI processing
+                                }
+                            } catch (extErr) {
+                                console.error("[Telegram] Extension error:", extErr);
+                            }
+                            // =====================================
+
                             // Process with AI if provider available
                             if (this.aiProvider) {
                                 console.log(`[Telegram] Processing message from ${incoming.from}`);

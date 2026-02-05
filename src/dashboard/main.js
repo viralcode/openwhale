@@ -106,7 +106,8 @@ let state = {
   isAuthenticated: false,
   user: null,
   sessionId: localStorage.getItem('owSessionId') || null,
-  users: [] // For admin user management
+  users: [], // For admin user management
+  extensions: [] // For self-extension system
 };
 
 // ============================================
@@ -422,6 +423,9 @@ async function loadData() {
     case 'tools':
       await loadTools();
       break;
+    case 'extensions':
+      await loadExtensions();
+      break;
     case 'settings':
       await loadUsers();
       break;
@@ -473,6 +477,17 @@ async function loadTools() {
     const data = await api('/tools');
     state.tools = data.tools || [];
   } catch (e) { console.error(e); }
+}
+
+async function loadExtensions() {
+  try {
+    const data = await api('/extensions');
+    if (data.ok) {
+      state.extensions = data.extensions || [];
+    }
+  } catch (e) {
+    console.error('Failed to load extensions:', e);
+  }
 }
 
 async function loadUsers() {
@@ -983,6 +998,7 @@ function renderSidebar() {
     { id: 'providers', iconName: 'bot', label: 'Providers' },
     { id: 'skills', iconName: 'wrench', label: 'Skills' },
     { id: 'tools', iconName: 'tool', label: 'Tools' },
+    { id: 'extensions', iconName: 'puzzle', label: 'Extensions' },
     { id: 'settings', iconName: 'settings', label: 'Settings' },
   ];
 
@@ -1055,6 +1071,7 @@ function renderContent() {
     case 'providers': return renderProviders();
     case 'skills': return renderSkills();
     case 'tools': return renderTools();
+    case 'extensions': return renderExtensions();
     case 'settings': return renderSettings();
     default: return renderChat();
   }
@@ -1532,6 +1549,92 @@ function renderTools() {
         </div>
       `).join('')}
     </div>
+  `;
+}
+
+function renderExtensions() {
+  return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Extensions</h1>
+        <p class="page-subtitle">AI-created extensions that run on schedules or on-demand</p>
+      </div>
+    </div>
+
+    ${state.extensions.length === 0 ? `
+      <div class="empty-state" style="text-align: center; padding: 60px 20px;">
+        <span style="font-size: 64px; margin-bottom: 20px; display: block;">🧩</span>
+        <h3 style="color: var(--text-primary); margin-bottom: 8px;">No Extensions Yet</h3>
+        <p style="color: var(--text-secondary); max-width: 400px; margin: 0 auto;">
+          Ask the AI to create an extension! For example:<br>
+          <em>"Create an extension that sends me a daily weather report"</em>
+        </p>
+      </div>
+    ` : `
+      <div class="bento-grid">
+        ${state.extensions.map(ext => `
+          <div class="bento-item bento-md" style="padding: 20px; display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="stat-icon purple" style="width: 44px; height: 44px;">
+                  ${icon('puzzle', 20)}
+                </span>
+                <div>
+                  <div style="font-weight: 600; font-size: 16px;">${ext.name}</div>
+                  ${ext.schedule ? `
+                    <div style="font-size: 11px; color: var(--accent-purple); display: flex; align-items: center; gap: 4px; margin-top: 4px;">
+                      ${icon('clock', 12)} ${ext.schedule}
+                    </div>
+                  ` : ''}
+                </div>
+              </div>
+              <div style="display: flex; align-items: center; gap: 8px;">
+                ${ext.running ? `
+                  <span style="display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 8px; border-radius: 12px; background: rgba(34, 197, 94, 0.15); color: var(--success);">
+                    ${icon('activity', 10)} Running
+                  </span>
+                ` : ''}
+                <label class="toggle" style="transform: scale(0.8);">
+                  <input type="checkbox" ${ext.enabled ? 'checked' : ''} onchange="toggleExtension('${ext.name}')">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+            </div>
+            
+            <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; flex: 1;">
+              ${ext.description || 'No description'}
+            </div>
+            
+            ${ext.channels?.length ? `
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                ${ext.channels.map(ch => `
+                  <span style="font-size: 10px; padding: 3px 8px; border-radius: 10px; background: var(--surface-hover); color: var(--text-muted);">
+                    ${ch}
+                  </span>
+                `).join('')}
+              </div>
+            ` : ''}
+            
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 12px; border-top: 1px solid var(--border);">
+              <span style="font-size: 11px; color: var(--text-muted);">
+                Updated: ${new Date(ext.updatedAt).toLocaleDateString()}
+              </span>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-sm btn-secondary" onclick="viewExtensionCode('${ext.name}')" title="View Code">
+                  ${icon('code', 14)}
+                </button>
+                <button class="btn btn-sm btn-primary" onclick="runExtension('${ext.name}')" title="Run Now">
+                  ${icon('zap', 14)}
+                </button>
+                <button class="btn btn-sm btn-danger" onclick="deleteExtension('${ext.name}')" title="Delete">
+                  ${icon('x', 14)}
+                </button>
+              </div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    `}
   `;
 }
 
@@ -2473,6 +2576,82 @@ window.toggleProvider = async function (type, enabled) {
 
 window.toggleSkill = async function (id, enabled) {
   await saveSkillConfig(id, { enabled });
+};
+
+// Extension actions
+window.toggleExtension = async function (name) {
+  try {
+    const result = await api(`/extensions/${name}/toggle`, { method: 'POST' });
+    if (result.ok) {
+      await loadExtensions();
+      render();
+    } else {
+      await showDialog('Error', result.error || 'Failed to toggle extension');
+    }
+  } catch (e) {
+    await showDialog('Error', e.message);
+  }
+};
+
+window.runExtension = async function (name) {
+  try {
+    await showDialog('Running', `Executing extension "${name}"...`);
+    const result = await api(`/extensions/${name}/run`, { method: 'POST' });
+    if (result.ok) {
+      await showDialog('Success', `Extension output:\n\n${result.output || 'No output'}`);
+    } else {
+      await showDialog('Error', result.error || 'Extension failed');
+    }
+  } catch (e) {
+    await showDialog('Error', e.message);
+  }
+};
+
+window.viewExtensionCode = async function (name) {
+  try {
+    const result = await api(`/extensions/${name}/code`);
+    if (result.ok) {
+      // Create a code viewer modal
+      const overlay = document.createElement('div');
+      overlay.className = 'modal-overlay';
+      overlay.id = 'code-modal';
+      overlay.innerHTML = `
+        <div class="modal-box" style="max-width: 800px; max-height: 80vh;">
+          <div class="modal-header">
+            <h3 class="modal-title">Extension: ${name}</h3>
+            <button class="modal-close" onclick="closeModal('code-modal')">✕</button>
+          </div>
+          <pre style="background: var(--surface); padding: 16px; border-radius: 8px; overflow: auto; max-height: 60vh; font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.5;"><code>${result.code.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</code></pre>
+          <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 16px;">
+            <button class="btn btn-secondary" onclick="closeModal('code-modal')">Close</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(overlay);
+    } else {
+      await showDialog('Error', result.error || 'Failed to load code');
+    }
+  } catch (e) {
+    await showDialog('Error', e.message);
+  }
+};
+
+window.deleteExtension = async function (name) {
+  const confirmed = await showConfirm('Delete Extension', `Are you sure you want to delete "${name}"? This cannot be undone.`);
+  if (!confirmed) return;
+
+  try {
+    const result = await api(`/extensions/${name}`, { method: 'DELETE' });
+    if (result.ok) {
+      await loadExtensions();
+      render();
+      await showDialog('Success', `Extension "${name}" deleted`);
+    } else {
+      await showDialog('Error', result.error || 'Failed to delete extension');
+    }
+  } catch (e) {
+    await showDialog('Error', e.message);
+  }
 };
 
 window.saveProvider = async function (type) {
