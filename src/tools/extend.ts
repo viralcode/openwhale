@@ -234,9 +234,7 @@ const openwhale = {
     channels: __CHANNELS__,
 };
 
-// Make fetch available
-
-import fetch from "node:http";
+// fetch is available globally in Node.js 18+
 `;
 }
 
@@ -591,7 +589,8 @@ CRON EXPRESSIONS:
 
                 // Generate extension code with SDK
                 const sdk = generateExtensionSDK(params.name, params.channels || []);
-                const fullCode = `${sdk}\n// Extension code starts here\n${params.code}\n`;
+                // Wrap user code in async IIFE to support top-level await
+                const fullCode = `${sdk}\n// Extension code starts here\n(async () => {\n${params.code}\n})().catch(e => console.error('[${params.name}] Error:', e));\n`;
 
                 writeFileSync(join(extPath, "index.ts"), fullCode);
 
