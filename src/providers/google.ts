@@ -13,10 +13,18 @@ export class GoogleProvider implements AIProvider {
 
     async listModels(): Promise<string[]> {
         return [
-            "gemini-2.0-flash-exp",
+            // Gemini 3 (latest - Feb 2026)
+            "gemini-3-pro-preview",
+            "gemini-3-flash-preview",
+            // Gemini 2.5 (GA)
+            "gemini-2.5-pro",
+            "gemini-2.5-flash",
+            "gemini-2.5-flash-lite",
+            // Gemini 2.0 (being deprecated Mar 2026)
+            "gemini-2.0-flash",
+            // Legacy
             "gemini-1.5-pro",
             "gemini-1.5-flash",
-            "gemini-1.0-pro",
         ];
     }
 

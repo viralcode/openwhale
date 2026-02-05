@@ -1,12 +1,12 @@
 export { registry, ProviderRegistry, type AIProvider, type CompletionRequest, type CompletionResponse, type Message, type StreamEvent } from "./base.js";
 export { AnthropicProvider, createAnthropicProvider } from "./anthropic.js";
-export { OpenAICompatibleProvider, createOpenAIProvider, createDeepSeekProvider, createGroqProvider, createTogetherProvider, createOllamaProvider } from "./openai-compatible.js";
+export { OpenAICompatibleProvider, createOpenAIProvider, createDeepSeekProvider, createGroqProvider, createTogetherProvider, createOllamaProvider, createQwenProvider } from "./openai-compatible.js";
 export { GoogleProvider, createGoogleProvider } from "./google.js";
 
 // Auto-register available providers
 import { registry } from "./base.js";
 import { createAnthropicProvider } from "./anthropic.js";
-import { createOpenAIProvider, createDeepSeekProvider, createGroqProvider, createTogetherProvider, createOllamaProvider } from "./openai-compatible.js";
+import { createOpenAIProvider, createDeepSeekProvider, createGroqProvider, createTogetherProvider, createOllamaProvider, createQwenProvider } from "./openai-compatible.js";
 import { createGoogleProvider } from "./google.js";
 
 export function initializeProviders(): void {
@@ -59,8 +59,15 @@ export function initializeProviders(): void {
         console.log("✓ Ollama provider registered");
     }
 
+    // Qwen (Alibaba DashScope)
+    const qwen = createQwenProvider();
+    if (qwen) {
+        registry.register("qwen", qwen);
+        console.log("✓ Qwen provider registered");
+    }
+
     // Set fallback order
-    registry.setFallbackOrder(["anthropic", "openai", "google", "deepseek", "groq", "together", "ollama"]);
+    registry.setFallbackOrder(["anthropic", "openai", "google", "qwen", "deepseek", "groq", "together", "ollama"]);
 
     console.log(`Providers initialized: ${registry.listProviders().length} available`);
 }

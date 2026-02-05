@@ -12,11 +12,15 @@ export class AnthropicProvider implements AIProvider {
 
     async listModels(): Promise<string[]> {
         return [
+            // Claude 5 (Sonnet 5 - Fennec, released Feb 2026)
+            "claude-sonnet-5-20260203",
+            // Claude 4.5 series (latest production models)
+            "claude-opus-4-5-20251101",
+            "claude-sonnet-4-5-20250929",
+            "claude-haiku-4-5-20251001",
+            // Claude 3.5 (still supported)
             "claude-3-5-sonnet-20241022",
             "claude-3-5-haiku-20241022",
-            "claude-3-opus-20240229",
-            "claude-3-sonnet-20240229",
-            "claude-3-haiku-20240307",
         ];
     }
 
