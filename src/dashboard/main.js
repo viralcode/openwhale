@@ -101,7 +101,12 @@ let state = {
   isSending: false,
   currentModel: 'claude-sonnet-4-20250514',
   whatsappQR: null,
-  prerequisites: {}
+  prerequisites: {},
+  // Auth
+  isAuthenticated: false,
+  user: null,
+  sessionId: localStorage.getItem('owSessionId') || null,
+  users: [] // For admin user management
 };
 
 // ============================================
@@ -297,30 +302,93 @@ function showPrompt(message, defaultValue = '', title = 'Input') {
 
 // Initialize
 document.addEventListener('DOMContentLoaded', async () => {
-  await checkSetupStatus();
-  if (!state.setupComplete) {
-    state.view = 'setup';
-  } else {
-    state.view = location.hash.slice(1) || 'chat';
-    await loadData();
+  // Check if user is authenticated
+  const isAuth = await checkAuth();
+
+  if (isAuth) {
+    await checkSetupStatus();
+    if (!state.setupComplete) {
+      state.view = 'setup';
+    } else {
+      state.view = location.hash.slice(1) || 'chat';
+      await loadData();
+    }
   }
   render();
 
   window.addEventListener('hashchange', async () => {
-    state.view = location.hash.slice(1) || 'chat';
-    await loadData();
-    render();
+    if (state.isAuthenticated) {
+      state.view = location.hash.slice(1) || 'chat';
+      await loadData();
+      render();
+    }
   });
 });
 
 // API Helpers
 async function api(endpoint, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+  if (state.sessionId) {
+    headers['Authorization'] = `Bearer ${state.sessionId}`;
+  }
   const res = await fetch(`${API_BASE}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers,
     ...options
   });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+// Auth Functions
+async function login(username, password) {
+  try {
+    const result = await fetch(`${API_BASE}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await result.json();
+    if (data.ok) {
+      state.sessionId = data.sessionId;
+      state.user = data.user;
+      state.isAuthenticated = true;
+      localStorage.setItem('owSessionId', data.sessionId);
+      return { ok: true };
+    }
+    return { ok: false, error: data.error };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function logout() {
+  try {
+    await api('/auth/logout', { method: 'POST' });
+  } catch { }
+  state.sessionId = null;
+  state.user = null;
+  state.isAuthenticated = false;
+  localStorage.removeItem('owSessionId');
+  render();
+}
+
+async function checkAuth() {
+  if (!state.sessionId) {
+    state.isAuthenticated = false;
+    return false;
+  }
+  try {
+    const data = await api('/auth/me');
+    if (data.ok) {
+      state.user = data.user;
+      state.isAuthenticated = true;
+      return true;
+    }
+  } catch { }
+  state.sessionId = null;
+  state.isAuthenticated = false;
+  localStorage.removeItem('owSessionId');
+  return false;
 }
 
 // Data Loading
@@ -353,6 +421,9 @@ async function loadData() {
       break;
     case 'tools':
       await loadTools();
+      break;
+    case 'settings':
+      await loadUsers();
       break;
     case 'overview':
       await loadStats();
@@ -402,6 +473,18 @@ async function loadTools() {
     const data = await api('/tools');
     state.tools = data.tools || [];
   } catch (e) { console.error(e); }
+}
+
+async function loadUsers() {
+  if (state.user?.role !== 'admin') return;
+  try {
+    const data = await api('/users');
+    if (data.ok) {
+      state.users = data.users;
+    }
+  } catch (e) {
+    console.error('Failed to load users:', e);
+  }
 }
 
 // Chat Functions
@@ -632,12 +715,249 @@ async function saveSkillConfig(id, config) {
 function render() {
   const root = document.getElementById('root');
 
+  // Check authentication first
+  if (!state.isAuthenticated) {
+    root.innerHTML = renderLoginPage();
+    bindLoginEvents();
+    return;
+  }
+
   if (state.view === 'setup') {
     root.innerHTML = renderSetupWizard();
     bindSetupEvents();
   } else {
     root.innerHTML = renderApp();
     bindEvents();
+  }
+}
+
+function renderLoginPage() {
+  return `
+    <div class="login-container">
+      <div class="login-box">
+        <div class="login-header">
+          <div class="login-logo">🐋</div>
+          <h1>OpenWhale</h1>
+          <p>Sign in to your dashboard</p>
+        </div>
+        <form id="login-form">
+          <div class="login-field">
+            <label for="login-username">Username</label>
+            <input type="text" id="login-username" placeholder="Enter username" required autofocus>
+          </div>
+          <div class="login-field">
+            <label for="login-password">Password</label>
+            <input type="password" id="login-password" placeholder="Enter password" required>
+          </div>
+          <div id="login-error" class="login-error"></div>
+          <button type="submit" class="login-btn">
+            <span>Sign In</span>
+            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </button>
+        </form>
+        <div class="login-footer">
+          <span>Default credentials:</span>
+          <code>admin / admin</code>
+        </div>
+      </div>
+      <div class="login-version">OpenWhale v0.1.0</div>
+    </div>
+    <style>
+      .login-container {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, #0a0a12 0%, #12121a 50%, #0d0d15 100%);
+        padding: 20px;
+        position: relative;
+      }
+      .login-container::before {
+        content: '';
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        width: 600px;
+        height: 600px;
+        background: radial-gradient(circle, rgba(88, 101, 242, 0.1) 0%, transparent 70%);
+        pointer-events: none;
+      }
+      .login-box {
+        position: relative;
+        background: linear-gradient(145deg, rgba(30, 30, 45, 0.9), rgba(20, 20, 32, 0.95));
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 20px;
+        padding: 48px 40px;
+        width: 100%;
+        max-width: 420px;
+        box-shadow: 
+          0 25px 50px -12px rgba(0, 0, 0, 0.5),
+          0 0 0 1px rgba(255, 255, 255, 0.05),
+          inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(20px);
+      }
+      .login-box::before {
+        content: '';
+        position: absolute;
+        inset: -1px;
+        border-radius: 21px;
+        padding: 1px;
+        background: linear-gradient(135deg, rgba(88, 101, 242, 0.5), rgba(255, 255, 255, 0.1), rgba(88, 101, 242, 0.3));
+        -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        pointer-events: none;
+      }
+      .login-header {
+        text-align: center;
+        margin-bottom: 32px;
+      }
+      .login-logo {
+        font-size: 56px;
+        margin-bottom: 16px;
+        filter: drop-shadow(0 4px 12px rgba(88, 101, 242, 0.3));
+      }
+      .login-header h1 {
+        font-size: 28px;
+        font-weight: 700;
+        margin: 0 0 8px;
+        background: linear-gradient(135deg, #fff, #a0a0b0);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .login-header p {
+        color: #6b6b80;
+        margin: 0;
+        font-size: 15px;
+      }
+      #login-form {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+      }
+      .login-field {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .login-field label {
+        font-size: 13px;
+        font-weight: 500;
+        color: #9090a0;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+      .login-field input {
+        width: 100%;
+        padding: 14px 16px;
+        background: rgba(0, 0, 0, 0.3);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        color: #fff;
+        font-size: 16px;
+        transition: all 0.2s ease;
+        box-sizing: border-box;
+      }
+      .login-field input::placeholder {
+        color: #4a4a5a;
+      }
+      .login-field input:focus {
+        outline: none;
+        border-color: rgba(88, 101, 242, 0.6);
+        box-shadow: 0 0 0 3px rgba(88, 101, 242, 0.15);
+        background: rgba(0, 0, 0, 0.4);
+      }
+      .login-error {
+        display: none;
+        padding: 12px 16px;
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        border-radius: 10px;
+        color: #ef4444;
+        font-size: 14px;
+        text-align: center;
+      }
+      .login-error.show {
+        display: block;
+      }
+      .login-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 16px 24px;
+        margin-top: 8px;
+        background: linear-gradient(135deg, #5865f2, #4752c4);
+        border: none;
+        border-radius: 12px;
+        color: #fff;
+        font-size: 16px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 4px 15px rgba(88, 101, 242, 0.3);
+      }
+      .login-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(88, 101, 242, 0.4);
+        background: linear-gradient(135deg, #6875f5, #5865f2);
+      }
+      .login-btn:active {
+        transform: translateY(0);
+      }
+      .login-footer {
+        margin-top: 28px;
+        padding-top: 20px;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        text-align: center;
+        font-size: 13px;
+        color: #5a5a6a;
+      }
+      .login-footer code {
+        display: inline-block;
+        margin-left: 6px;
+        padding: 4px 10px;
+        background: rgba(88, 101, 242, 0.15);
+        border-radius: 6px;
+        color: #8890f2;
+        font-family: monospace;
+        font-size: 12px;
+      }
+      .login-version {
+        margin-top: 24px;
+        font-size: 12px;
+        color: #3a3a4a;
+      }
+    </style>
+  `;
+}
+
+function bindLoginEvents() {
+  const form = document.getElementById('login-form');
+  if (form) {
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const username = document.getElementById('login-username').value;
+      const password = document.getElementById('login-password').value;
+      const errorDiv = document.getElementById('login-error');
+
+      // Hide any previous error
+      errorDiv.classList.remove('show');
+
+      const result = await login(username, password);
+      if (result.ok) {
+        await checkSetupStatus();
+        await loadData();
+        render();
+      } else {
+        errorDiv.textContent = result.error || 'Invalid username or password';
+        errorDiv.classList.add('show');
+      }
+    });
   }
 }
 
@@ -680,6 +1000,13 @@ function renderSidebar() {
           `).join('')}
         </div>
       </nav>
+      <div class="sidebar-footer">
+        <button class="nav-item" onclick="logout()" title="Logout (${state.user?.username || 'User'})">
+          <span class="nav-icon">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg>
+          </span>
+        </button>
+      </div>
     </aside>
   `;
 }
@@ -1209,7 +1536,30 @@ function renderTools() {
 }
 
 function renderSettings() {
+  const isAdmin = state.user?.role === 'admin';
+
   return `
+    <!-- Account Section -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Account</h3>
+      </div>
+      
+      <div class="user-item" style="margin-bottom: 20px;">
+        <div class="user-item-avatar">${(state.user?.username || 'U')[0].toUpperCase()}</div>
+        <div class="user-item-info">
+          <div class="user-item-name">${state.user?.username || 'User'}</div>
+          <div class="user-item-meta">
+            <span class="role-badge ${state.user?.role}">${state.user?.role || 'user'}</span>
+          </div>
+        </div>
+        <button class="btn btn-secondary btn-sm" onclick="showChangePasswordModal()">
+          Change Password
+        </button>
+      </div>
+    </div>
+    
+    <!-- General Settings -->
     <div class="card">
       <div class="card-header">
         <h3 class="card-title">General Settings</h3>
@@ -1232,6 +1582,57 @@ function renderSettings() {
       
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
     </div>
+    
+    ${isAdmin ? `
+    <!-- User Management (Admin Only) -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">User Management</h3>
+      </div>
+      
+      <div class="user-list" id="user-list">
+        ${state.users.map(u => `
+          <div class="user-item">
+            <div class="user-item-avatar">${(u.username || 'U')[0].toUpperCase()}</div>
+            <div class="user-item-info">
+              <div class="user-item-name">${u.username}</div>
+              <div class="user-item-meta">
+                <span class="role-badge ${u.role}">${u.role}</span>
+                <span>Created: ${u.createdAt ? new Date(u.createdAt).toLocaleDateString() : 'N/A'}</span>
+              </div>
+            </div>
+            <div class="user-item-actions">
+              ${u.id !== state.user?.userId ? `
+                <button class="btn btn-danger btn-sm" onclick="deleteUser('${u.id}', '${u.username}')">
+                  Delete
+                </button>
+              ` : '<span style="color: var(--text-muted); font-size: 12px;">You</span>'}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+      
+      <h4 style="font-size: 14px; margin-bottom: 12px; color: var(--text-secondary);">Add New User</h4>
+      <div class="add-user-form">
+        <div class="form-group">
+          <label class="form-label">Username</label>
+          <input type="text" class="form-input" id="new-username" placeholder="username">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password</label>
+          <input type="password" class="form-input" id="new-password" placeholder="password">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-input" id="new-role">
+            <option value="user">User</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <button class="btn btn-primary" onclick="addUser()">Add User</button>
+      </div>
+    </div>
+    ` : ''}
     
     <div class="card">
       <div class="card-header">
@@ -1719,6 +2120,161 @@ window.connectTelegram = connectTelegram;
 window.connectDiscord = connectDiscord;
 window.installPrerequisite = installPrerequisite;
 window.saveSetupStep = saveSetupStep;
+window.logout = logout;
+
+// User Management Functions
+
+async function addUser() {
+  const username = document.getElementById('new-username')?.value;
+  const password = document.getElementById('new-password')?.value;
+  const role = document.getElementById('new-role')?.value || 'user';
+
+  if (!username || !password) {
+    await showDialog('Error', 'Username and password are required');
+    return;
+  }
+
+  try {
+    const result = await api('/users', {
+      method: 'POST',
+      body: JSON.stringify({ username, password, role })
+    });
+
+    if (result.ok) {
+      await loadUsers();
+      render();
+      await showDialog('Success', `User "${username}" created successfully`);
+    } else {
+      await showDialog('Error', result.error || 'Failed to create user');
+    }
+  } catch (e) {
+    await showDialog('Error', e.message);
+  }
+}
+
+async function deleteUser(userId, username) {
+  const confirmed = await showConfirm('Delete User', `Are you sure you want to delete "${username}"? This cannot be undone.`);
+  if (!confirmed) return;
+
+  try {
+    const result = await api(`/users/${userId}`, { method: 'DELETE' });
+    if (result.ok) {
+      await loadUsers();
+      render();
+    } else {
+      await showDialog('Error', result.error || 'Failed to delete user');
+    }
+  } catch (e) {
+    await showDialog('Error', e.message);
+  }
+}
+
+function showChangePasswordModal() {
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'password-modal';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title">Change Password</h3>
+        <button class="modal-close" onclick="closeModal('password-modal')">✕</button>
+      </div>
+      <form id="change-password-form">
+        <div class="form-group">
+          <label class="form-label">Current Password</label>
+          <input type="password" class="form-input" id="current-password" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">New Password</label>
+          <input type="password" class="form-input" id="new-pw" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm New Password</label>
+          <input type="password" class="form-input" id="confirm-pw" required>
+        </div>
+        <div id="pw-error" style="color: var(--accent-red); margin-bottom: 16px; display: none;"></div>
+        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('password-modal')">Cancel</button>
+          <button type="submit" class="btn btn-primary">Change Password</button>
+        </div>
+      </form>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+
+  document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    await changePassword();
+  });
+}
+
+async function changePassword() {
+  const currentPassword = document.getElementById('current-password')?.value;
+  const newPassword = document.getElementById('new-pw')?.value;
+  const confirmPassword = document.getElementById('confirm-pw')?.value;
+  const errorDiv = document.getElementById('pw-error');
+
+  if (newPassword !== confirmPassword) {
+    errorDiv.textContent = 'New passwords do not match';
+    errorDiv.style.display = 'block';
+    return;
+  }
+
+  try {
+    const result = await api('/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+
+    if (result.ok) {
+      closeModal('password-modal');
+      await showDialog('Success', 'Password changed successfully');
+    } else {
+      errorDiv.textContent = result.error || 'Failed to change password';
+      errorDiv.style.display = 'block';
+    }
+  } catch (e) {
+    errorDiv.textContent = e.message;
+    errorDiv.style.display = 'block';
+  }
+}
+
+function closeModal(id) {
+  const modal = document.getElementById(id);
+  if (modal) modal.remove();
+}
+
+function showDialog(title, message) {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay';
+    overlay.id = 'dialog-modal';
+    overlay.innerHTML = `
+      <div class="modal-box">
+        <div class="modal-header">
+          <h3 class="modal-title">${title}</h3>
+          <button class="modal-close" onclick="closeModal('dialog-modal')">✕</button>
+        </div>
+        <p style="color: var(--text-secondary); margin-bottom: 24px;">${message}</p>
+        <div style="display: flex; justify-content: flex-end;">
+          <button class="btn btn-primary" id="dialog-ok-btn">OK</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+    document.getElementById('dialog-ok-btn').addEventListener('click', () => {
+      closeModal('dialog-modal');
+      resolve();
+    });
+  });
+}
+
+window.addUser = addUser;
+window.deleteUser = deleteUser;
+window.showChangePasswordModal = showChangePasswordModal;
+window.changePassword = changePassword;
+window.closeModal = closeModal;
+window.showDialog = showDialog;
 
 // Test AI provider connection
 window.testAIProvider = async function () {

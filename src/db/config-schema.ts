@@ -89,3 +89,25 @@ export const dashboardMessages = sqliteTable("dashboard_messages", {
     outputTokens: integer("output_tokens"),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+/**
+ * Dashboard users for authentication
+ */
+export const dashboardUsers = sqliteTable("dashboard_users", {
+    id: text("id").primaryKey(),
+    username: text("username").notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    role: text("role").default("user"), // admin, user
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+    lastLoginAt: integer("last_login_at", { mode: "timestamp" }),
+});
+
+/**
+ * Auth sessions for dashboard login
+ */
+export const authSessions = sqliteTable("auth_sessions", {
+    id: text("id").primaryKey(),
+    userId: text("user_id").notNull(),
+    expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
+    createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});

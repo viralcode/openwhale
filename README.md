@@ -138,6 +138,24 @@ First time running? The dashboard walks you through:
 3. Connecting messaging channels
 4. Enabling skills
 
+### Authentication
+
+The dashboard is protected by authentication.
+
+**Default credentials:**
+```
+Username: admin
+Password: admin
+```
+
+> ⚠️ **Security Note:** Change the default password after first login!
+
+**Features:**
+- Session-based auth with 7-day expiry
+- Admin can create additional users
+- Password change in Settings
+- Logout button in sidebar
+
 ---
 
 ## Connecting Channels

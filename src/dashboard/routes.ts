@@ -7,14 +7,14 @@ import { Hono } from "hono";
 import type { DrizzleDB } from "../db/connection.js";
 import type { OpenWhaleConfig } from "../config/loader.js";
 import { sessions, users, messages, auditLogs } from "../db/schema.js";
-import { providerConfig, skillConfig, channelConfig, setupState as setupStateTable } from "../db/config-schema.js";
+import { providerConfig, skillConfig, channelConfig, setupState as setupStateTable, dashboardUsers, authSessions } from "../db/config-schema.js";
 import { desc, sql, eq } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync, exec } from "node:child_process";
 import { promisify } from "node:util";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import {
     initializeProvider,
     setModel,
@@ -218,12 +218,224 @@ if (process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY) {
 export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
     const dashboard = new Hono();
 
+    // ============== AUTH HELPERS ==============
+
+    function hashPassword(password: string): string {
+        return createHash("sha256").update(password).digest("hex");
+    }
+
+    async function validateSession(sessionId: string | undefined): Promise<{ userId: string; username: string; role: string } | null> {
+        if (!sessionId) return null;
+        try {
+            const session = await db.select().from(authSessions).where(eq(authSessions.id, sessionId)).limit(1);
+            if (!session.length || !session[0].expiresAt || new Date(session[0].expiresAt) < new Date()) {
+                return null;
+            }
+            const user = await db.select().from(dashboardUsers).where(eq(dashboardUsers.id, session[0].userId)).limit(1);
+            if (!user.length) return null;
+            return { userId: user[0].id, username: user[0].username, role: user[0].role || "user" };
+        } catch {
+            return null;
+        }
+    }
+
+    async function ensureAuthTables(): Promise<void> {
+        try {
+            // Create dashboard_users table if not exists
+            await db.run(sql`
+                CREATE TABLE IF NOT EXISTS dashboard_users (
+                    id TEXT PRIMARY KEY,
+                    username TEXT NOT NULL UNIQUE,
+                    password_hash TEXT NOT NULL,
+                    role TEXT DEFAULT 'user',
+                    created_at INTEGER,
+                    last_login_at INTEGER
+                )
+            `);
+
+            // Create auth_sessions table if not exists
+            await db.run(sql`
+                CREATE TABLE IF NOT EXISTS auth_sessions (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    created_at INTEGER
+                )
+            `);
+        } catch (e) {
+            console.error("[Dashboard] Failed to create auth tables:", e);
+        }
+    }
+
+    async function ensureDefaultAdmin(): Promise<void> {
+        try {
+            // First ensure tables exist
+            await ensureAuthTables();
+
+            const existing = await db.select().from(dashboardUsers).limit(1);
+            if (!existing.length) {
+                await db.insert(dashboardUsers).values({
+                    id: randomUUID(),
+                    username: "admin",
+                    passwordHash: hashPassword("admin"),
+                    role: "admin",
+                });
+                console.log("[Dashboard] Created default admin user (admin/admin)");
+            }
+        } catch (e) {
+            console.error("[Dashboard] Failed to create default admin:", e);
+        }
+    }
+
     // Load configs from database on startup
     loadConfigsFromDB(db).then(() => {
         console.log("[Dashboard] ✅ Configs loaded, env vars set for skills");
         console.log("[Dashboard] GITHUB_TOKEN:", process.env.GITHUB_TOKEN ? "Set" : "Not set");
     }).catch((e) => {
         console.error("[Dashboard] Failed to load configs:", e);
+    });
+
+    // Create default admin on startup
+    ensureDefaultAdmin();
+
+    // ============== AUTH ROUTES (no auth required) ==============
+
+    dashboard.post("/api/auth/login", async (c) => {
+        try {
+            const { username, password } = await c.req.json();
+            if (!username || !password) {
+                return c.json({ ok: false, error: "Username and password required" }, 400);
+            }
+
+            const user = await db.select().from(dashboardUsers).where(eq(dashboardUsers.username, username)).limit(1);
+            if (!user.length || user[0].passwordHash !== hashPassword(password)) {
+                return c.json({ ok: false, error: "Invalid username or password" }, 401);
+            }
+
+            // Create session (7 days)
+            const sessionId = randomUUID();
+            const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+
+            await db.insert(authSessions).values({
+                id: sessionId,
+                userId: user[0].id,
+                expiresAt,
+            });
+
+            // Update last login
+            await db.update(dashboardUsers).set({ lastLoginAt: new Date() }).where(eq(dashboardUsers.id, user[0].id));
+
+            return c.json({ ok: true, sessionId, user: { username: user[0].username, role: user[0].role } });
+        } catch (e) {
+            console.error("[Dashboard] Login error:", e);
+            return c.json({ ok: false, error: "Login failed" }, 500);
+        }
+    });
+
+    dashboard.post("/api/auth/logout", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        if (sessionId) {
+            await db.delete(authSessions).where(eq(authSessions.id, sessionId));
+        }
+        return c.json({ ok: true });
+    });
+
+    dashboard.get("/api/auth/me", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) {
+            return c.json({ ok: false, error: "Not authenticated" }, 401);
+        }
+        return c.json({ ok: true, user });
+    });
+
+    dashboard.post("/api/auth/change-password", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) {
+            return c.json({ ok: false, error: "Not authenticated" }, 401);
+        }
+
+        const { currentPassword, newPassword } = await c.req.json();
+        if (!currentPassword || !newPassword) {
+            return c.json({ ok: false, error: "Current and new passwords required" }, 400);
+        }
+
+        const dbUser = await db.select().from(dashboardUsers).where(eq(dashboardUsers.id, user.userId)).limit(1);
+        if (!dbUser.length || dbUser[0].passwordHash !== hashPassword(currentPassword)) {
+            return c.json({ ok: false, error: "Current password is incorrect" }, 401);
+        }
+
+        await db.update(dashboardUsers).set({ passwordHash: hashPassword(newPassword) }).where(eq(dashboardUsers.id, user.userId));
+        return c.json({ ok: true, message: "Password changed successfully" });
+    });
+
+    // ============== USER MANAGEMENT (admin only) ==============
+
+    dashboard.get("/api/users", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user || user.role !== "admin") {
+            return c.json({ ok: false, error: "Admin access required" }, 403);
+        }
+
+        const users = await db.select({
+            id: dashboardUsers.id,
+            username: dashboardUsers.username,
+            role: dashboardUsers.role,
+            createdAt: dashboardUsers.createdAt,
+            lastLoginAt: dashboardUsers.lastLoginAt,
+        }).from(dashboardUsers);
+
+        return c.json({ ok: true, users });
+    });
+
+    dashboard.post("/api/users", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user || user.role !== "admin") {
+            return c.json({ ok: false, error: "Admin access required" }, 403);
+        }
+
+        const { username, password, role = "user" } = await c.req.json();
+        if (!username || !password) {
+            return c.json({ ok: false, error: "Username and password required" }, 400);
+        }
+
+        // Check if username exists
+        const existing = await db.select().from(dashboardUsers).where(eq(dashboardUsers.username, username)).limit(1);
+        if (existing.length) {
+            return c.json({ ok: false, error: "Username already exists" }, 400);
+        }
+
+        const newUser = {
+            id: randomUUID(),
+            username,
+            passwordHash: hashPassword(password),
+            role,
+        };
+
+        await db.insert(dashboardUsers).values(newUser);
+        return c.json({ ok: true, user: { id: newUser.id, username, role } });
+    });
+
+    dashboard.delete("/api/users/:id", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user || user.role !== "admin") {
+            return c.json({ ok: false, error: "Admin access required" }, 403);
+        }
+
+        const userId = c.req.param("id");
+
+        // Prevent deleting yourself
+        if (userId === user.userId) {
+            return c.json({ ok: false, error: "Cannot delete your own account" }, 400);
+        }
+
+        await db.delete(authSessions).where(eq(authSessions.userId, userId));
+        await db.delete(dashboardUsers).where(eq(dashboardUsers.id, userId));
+        return c.json({ ok: true });
     });
 
     // ============== STATIC FILES ==============
