@@ -20,6 +20,12 @@
 
 ---
 
+<p align="center">
+  <a href="FEATURES.md"><strong>📋 View Full Features List</strong></a>
+</p>
+
+---
+
 ## What is this?
 
 OpenWhale is an AI assistant that can take action. It connects to multiple AI models, talks on your behalf through WhatsApp/Telegram/Discord, browses the web, executes code, manages your calendar, and basically does whatever you need it to do.
