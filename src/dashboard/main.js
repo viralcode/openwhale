@@ -1140,7 +1140,11 @@ function renderTools() {
     nodes: 'gitBranch',
     memory: 'database',
     code_exec: 'code',
-    screenshot: 'camera'
+    screenshot: 'camera',
+    extend: 'puzzle',
+    camera_snap: 'camera',
+    camera_record: 'video',
+    screen_record: 'monitor'
   };
 
   const categoryColors = {

@@ -83,25 +83,7 @@ const memoryStore: Map<string, {
 
 export const memoryTool: AgentTool<MemoryAction> = {
     name: "memory",
-    description: `Store and recall information. Multiple memory systems available:
-
-1. SESSION MEMORY (in-memory, fast, session-scoped):
-   - remember/recall/forget/list/search - Quick key-value storage
-
-2. PERSISTENT MEMORY (file-based, survives restarts):
-   - write_memory - Add to MEMORY.md for important long-term facts
-   - add_daily - Add notes to today's daily log (YYYY-MM-DD.md)
-   - read_memory - Read memory files
-   - search_memory - Keyword search across all memory files
-
-3. VECTOR MEMORY (semantic search with embeddings):
-   - vector_search - Find semantically similar content (requires OPENAI_API_KEY)
-   - index_memory - Re-index all memory files for vector search
-   - memory_status - Show vector memory stats
-
-Use write_memory for: user preferences, important facts, learned information
-Use add_daily for: conversation summaries, daily notes, context
-Use vector_search for: finding related content by meaning, not just keywords`,
+    description: `Store and recall information across sessions. Supports key-value storage, persistent MEMORY.md files, daily logs, and semantic vector search.`,
     category: "utility",
     parameters: MemoryActionSchema,
 
