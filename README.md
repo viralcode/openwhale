@@ -393,27 +393,31 @@ Get keys at [trello.com/app-key](https://trello.com/app-key).
 
 ## AI Providers
 
-Add the keys for whichever AI services you want to use. You can use multiple.
+OpenWhale supports **8 AI providers** with automatic failover. Add the keys for whichever services you want to use.
+
+| Provider | Env Variable | Top Models (Feb 2026) |
+|----------|--------------|----------------------|
+| **Anthropic** | `ANTHROPIC_API_KEY` | `claude-sonnet-5-20260203`, `claude-opus-4-5`, `claude-sonnet-4-5` |
+| **OpenAI** | `OPENAI_API_KEY` | `gpt-5.2`, `gpt-5`, `gpt-4o`, `o4-mini` |
+| **Google Gemini** | `GOOGLE_API_KEY` | `gemini-3-pro-preview`, `gemini-3-flash-preview`, `gemini-2.5-pro` |
+| **Qwen** | `DASHSCOPE_API_KEY` | `qwen3-max`, `qwq-plus`, `qwen3-coder-plus`, `qwen3-vl-plus` |
+| **DeepSeek** | `DEEPSEEK_API_KEY` | `deepseek-chat`, `deepseek-coder`, `deepseek-reasoner` |
+| **Groq** | `GROQ_API_KEY` | `llama-3.3-70b-versatile`, `mixtral-8x7b-32768` |
+| **Together AI** | `TOGETHER_API_KEY` | Any open-source model |
+| **Ollama** | `OLLAMA_HOST` | Local models (no API key needed) |
 
 ```bash
-# Anthropic Claude (recommended)
+# Example .env configuration
 ANTHROPIC_API_KEY=sk-ant-...
-
-# OpenAI GPT-4
 OPENAI_API_KEY=sk-...
-
-# Google Gemini
 GOOGLE_API_KEY=...
-
-# DeepSeek
+DASHSCOPE_API_KEY=...  # or QWEN_API_KEY
 DEEPSEEK_API_KEY=...
-
-# Groq (fast inference)
 GROQ_API_KEY=...
-
-# Ollama (local models, no key needed)
 OLLAMA_HOST=http://localhost:11434
 ```
+
+**Fallback Order:** Anthropic → OpenAI → Google → Qwen → DeepSeek → Groq → Together → Ollama
 
 Switch models on the fly in the dashboard or CLI.
 

@@ -210,13 +210,20 @@ export function createOpenAIProvider(): OpenAICompatibleProvider | null {
         apiKey,
         baseUrl: "https://api.openai.com/v1",
         models: [
+            // GPT-5 series (2026)
+            "gpt-5.2",
+            "gpt-5.2-instant",
+            "gpt-5",
+            // GPT-4o (still on API, retiring from ChatGPT Feb 2026)
             "gpt-4o",
             "gpt-4o-mini",
-            "gpt-4-turbo",
-            "gpt-4",
-            "gpt-3.5-turbo",
+            // o-series reasoning
+            "o4-mini",
             "o1-preview",
             "o1-mini",
+            // Legacy
+            "gpt-4-turbo",
+            "gpt-3.5-turbo",
         ],
     });
 }
@@ -271,3 +278,32 @@ export function createOllamaProvider(): OpenAICompatibleProvider | null {
     });
 }
 
+export function createQwenProvider(): OpenAICompatibleProvider | null {
+    const apiKey = process.env.DASHSCOPE_API_KEY ?? process.env.QWEN_API_KEY;
+    if (!apiKey) return null;
+    return new OpenAICompatibleProvider({
+        name: "Qwen",
+        apiKey,
+        baseUrl: "https://dashscope-intl.aliyuncs.com/compatible-mode/v1",
+        models: [
+            // Qwen 3 Flagship (Feb 2026)
+            "qwen3-max",
+            "qwen3-max-2026-01-23",
+            "qwen-max",
+            "qwen-plus",
+            "qwen-turbo",
+            // Reasoning
+            "qwq-plus",
+            "qwq-32b",
+            // Vision & Multimodal
+            "qwen3-vl-plus",
+            "qwen3-vl-flash",
+            "qwen-vl-max",
+            // Coding
+            "qwen3-coder-plus",
+            "qwen3-coder-flash",
+            // Long context
+            "qwen-long",
+        ],
+    });
+}

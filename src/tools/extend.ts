@@ -19,6 +19,12 @@ import {
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
+import {
+    setSecret,
+    deleteSecret,
+    listSecrets,
+    deleteAllSecrets,
+} from "./extension-secrets.js";
 
 // Extensions directory
 const EXTENSIONS_DIR = join(homedir(), ".openwhale", "extensions");
@@ -82,6 +88,7 @@ const ExtendActionSchema = z.discriminatedUnion("action", [
         code: z.string().describe("TypeScript code for the extension"),
         schedule: z.string().optional().describe("Cron expression for scheduled execution (e.g., '0 9 * * *' for 9 AM daily)"),
         channels: z.array(z.string()).optional().describe("Channels to send notifications to (e.g., ['whatsapp'])"),
+        knowledgeUrl: z.string().optional().describe("URL to fetch and store as knowledge base for this extension"),
     }),
     z.object({
         action: z.literal("list"),
@@ -114,6 +121,21 @@ const ExtendActionSchema = z.discriminatedUnion("action", [
         action: z.literal("disable"),
         name: z.string().describe("Name of the extension to disable"),
     }),
+    z.object({
+        action: z.literal("set_secret"),
+        name: z.string().describe("Name of the extension"),
+        key: z.string().describe("Secret key (e.g., 'API_KEY', 'TOKEN')"),
+        value: z.string().describe("Secret value (will be stored securely)"),
+    }),
+    z.object({
+        action: z.literal("list_secrets"),
+        name: z.string().describe("Name of the extension"),
+    }),
+    z.object({
+        action: z.literal("delete_secret"),
+        name: z.string().describe("Name of the extension"),
+        key: z.string().describe("Secret key to delete"),
+    }),
 ]);
 
 type ExtendAction = z.infer<typeof ExtendActionSchema>;
@@ -122,6 +144,7 @@ type ExtendAction = z.infer<typeof ExtendActionSchema>;
  * Generate the extension SDK that gets injected into extension code
  */
 function generateExtensionSDK(extensionName: string, channels: string[]): string {
+    const secretsFile = join(EXTENSIONS_DIR, extensionName, "secrets.json");
     return `
 // OpenWhale Extension SDK - Auto-injected
 const __EXTENSION_NAME__ = ${JSON.stringify(extensionName)};
@@ -129,6 +152,7 @@ const __CHANNELS__ = ${JSON.stringify(channels)};
 
 // Simple data storage using JSON file
 const __DATA_FILE__ = ${JSON.stringify(join(EXTENSIONS_DIR, extensionName, "data.json"))};
+const __SECRETS_FILE__ = ${JSON.stringify(secretsFile)};
 import * as __fs from "node:fs";
 
 const openwhale = {
@@ -175,6 +199,31 @@ const openwhale = {
         },
     },
     
+    // Secure secrets access (managed via set_secret action)
+    secrets: {
+        get: (key: string): string | undefined => {
+            try {
+                if (!__fs.existsSync(__SECRETS_FILE__)) return undefined;
+                const data = JSON.parse(__fs.readFileSync(__SECRETS_FILE__, "utf8"));
+                return data[key];
+            } catch { return undefined; }
+        },
+        has: (key: string): boolean => {
+            try {
+                if (!__fs.existsSync(__SECRETS_FILE__)) return false;
+                const data = JSON.parse(__fs.readFileSync(__SECRETS_FILE__, "utf8"));
+                return key in data;
+            } catch { return false; }
+        },
+        keys: (): string[] => {
+            try {
+                if (!__fs.existsSync(__SECRETS_FILE__)) return [];
+                const data = JSON.parse(__fs.readFileSync(__SECRETS_FILE__, "utf8"));
+                return Object.keys(data);
+            } catch { return []; }
+        },
+    },
+    
     // Logging
     log: (message: string): void => {
         console.log(\`[\${__EXTENSION_NAME__}] \${message}\`);
@@ -186,6 +235,7 @@ const openwhale = {
 };
 
 // Make fetch available
+
 import fetch from "node:http";
 `;
 }
@@ -511,6 +561,21 @@ CRON EXPRESSIONS:
                 // Create extension directory
                 mkdirSync(extPath, { recursive: true });
 
+                // Fetch knowledge from URL if provided
+                let knowledgeContent = "";
+                if (params.knowledgeUrl) {
+                    try {
+                        const response = await fetch(params.knowledgeUrl);
+                        if (response.ok) {
+                            knowledgeContent = await response.text();
+                            // Store as knowledge file
+                            writeFileSync(join(extPath, "knowledge.md"), `# Knowledge Base\nSource: ${params.knowledgeUrl}\n\n${knowledgeContent}`);
+                        }
+                    } catch (err) {
+                        console.log(`[Extension] Failed to fetch knowledge URL: ${err}`);
+                    }
+                }
+
                 // Create manifest
                 const manifest: ExtensionManifest = {
                     name: params.name,
@@ -540,6 +605,9 @@ CRON EXPRESSIONS:
                 }
                 if (params.channels?.length) {
                     response += `📢 Channels: ${params.channels.join(", ")}\n`;
+                }
+                if (knowledgeContent) {
+                    response += `📚 Knowledge base loaded from URL\n`;
                 }
                 response += `\nRun with: extend({ action: "run", name: "${params.name}" })`;
 
@@ -656,6 +724,9 @@ CRON EXPRESSIONS:
                 // Remove from memory
                 loadedExtensions.delete(params.name);
 
+                // Delete secrets from SQLite
+                deleteAllSecrets(params.name);
+
                 // Delete files
                 rmSync(extPath, { recursive: true, force: true });
 
@@ -718,6 +789,79 @@ CRON EXPRESSIONS:
                 return {
                     success: true,
                     content: `⏸️ Extension '${params.name}' disabled.`,
+                };
+            }
+
+            case "set_secret": {
+                const manifest = readManifest(params.name);
+                if (!manifest) {
+                    return { success: false, content: "", error: `Extension '${params.name}' not found.` };
+                }
+
+                // Store secret in file (per-extension)
+                const secretsPath = join(getExtensionPath(params.name), "secrets.json");
+                let secrets: Record<string, string> = {};
+                try {
+                    if (existsSync(secretsPath)) {
+                        secrets = JSON.parse(readFileSync(secretsPath, "utf8"));
+                    }
+                } catch { }
+                secrets[params.key] = params.value;
+                writeFileSync(secretsPath, JSON.stringify(secrets, null, 2));
+
+                // Also store in SQLite for persistence
+                setSecret(params.name, params.key, params.value);
+
+                return {
+                    success: true,
+                    content: `🔐 Secret '${params.key}' stored for extension '${params.name}'. Access it in your code via openwhale.secrets.get("${params.key}")`,
+                };
+            }
+
+            case "list_secrets": {
+                const manifest = readManifest(params.name);
+                if (!manifest) {
+                    return { success: false, content: "", error: `Extension '${params.name}' not found.` };
+                }
+
+                const keys = listSecrets(params.name);
+                if (keys.length === 0) {
+                    return {
+                        success: true,
+                        content: `No secrets stored for extension '${params.name}'.`,
+                    };
+                }
+
+                return {
+                    success: true,
+                    content: `🔐 Secrets for '${params.name}':\n${keys.map(k => `  • ${k}`).join("\n")}`,
+                };
+            }
+
+            case "delete_secret": {
+                const manifest = readManifest(params.name);
+                if (!manifest) {
+                    return { success: false, content: "", error: `Extension '${params.name}' not found.` };
+                }
+
+                // Delete from file
+                const secretsPath = join(getExtensionPath(params.name), "secrets.json");
+                try {
+                    if (existsSync(secretsPath)) {
+                        const secrets = JSON.parse(readFileSync(secretsPath, "utf8"));
+                        delete secrets[params.key];
+                        writeFileSync(secretsPath, JSON.stringify(secrets, null, 2));
+                    }
+                } catch { }
+
+                // Delete from SQLite
+                const deleted = deleteSecret(params.name, params.key);
+
+                return {
+                    success: true,
+                    content: deleted
+                        ? `🗑️ Secret '${params.key}' deleted from extension '${params.name}'.`
+                        : `Secret '${params.key}' not found in extension '${params.name}'.`,
                 };
             }
         }
