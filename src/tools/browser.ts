@@ -234,8 +234,14 @@ class BrowserManager {
 
         this.context = await this.browser.newContext({
             viewport: { width: 1280, height: 720 },
-            userAgent: "OpenWhale/1.0 (AI Assistant)",
+            // Use modern Chrome user-agent so sites render properly
+            userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            // Disable cache to get fresh content
+            bypassCSP: true,
         });
+
+        // Clear cookies/cache for fresh sessions
+        await this.context.clearCookies();
 
         console.log(`[Browser] Started in ${headless ? 'headless' : 'visible'} mode`);
     }
