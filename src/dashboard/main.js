@@ -1492,6 +1492,28 @@ function renderChannelsStep() {
         ` : ''}
       </div>
       
+      <div class="prereq-item" style="flex-direction: column; align-items: stretch;">
+        <div style="display: flex; align-items: center; gap: 16px; width: 100%;">
+          <span class="prereq-icon">🎮</span>
+          <div class="prereq-info">
+            <div class="prereq-name">Discord</div>
+            <div class="prereq-desc">Chat via Discord bot</div>
+          </div>
+          <label class="toggle">
+            <input type="checkbox" id="setup-discord">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        ${document.getElementById?.('setup-discord')?.checked ? `
+          <div style="margin-top: 16px; padding: 16px; background: var(--bg-secondary); border-radius: var(--radius-sm);">
+            <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 14px;">🤖 Create a Discord bot at Discord Developer Portal</p>
+            <button class="btn btn-primary" onclick="connectChannelInSetup('discord')" style="width: 100%;">
+              🔑 Enter Bot Token
+            </button>
+          </div>
+        ` : ''}
+      </div>
+      
       <div class="prereq-item">
         <span class="prereq-icon">🌐</span>
         <div class="prereq-info">
@@ -1841,11 +1863,30 @@ window.connectChannelInSetup = async function (type) {
       // Telegram bot token input
       const token = await showPrompt('Enter your Telegram Bot Token (from @BotFather):', '', '📱 Telegram Setup');
       if (token) {
-        await api('/config', {
+        const result = await api('/channels/telegram/connect', {
           method: 'POST',
           body: JSON.stringify({ telegramBotToken: token })
         });
-        await showAlert('Telegram bot token saved!', '✅ Success');
+        if (result.ok) {
+          await showAlert(`Telegram bot @${result.botUsername} connected!`, '✅ Success');
+        } else {
+          await showAlert(`Failed: ${result.error}`, '❌ Error');
+        }
+      }
+      render();
+    } else if (type === 'discord') {
+      // Discord bot token input
+      const token = await showPrompt('Enter your Discord Bot Token:', '', '🎮 Discord Setup');
+      if (token) {
+        const result = await api('/channels/discord/connect', {
+          method: 'POST',
+          body: JSON.stringify({ discordBotToken: token })
+        });
+        if (result.ok) {
+          await showAlert(`Discord bot ${result.botUsername} connected!`, '✅ Success');
+        } else {
+          await showAlert(`Failed: ${result.error}`, '❌ Error');
+        }
       }
       render();
     }
