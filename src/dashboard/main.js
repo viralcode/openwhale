@@ -539,6 +539,60 @@ async function connectWhatsApp() {
   }
 }
 
+async function connectTelegram() {
+  const token = await showPrompt(
+    'Enter your Telegram Bot Token (from @BotFather):',
+    '',
+    '🤖 Telegram Setup'
+  );
+
+  if (!token) return;
+
+  try {
+    const result = await api('/channels/telegram/connect', {
+      method: 'POST',
+      body: JSON.stringify({ telegramBotToken: token })
+    });
+
+    if (result.ok) {
+      await showAlert(`Telegram bot @${result.botUsername} connected!`, '✅ Success');
+      await loadChannels();
+      render();
+    } else {
+      await showAlert(`Failed: ${result.error}`, '❌ Error');
+    }
+  } catch (e) {
+    await showAlert(`Failed to connect: ${e.message}`, '❌ Error');
+  }
+}
+
+async function connectDiscord() {
+  const token = await showPrompt(
+    'Enter your Discord Bot Token:',
+    '',
+    '🎮 Discord Setup'
+  );
+
+  if (!token) return;
+
+  try {
+    const result = await api('/channels/discord/connect', {
+      method: 'POST',
+      body: JSON.stringify({ discordBotToken: token })
+    });
+
+    if (result.ok) {
+      await showAlert(`Discord bot ${result.botUsername} connected!`, '✅ Success');
+      await loadChannels();
+      render();
+    } else {
+      await showAlert(`Failed: ${result.error}`, '❌ Error');
+    }
+  } catch (e) {
+    await showAlert(`Failed to connect: ${e.message}`, '❌ Error');
+  }
+}
+
 // Provider/Skill Config Functions
 async function saveProviderConfig(id, config) {
   try {
@@ -878,6 +932,18 @@ function renderChannels() {
                 <p>Scan with WhatsApp to connect</p>
               </div>
             ` : ''}
+          ` : ''}
+          
+          ${ch.type === 'telegram' && !ch.connected && ch.enabled ? `
+            <button class="btn btn-primary" onclick="connectTelegram()" style="margin-top: 16px; width: 100%">
+              🤖 Connect Telegram Bot
+            </button>
+          ` : ''}
+          
+          ${ch.type === 'discord' && !ch.connected && ch.enabled ? `
+            <button class="btn btn-primary" onclick="connectDiscord()" style="margin-top: 16px; width: 100%">
+              🎮 Connect Discord Bot
+            </button>
           ` : ''}
           
           <div class="channel-stats">
@@ -1615,6 +1681,8 @@ window.completeSetup = async function () {
 // Global functions for onclick handlers
 window.toggleChannel = toggleChannel;
 window.connectWhatsApp = connectWhatsApp;
+window.connectTelegram = connectTelegram;
+window.connectDiscord = connectDiscord;
 window.installPrerequisite = installPrerequisite;
 window.saveSetupStep = saveSetupStep;
 

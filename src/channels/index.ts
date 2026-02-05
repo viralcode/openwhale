@@ -20,12 +20,27 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     channelRegistry.register(webAdapter);
     await webAdapter.connect();
 
+    // Get AI provider for channels
+    let aiProvider: any = null;
+    let currentModel = "claude-sonnet-4-20250514";
+
+    try {
+        const { createAnthropicProvider } = await import("../providers/anthropic.js");
+        aiProvider = createAnthropicProvider();
+    } catch (err) {
+        console.log("[Channels] No AI provider available for Telegram/Discord");
+    }
+
     // Register Telegram if configured
     const telegram = createTelegramAdapter();
     if (telegram) {
+        if (aiProvider) {
+            telegram.setAIProvider(aiProvider, currentModel);
+        }
         channelRegistry.register(telegram);
         try {
             await telegram.connect();
+            console.log("[Telegram] ✓ Connected with AI processing enabled");
         } catch (err) {
             console.error("Failed to connect Telegram:", err);
         }
@@ -34,9 +49,13 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     // Register Discord if configured
     const discord = createDiscordAdapter();
     if (discord) {
+        if (aiProvider) {
+            discord.setAIProvider(aiProvider, currentModel);
+        }
         channelRegistry.register(discord);
         try {
             await discord.connect();
+            console.log("[Discord] ✓ Connected with AI processing enabled");
         } catch (err) {
             console.error("Failed to connect Discord:", err);
         }

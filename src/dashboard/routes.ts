@@ -550,6 +550,105 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         }
     });
 
+    // Telegram connect
+    dashboard.post("/api/channels/telegram/connect", async (c) => {
+        try {
+            const body = await c.req.json();
+            const { telegramBotToken } = body;
+
+            if (!telegramBotToken) {
+                return c.json({ ok: false, error: "Bot token required" }, 400);
+            }
+
+            // Validate token by calling Telegram API
+            const response = await fetch(`https://api.telegram.org/bot${telegramBotToken}/getMe`);
+            const data = await response.json() as { ok: boolean; result?: { username: string }; description?: string };
+
+            if (!data.ok) {
+                return c.json({ ok: false, error: data.description || "Invalid bot token" }, 400);
+            }
+
+            // Save token to environment
+            process.env.TELEGRAM_BOT_TOKEN = telegramBotToken;
+
+            // Mark as connected
+            channelConfigs.set("telegram", { enabled: true, connected: true });
+
+            // Start the Telegram adapter
+            const { createTelegramAdapter } = await import("../channels/telegram.js");
+            const { createAnthropicProvider } = await import("../providers/anthropic.js");
+            const telegram = createTelegramAdapter();
+            if (telegram) {
+                const aiProvider = createAnthropicProvider();
+                telegram.setAIProvider(aiProvider, "claude-sonnet-4-20250514");
+                await telegram.connect();
+            }
+
+            console.log(`[Dashboard] Telegram connected: @${data.result?.username}`);
+            return c.json({ ok: true, botUsername: data.result?.username });
+        } catch (e) {
+            console.error("[Dashboard] Telegram connect error:", e);
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // Telegram status
+    dashboard.get("/api/channels/telegram/status", async (c) => {
+        const config = channelConfigs.get("telegram");
+        const connected = config?.connected ?? false;
+        return c.json({ connected, enabled: config?.enabled ?? false });
+    });
+
+    // Discord connect
+    dashboard.post("/api/channels/discord/connect", async (c) => {
+        try {
+            const body = await c.req.json();
+            const { discordBotToken } = body;
+
+            if (!discordBotToken) {
+                return c.json({ ok: false, error: "Bot token required" }, 400);
+            }
+
+            // Validate token
+            const response = await fetch("https://discord.com/api/v10/users/@me", {
+                headers: { Authorization: `Bot ${discordBotToken}` },
+            });
+
+            if (!response.ok) {
+                return c.json({ ok: false, error: "Invalid bot token" }, 400);
+            }
+
+            const data = await response.json() as { username: string };
+
+            // Save token to environment
+            process.env.DISCORD_BOT_TOKEN = discordBotToken;
+
+            channelConfigs.set("discord", { enabled: true, connected: true });
+
+            // Start Discord adapter
+            const { createDiscordAdapter } = await import("../channels/discord.js");
+            const { createAnthropicProvider } = await import("../providers/anthropic.js");
+            const discord = createDiscordAdapter();
+            if (discord) {
+                const aiProvider = createAnthropicProvider();
+                discord.setAIProvider(aiProvider, "claude-sonnet-4-20250514");
+                await discord.connect();
+            }
+
+            console.log(`[Dashboard] Discord connected: ${data.username}`);
+            return c.json({ ok: true, botUsername: data.username });
+        } catch (e) {
+            console.error("[Dashboard] Discord connect error:", e);
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // Discord status
+    dashboard.get("/api/channels/discord/status", async (c) => {
+        const config = channelConfigs.get("discord");
+        return c.json({ connected: config?.connected ?? false, enabled: config?.enabled ?? false });
+    });
+
     // Channel message history
     dashboard.get("/api/channels/:type/messages", async (c) => {
         const channelType = c.req.param("type");

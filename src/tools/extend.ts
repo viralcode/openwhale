@@ -479,71 +479,7 @@ export async function hotReloadExtension(name: string): Promise<void> {
 
 export const extendTool: AgentTool<ExtendAction> = {
     name: "extend",
-    description: `Create, manage, and run persistent extensions that extend OpenWhale's capabilities.
-Extensions are TypeScript files that persist across restarts and can be scheduled to run automatically.
-
-IMPORTANT: Always set channels: ["whatsapp"] when creating extensions that should send notifications.
-
-Use this to:
-- Create custom automations (reminders, notifications, data processing)
-- Schedule recurring tasks with cron expressions
-- Send notifications to WhatsApp or other channels
-- Store persistent data across runs
-
-Extensions have access to the 'openwhale' SDK:
-- openwhale.notify(message, channel?) - Send notification (use "whatsapp" as channel)
-- openwhale.data.get(key) / set(key, value) - Persist key-value data
-- openwhale.log(message) - Logging
-
-EXTENSION CODE EXAMPLES:
-
-1. ONE-TIME REMINDER (runs once, notifies via WhatsApp):
-\`\`\`typescript
-await openwhale.notify("⏰ Reminder: Don't forget your meeting!", "whatsapp");
-\`\`\`
-
-2. REMINDER WITH TIME CHECK (tracks when it was created):
-\`\`\`typescript
-const createdAt = openwhale.data.get("createdAt") as number;
-if (!createdAt) {
-  openwhale.data.set("createdAt", Date.now());
-  openwhale.log("Reminder scheduled");
-} else if (Date.now() - createdAt >= 5 * 60 * 1000) { // 5 minutes
-  await openwhale.notify("⏰ Your 5-minute reminder!", "whatsapp");
-  openwhale.data.set("fired", true);
-}
-\`\`\`
-
-3. DAILY HABIT TRACKER:
-\`\`\`typescript
-const count = (openwhale.data.get("count") as number) || 0;
-const today = new Date().toDateString();
-const lastDate = openwhale.data.get("lastDate") as string;
-
-if (lastDate !== today) {
-  await openwhale.notify(\`🌅 Good morning! You've maintained this habit \${count} days.\`, "whatsapp");
-  openwhale.data.set("count", count + 1);
-  openwhale.data.set("lastDate", today);
-}
-\`\`\`
-
-4. PRICE MONITOR:
-\`\`\`typescript
-const response = await fetch("https://api.example.com/price");
-const data = await response.json();
-const lastPrice = openwhale.data.get("lastPrice") as number;
-if (lastPrice && data.price < lastPrice * 0.9) {
-  await openwhale.notify(\`📉 Price dropped to \${data.price}!\`, "whatsapp");
-}
-openwhale.data.set("lastPrice", data.price);
-\`\`\`
-
-CRON EXPRESSIONS:
-- "* * * * *" - Every minute
-- "*/5 * * * *" - Every 5 minutes
-- "0 9 * * *" - Daily at 9 AM
-- "0 */2 * * *" - Every 2 hours
-- "0 9 * * 1" - Every Monday at 9 AM`,
+    description: `Create and manage persistent extensions that run on schedules. Extensions can send notifications, fetch data, and store state across runs. Use cron expressions for scheduling (e.g., "*/5 * * * *" for every 5 minutes, "0 9 * * *" for daily 9 AM).`,
     category: "system",
     parameters: ExtendActionSchema,
 
