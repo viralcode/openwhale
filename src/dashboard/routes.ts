@@ -79,6 +79,15 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
                 connected: c.connectedAt !== null,
                 settings: c.settings ?? undefined
             });
+            // Set environment variables for bot tokens
+            if (c.credentials) {
+                if (c.type === "telegram" && c.credentials.botToken) {
+                    process.env.TELEGRAM_BOT_TOKEN = c.credentials.botToken;
+                }
+                if (c.type === "discord" && c.credentials.botToken) {
+                    process.env.DISCORD_BOT_TOKEN = c.credentials.botToken;
+                }
+            }
         }
 
         // Load setup state
@@ -130,6 +139,30 @@ async function saveSkillToDB(db: DrizzleDB, id: string, cfg: { enabled: boolean;
             });
     } catch (e) {
         console.error("[Dashboard] Failed to save skill config:", e);
+    }
+}
+
+async function saveChannelToDB(db: DrizzleDB, type: string, cfg: { enabled: boolean; connected: boolean; credentials?: Record<string, string> }) {
+    try {
+        await db.insert(channelConfig)
+            .values({
+                id: type,
+                type,
+                displayName: type.charAt(0).toUpperCase() + type.slice(1),
+                enabled: cfg.enabled,
+                credentials: cfg.credentials,
+                connectedAt: cfg.connected ? new Date() : null
+            })
+            .onConflictDoUpdate({
+                target: channelConfig.id,
+                set: {
+                    enabled: cfg.enabled,
+                    credentials: cfg.credentials,
+                    connectedAt: cfg.connected ? new Date() : null
+                }
+            });
+    } catch (e) {
+        console.error("[Dashboard] Failed to save channel config:", e);
     }
 }
 
@@ -571,8 +604,15 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             // Save token to environment
             process.env.TELEGRAM_BOT_TOKEN = telegramBotToken;
 
-            // Mark as connected
+            // Mark as connected in memory
             channelConfigs.set("telegram", { enabled: true, connected: true });
+
+            // Persist to database
+            await saveChannelToDB(db, "telegram", {
+                enabled: true,
+                connected: true,
+                credentials: { botToken: telegramBotToken }
+            });
 
             // Start the Telegram adapter
             const { createTelegramAdapter } = await import("../channels/telegram.js");
@@ -623,7 +663,15 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             // Save token to environment
             process.env.DISCORD_BOT_TOKEN = discordBotToken;
 
+            // Mark as connected in memory
             channelConfigs.set("discord", { enabled: true, connected: true });
+
+            // Persist to database
+            await saveChannelToDB(db, "discord", {
+                enabled: true,
+                connected: true,
+                credentials: { botToken: discordBotToken }
+            });
 
             // Start Discord adapter
             const { createDiscordAdapter } = await import("../channels/discord.js");
@@ -728,7 +776,13 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 hasKey: !!(providerConfigs.get("anthropic")?.apiKey || process.env.ANTHROPIC_API_KEY),
                 supportsTools: true,
                 supportsVision: true,
-                models: ["claude-sonnet-4-20250514", "claude-3-opus-20240229", "claude-3-haiku-20240307"]
+                models: [
+                    "claude-sonnet-4-20250514",
+                    "claude-3-5-sonnet-20241022",
+                    "claude-3-opus-20240229",
+                    "claude-3-5-haiku-20241022",
+                    "claude-3-haiku-20240307"
+                ]
             },
             {
                 name: "OpenAI",
@@ -737,7 +791,15 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 hasKey: !!(providerConfigs.get("openai")?.apiKey || process.env.OPENAI_API_KEY),
                 supportsTools: true,
                 supportsVision: true,
-                models: ["gpt-4o", "gpt-4-turbo", "gpt-3.5-turbo"]
+                models: [
+                    "gpt-4o",
+                    "gpt-4o-mini",
+                    "gpt-4-turbo",
+                    "gpt-4",
+                    "gpt-3.5-turbo",
+                    "o1-preview",
+                    "o1-mini"
+                ]
             },
             {
                 name: "Google",
@@ -746,7 +808,13 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 hasKey: !!(providerConfigs.get("google")?.apiKey || process.env.GOOGLE_API_KEY),
                 supportsTools: true,
                 supportsVision: true,
-                models: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"]
+                models: [
+                    "gemini-2.0-flash",
+                    "gemini-2.0-flash-lite",
+                    "gemini-1.5-pro",
+                    "gemini-1.5-flash",
+                    "gemini-1.5-flash-8b"
+                ]
             },
             {
                 name: "Ollama",
@@ -755,7 +823,16 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 hasKey: true,
                 supportsTools: true,
                 supportsVision: true,
-                models: ["llama3.2", "mistral", "phi3"]
+                models: [
+                    "llama3.2",
+                    "llama3.1",
+                    "llama3",
+                    "mistral",
+                    "mixtral",
+                    "phi3",
+                    "qwen2.5",
+                    "deepseek-r1"
+                ]
             }
         ];
 
