@@ -286,10 +286,16 @@ function parseCronToMs(expression: string): number | null {
     const parts = expression.trim().split(/\s+/);
     if (parts.length < 5) return null;
 
-    // For now, just return 60 seconds for "* * * * *" (every minute)
-    // and calculate proper intervals for common patterns
     const [minute, hour] = parts;
 
+    // Handle */N patterns (every N minutes)
+    const everyNMatch = minute.match(/^\*\/(\d+)$/);
+    if (everyNMatch) {
+        const n = parseInt(everyNMatch[1], 10);
+        return n * 60 * 1000; // Every N minutes
+    }
+
+    // Every minute: * * * * *
     if (minute === "*" && hour === "*") {
         return 60 * 1000; // Every minute
     }
