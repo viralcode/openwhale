@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/logo.png" alt="OpenWhale" width="200" />
+  <img src="images/logo.png" alt="OpenWhale" width="200" />
 </p>
 
 <h1 align="center">OpenWhale</h1>
