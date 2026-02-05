@@ -304,6 +304,18 @@ Current time: ${new Date().toLocaleString()}`;
                                                 const type = toolCall.name === "camera_snap" ? "Camera photo" : "Screenshot";
                                                 console.log(`[WhatsApp]   📸 ${type} captured (${lastScreenshotBase64.length} chars)`);
                                                 toolResults.push({ name: toolCall.name, result: `${type} captured! Now use whatsapp_send_image to send it.` });
+                                            } else if (toolCall.name === "browser" && result.metadata?.image) {
+                                                // Browser screenshot - extract base64 from data URL
+                                                const imageData = result.metadata.image as string;
+                                                if (imageData.startsWith("data:image")) {
+                                                    lastScreenshotBase64 = imageData.split(",")[1];
+                                                    console.log(`[WhatsApp]   📸 Browser screenshot captured (${lastScreenshotBase64.length} chars)`);
+                                                    toolResults.push({ name: toolCall.name, result: `Browser screenshot captured! Now use whatsapp_send_image to send it.` });
+                                                } else {
+                                                    const resultStr = (result.content || result.error || "").slice(0, 2000);
+                                                    toolResults.push({ name: toolCall.name, result: resultStr });
+                                                    console.log(`[WhatsApp]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+                                                }
                                             } else {
                                                 const resultStr = (result.content || result.error || "").slice(0, 2000);
                                                 toolResults.push({ name: toolCall.name, result: resultStr });

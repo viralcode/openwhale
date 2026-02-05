@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { chromium, type Browser, type Page, type BrowserContext } from "playwright";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
-import { writeFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -204,9 +204,7 @@ class BrowserManager {
     private isHeadless: boolean = true;
     private consoleMessages: ConsoleMessage[] = [];
     private dialogHandler: ((accept: boolean, text?: string) => void) | null = null;
-    private pendingDialog: { type: string; message: string } | null = null;
     private refMap: Map<string, string> = new Map(); // ref -> selector mapping
-    private lastSnapshot: string = "";
 
     // Status
     getStatus() {
@@ -305,7 +303,7 @@ class BrowserManager {
 
         // Handle dialogs
         page.on("dialog", async dialog => {
-            this.pendingDialog = { type: dialog.type(), message: dialog.message() };
+            console.log(`[Browser] Dialog: ${dialog.type()} - ${dialog.message()}`);
             if (this.dialogHandler) {
                 // Wait for handler to be set, then auto-handle
             } else {
@@ -359,7 +357,7 @@ class BrowserManager {
     }
 
     // Get active page
-    async getActivePage(headless: boolean = true): Promise<Page | null> {
+    async getActivePage(): Promise<Page | null> {
         if (!this.activeTabId) {
             // Auto-create a tab if none exists
             return null;
@@ -369,11 +367,11 @@ class BrowserManager {
     }
 
     // Navigate current tab
-    async navigate(url: string, waitUntil: "load" | "domcontentloaded" | "networkidle" = "domcontentloaded", headless: boolean = true): Promise<{ url: string; title: string }> {
-        let page = await this.getActivePage(headless);
+    async navigate(url: string, waitUntil: "load" | "domcontentloaded" | "networkidle" = "domcontentloaded"): Promise<{ url: string; title: string }> {
+        let page = await this.getActivePage();
 
         if (!page) {
-            const tab = await this.openTab(url, headless);
+            const tab = await this.openTab(url);
             return { url: tab.url, title: tab.title };
         }
 
@@ -389,7 +387,7 @@ class BrowserManager {
     }
 
     // Take snapshot
-    async snapshot(format: "text" | "interactive" | "aria" = "interactive", selector?: string, maxChars: number = 50000): Promise<{ snapshot: string; targetId: string; url: string; title: string }> {
+    async snapshot(format: "text" | "interactive" | "aria" = "interactive", _selector?: string, maxChars: number = 50000): Promise<{ snapshot: string; targetId: string; url: string; title: string }> {
         const page = await this.getActivePage();
         if (!page) throw new Error("No active tab. Use 'open' to open a URL first.");
 
@@ -398,69 +396,60 @@ class BrowserManager {
 
         let content: string;
 
-        if (format === "aria") {
-            // Accessibility tree snapshot
-            content = await page.accessibility.snapshot().then(snap =>
-                JSON.stringify(snap, null, 2)
-            );
+        if (format === "aria" || format === "text") {
+            // Simple text content
+            content = await page.evaluate(`
+                JSON.stringify({
+                    title: document.title,
+                    url: location.href,
+                    text: document.body.innerText.slice(0, 50000)
+                })
+            `) as string;
         } else {
             // Interactive element snapshot with refs
-            const elements = await page.evaluate(() => {
-                const interactiveSelectors = [
-                    'a[href]', 'button', 'input', 'select', 'textarea',
-                    '[role="button"]', '[role="link"]', '[role="menuitem"]',
-                    '[onclick]', '[tabindex]', 'label',
-                ];
-
-                const elements: Array<{
-                    ref: number;
-                    tag: string;
-                    type?: string;
-                    text: string;
-                    href?: string;
-                    placeholder?: string;
-                    name?: string;
-                    id?: string;
-                    role?: string;
-                    selector: string;
-                }> = [];
-
-                let refCounter = 1;
-
-                for (const selector of interactiveSelectors) {
-                    document.querySelectorAll(selector).forEach((el) => {
-                        const htmlEl = el as HTMLElement;
-                        // Skip hidden elements
-                        if (htmlEl.offsetParent === null && htmlEl.tagName !== 'BODY') return;
-
-                        // Build unique selector
-                        let uniqueSelector = '';
-                        if (el.id) {
-                            uniqueSelector = `#${el.id}`;
-                        } else {
-                            const tag = el.tagName.toLowerCase();
-                            const classes = Array.from(el.classList).slice(0, 2).join('.');
-                            const nthChild = Array.from(el.parentElement?.children || []).indexOf(el) + 1;
-                            uniqueSelector = classes ? `${tag}.${classes}` : `${tag}:nth-child(${nthChild})`;
-                        }
-
-                        elements.push({
-                            ref: refCounter++,
-                            tag: el.tagName.toLowerCase(),
-                            type: (el as HTMLInputElement).type || undefined,
-                            text: (htmlEl.innerText || htmlEl.textContent || '').trim().slice(0, 100),
-                            href: (el as HTMLAnchorElement).href || undefined,
-                            placeholder: (el as HTMLInputElement).placeholder || undefined,
-                            name: (el as HTMLInputElement).name || undefined,
-                            id: el.id || undefined,
-                            role: el.getAttribute('role') || undefined,
-                            selector: uniqueSelector,
+            const elementsJson = await page.evaluate(`
+                (function() {
+                    const selectors = ['a[href]', 'button', 'input', 'select', 'textarea', '[role="button"]', '[role="link"]', '[onclick]', 'label'];
+                    const results = [];
+                    let ref = 1;
+                    
+                    for (const sel of selectors) {
+                        document.querySelectorAll(sel).forEach(el => {
+                            if (el.offsetParent === null && el.tagName !== 'BODY') return;
+                            
+                            let selector = el.id ? '#' + el.id : el.tagName.toLowerCase();
+                            if (!el.id && el.classList.length) selector += '.' + Array.from(el.classList).slice(0,2).join('.');
+                            
+                            results.push({
+                                ref: ref++,
+                                tag: el.tagName.toLowerCase(),
+                                type: el.type || undefined,
+                                text: (el.innerText || el.textContent || '').trim().slice(0, 100),
+                                href: el.href || undefined,
+                                placeholder: el.placeholder || undefined,
+                                name: el.name || undefined,
+                                id: el.id || undefined,
+                                role: el.getAttribute('role') || undefined,
+                                selector: selector
+                            });
                         });
-                    });
-                }
+                    }
+                    return JSON.stringify(results.slice(0, 200));
+                })()
+            `) as string;
 
-                return elements.slice(0, 200); // Limit to 200 elements
-            });
+            const elements = JSON.parse(elementsJson) as Array<{
+                ref: number;
+                tag: string;
+                type?: string;
+                text: string;
+                href?: string;
+                placeholder?: string;
+                name?: string;
+                id?: string;
+                role?: string;
+                selector: string;
+            }>;
 
             // Build ref map
             for (const el of elements) {
@@ -468,36 +457,29 @@ class BrowserManager {
             }
 
             // Format output
-            if (format === "interactive") {
-                const lines: string[] = [];
-                lines.push(`Page: ${await page.title()}`);
-                lines.push(`URL: ${page.url()}`);
-                lines.push(`\nInteractive Elements:`);
+            const lines: string[] = [];
+            lines.push(`Page: ${await page.title()}`);
+            lines.push(`URL: ${page.url()}`);
+            lines.push(`\nInteractive Elements:`);
 
-                for (const el of elements) {
-                    let line = `[ref=${el.ref}] <${el.tag}`;
-                    if (el.type) line += ` type="${el.type}"`;
-                    if (el.role) line += ` role="${el.role}"`;
-                    line += `>`;
-                    if (el.text) line += ` "${el.text}"`;
-                    if (el.href) line += ` → ${el.href}`;
-                    if (el.placeholder) line += ` (placeholder: ${el.placeholder})`;
-                    lines.push(line);
-                }
-
-                content = lines.join('\n');
-            } else {
-                // Text format - just get page text
-                content = await page.evaluate(() => document.body.innerText);
+            for (const el of elements) {
+                let line = `[ref=${el.ref}] <${el.tag}`;
+                if (el.type) line += ` type="${el.type}"`;
+                if (el.role) line += ` role="${el.role}"`;
+                line += `>`;
+                if (el.text) line += ` "${el.text}"`;
+                if (el.href) line += ` → ${el.href}`;
+                if (el.placeholder) line += ` (placeholder: ${el.placeholder})`;
+                lines.push(line);
             }
+
+            content = lines.join('\n');
         }
 
         // Truncate if needed
         if (content.length > maxChars) {
             content = content.slice(0, maxChars) + `\n... (truncated at ${maxChars} chars)`;
         }
-
-        this.lastSnapshot = content;
 
         return {
             snapshot: content,
@@ -710,8 +692,8 @@ class BrowserManager {
     }
 
     // Setup dialog handler
-    armDialog(accept: boolean, promptText?: string): void {
-        this.dialogHandler = async (dialogAccept, text) => {
+    armDialog(_accept: boolean, _promptText?: string): void {
+        this.dialogHandler = async (_dialogAccept, _text) => {
             // This will be called by the dialog event
         };
     }
@@ -747,24 +729,26 @@ class BrowserManager {
         switch (operation) {
             case "get":
                 if (key) {
-                    return await page.evaluate(([st, k]) => (window as any)[st].getItem(k), [storageType, key]);
+                    return await page.evaluate(`window["${storageType}"].getItem("${key}")`) as string | null;
                 }
-                return await page.evaluate((st) => {
-                    const storage = (window as any)[st];
-                    const items: Record<string, string> = {};
-                    for (let i = 0; i < storage.length; i++) {
-                        const k = storage.key(i);
-                        items[k] = storage.getItem(k);
-                    }
-                    return items;
-                }, storageType);
+                return await page.evaluate(`
+                    (function() {
+                        const storage = window["${storageType}"];
+                        const items = {};
+                        for (let i = 0; i < storage.length; i++) {
+                            const k = storage.key(i);
+                            items[k] = storage.getItem(k);
+                        }
+                        return JSON.stringify(items);
+                    })()
+                `) as string;
             case "set":
                 if (key && value !== undefined) {
-                    await page.evaluate(([st, k, v]) => (window as any)[st].setItem(k, v), [storageType, key, value]);
+                    await page.evaluate(`window["${storageType}"].setItem("${key}", "${value}")`);
                 }
                 return { set: key };
             case "clear":
-                await page.evaluate((st) => (window as any)[st].clear(), storageType);
+                await page.evaluate(`window["${storageType}"].clear()`);
                 return { cleared: true };
         }
     }
@@ -793,7 +777,7 @@ For interactions, first take a snapshot to get refs, then use act with ref param
     category: "browser",
     parameters: BrowserActionSchema,
 
-    async execute(params: BrowserAction, context: ToolCallContext): Promise<ToolResult> {
+    async execute(params: BrowserAction, _context: ToolCallContext): Promise<ToolResult> {
         try {
             switch (params.action) {
                 // ========== LIFECYCLE ==========
@@ -839,7 +823,7 @@ For interactions, first take a snapshot to get refs, then use act with ref param
                     return {
                         success: true,
                         content: `Opened: ${tab.title}\nURL: ${tab.url}\nTab ID: ${tab.targetId}`,
-                        metadata: tab,
+                        metadata: tab as unknown as Record<string, unknown>,
                     };
                 }
 
@@ -867,7 +851,7 @@ For interactions, first take a snapshot to get refs, then use act with ref param
 
                 // ========== NAVIGATION ==========
                 case "navigate": {
-                    const result = await browserManager.navigate(params.url, params.waitUntil, params.headless);
+                    const result = await browserManager.navigate(params.url, params.waitUntil);
                     return {
                         success: true,
                         content: `Navigated to: ${result.url}\nTitle: ${result.title}`,
