@@ -4,6 +4,43 @@ A complete list of everything OpenWhale can do.
 
 ---
 
+## 🎯 Use Cases
+
+### Personal Productivity
+- **Smart Reminders** — "Remind me to call mom every Sunday at 5pm via WhatsApp"
+- **Daily Briefings** — Get weather, calendar, and tasks sent to Telegram each morning
+- **Note Taking** — "Add to my notes: project deadline moved to Friday"
+- **Quick Research** — "What's the best restaurant near me?" with web browsing
+
+### Developer Workflows
+- **GitHub Automation** — "Create an issue for the login bug I found"
+- **Code Execution** — "Run this Python script and show me the output"
+- **Server Monitoring** — "Check if my server is running and restart if needed"
+- **Documentation** — "Summarize the changes in the last 5 commits"
+
+### Home Automation
+- **Scheduled Tasks** — "Turn off all smart lights at midnight"
+- **Status Checks** — "Is my Raspberry Pi still online?"
+- **File Management** — "Backup my downloads folder to Drive every week"
+
+### Communication
+- **Cross-Platform Messaging** — Receive on WhatsApp, respond via Discord
+- **Auto-Responses** — "If anyone asks about pricing, send them the PDF"
+- **Group Updates** — "Send the daily standup summary to #team-updates"
+
+### Business Use
+- **Lead Tracking** — "Add this contact to Notion and create a Trello card"
+- **Email Drafts** — "Draft a reply to the last email from John"
+- **Meeting Prep** — "What's on my calendar tomorrow? Summarize the documents"
+- **Expense Tracking** — "Log this receipt and add it to my expenses spreadsheet"
+
+### Creative Work
+- **Image Generation** — "Create a logo concept for my project"
+- **Music Control** — "Play my focus playlist on Spotify"
+- **Content Ideas** — "Search my notes for blog post ideas"
+
+---
+
 ## 🤖 AI Capabilities
 
 - **Multi-Model Support** — Use Claude, GPT-4/5, Gemini, DeepSeek, Groq, Qwen, Together AI, or Ollama
@@ -24,20 +61,20 @@ A complete list of everything OpenWhale can do.
 
 ## 🛠️ Built-in Tools
 
-| Tool | Description |
-|------|-------------|
-| **exec** | Run shell commands on your machine |
-| **file** | Read, write, list files and directories |
-| **browser** | Open URLs, take screenshots, interact with web pages |
-| **screenshot** | Capture your screen or specific windows |
-| **code_exec** | Run Python/JavaScript code in a sandbox |
-| **web_fetch** | Fetch content from URLs (APIs, web pages) |
-| **memory** | Remember things across conversations |
-| **cron** | Schedule tasks to run at specific times |
-| **canvas** | Generate and manipulate images |
-| **tts** | Text-to-speech (say things out loud) |
-| **image** | Analyze and process images |
-| **nodes** | Work with structured data and knowledge graphs |
+| Tool | Description | Example |
+|------|-------------|---------|
+| **exec** | Run shell commands | "List all running Docker containers" |
+| **file** | Read, write, list files | "Show me my .env file" |
+| **browser** | Web interaction | "Take a screenshot of hacker news" |
+| **screenshot** | Capture screen | "Screenshot my desktop" |
+| **code_exec** | Run code in sandbox | "Calculate 2^100 in Python" |
+| **web_fetch** | Fetch URLs | "Get the weather API response" |
+| **memory** | Persistent memory | "Remember my API key is xyz" |
+| **cron** | Schedule tasks | "Run this every Monday at 9am" |
+| **canvas** | Image manipulation | "Resize this image to 500px" |
+| **tts** | Text-to-speech | "Say good morning out loud" |
+| **image** | Image analysis | "What's in this screenshot?" |
+| **nodes** | Knowledge graphs | "Create a node for this project" |
 
 ---
 
@@ -53,7 +90,7 @@ A complete list of everything OpenWhale can do.
 
 ## ⚡ Self-Extension System
 
-- **Create Extensions via Chat** — Just describe what you want
+- **Create Extensions via Chat** — "Create an extension that checks Bitcoin price daily"
 - **Scheduled Tasks** — Run extensions on cron schedules
 - **Multi-Channel Output** — Extensions can send to WhatsApp, Telegram, Discord
 - **Enable/Disable** — Toggle extensions on and off
@@ -63,20 +100,20 @@ A complete list of everything OpenWhale can do.
 
 ## 🔌 Skills (External Integrations)
 
-| Skill | Description |
-|-------|-------------|
-| **GitHub** | Access repositories, issues, pull requests |
-| **Notion** | Manage pages and databases |
-| **Google Calendar** | Create and manage events |
-| **Gmail** | Read and send emails |
-| **Google Drive** | Access files and folders |
-| **Google Tasks** | Manage to-do lists |
-| **Weather** | Current conditions and forecasts |
-| **Spotify** | Control playback, search music, manage playlists |
-| **Trello** | Manage boards, lists, and cards |
-| **1Password** | Securely fetch passwords and secrets |
-| **Apple Notes** | Read and write notes (macOS) |
-| **Apple Reminders** | Manage reminders (macOS) |
+| Skill | Description | Example |
+|-------|-------------|---------|
+| **GitHub** | Repos, issues, PRs | "Show my open pull requests" |
+| **Notion** | Pages and databases | "Add this to my reading list" |
+| **Google Calendar** | Events | "What meetings do I have today?" |
+| **Gmail** | Email | "Send an email to john@example.com" |
+| **Google Drive** | Files | "Upload this to my Drive" |
+| **Google Tasks** | To-do lists | "Add 'buy milk' to my tasks" |
+| **Weather** | Forecasts | "Will it rain tomorrow?" |
+| **Spotify** | Music control | "Play my liked songs" |
+| **Trello** | Boards and cards | "Move this card to Done" |
+| **1Password** | Secrets | "Get my AWS credentials" |
+| **Apple Notes** | Notes (macOS) | "Add to my grocery list" |
+| **Apple Reminders** | Reminders (macOS) | "Remind me at 3pm" |
 
 ---
 
