@@ -5,7 +5,7 @@
 <h1 align="center">OpenWhale</h1>
 
 <p align="center">
-  <strong>Your friendly neighborhood AI assistant 🐋</strong>
+  <strong>Self-Extensible AI Assistant 🐋</strong>
 </p>
 
 <p align="center">
