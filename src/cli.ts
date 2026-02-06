@@ -204,6 +204,18 @@ async function main() {
         case "whatsapp":
             await handleWhatsAppCommand(process.argv[3]);
             break;
+        case "twitter":
+            await handleTwitterCommand(process.argv[3]);
+            break;
+        case "skills":
+            await showSkills();
+            break;
+        case "memory":
+            await handleMemoryCommand(process.argv[3]);
+            break;
+        case "extensions":
+            await handleExtensionsCommand(process.argv[3]);
+            break;
         case "test":
             await runTests();
             break;
@@ -796,23 +808,42 @@ ${c("bold", "Commands:")}
   ${c("cyan", "chat")}       Start an AGENTIC chat session (Claude can use tools!)
   ${c("cyan", "whatsapp")}   WhatsApp connection management
     ${c("dim", "login")}     Pair WhatsApp via QR code
+  ${c("cyan", "twitter")}    Twitter/X integration (via bird CLI)
+    ${c("dim", "status")}    Check Twitter connection
+    ${c("dim", "timeline")}  Get home timeline
   ${c("cyan", "browser")}    Browser automation settings (Playwright/BrowserOS)
-  ${c("cyan", "test")}       Run tests on all features
+  ${c("cyan", "daemon")}     Background service management
+    ${c("dim", "install")}   Install as system service
+    ${c("dim", "start")}     Start daemon
+  ${c("cyan", "skills")}     List configured skills (GitHub, Notion, etc.)
+  ${c("cyan", "memory")}     Memory management
+    ${c("dim", "search")}    Search memories
+    ${c("dim", "status")}    Show memory status
+  ${c("cyan", "extensions")} Extension management
+    ${c("dim", "list")}      List extensions
+    ${c("dim", "run")}       Run an extension
   ${c("cyan", "providers")}  List available AI providers
   ${c("cyan", "tools")}      List available agent tools
   ${c("cyan", "channels")}   List communication channels
   ${c("cyan", "serve")}      Start the HTTP server
+  ${c("cyan", "test")}       Run tests on all features
   ${c("cyan", "help")}       Show this help message
 
 ${c("bold", "Examples:")}
   openwhale chat              Start agentic chat (can use WhatsApp, exec, etc.)
   openwhale whatsapp login    Pair WhatsApp via QR code
-  openwhale test              Test all features
+  openwhale twitter status    Check Twitter connection
+  openwhale skills            List all configured skills
+  openwhale browser install   Auto-install BrowserOS
   openwhale serve             Start server on port 7777
 
 ${c("bold", "Environment Variables:")}
-  ANTHROPIC_API_KEY    Your Anthropic API key
-  WHATSAPP_OWNER_NUMBER   Your WhatsApp number for messaging
+  ANTHROPIC_API_KEY       Anthropic API key (Claude)
+  OPENAI_API_KEY          OpenAI API key
+  GOOGLE_API_KEY          Google/Gemini API key
+  DEEPSEEK_API_KEY        DeepSeek API key
+  TWITTER_ENABLED=true    Enable Twitter/X skill
+  WHATSAPP_OWNER_NUMBER   Your WhatsApp number
 `);
 }
 
@@ -866,6 +897,7 @@ function showChannels() {
         { name: "Discord", type: "Bot", key: "DISCORD_BOT_TOKEN", status: !!process.env.DISCORD_BOT_TOKEN },
         { name: "Slack", type: "Bot", key: "SLACK_BOT_TOKEN", status: !!process.env.SLACK_BOT_TOKEN },
         { name: "WhatsApp", type: "Baileys", key: "WHATSAPP_OWNER_NUMBER", status: !!process.env.WHATSAPP_OWNER_NUMBER },
+        { name: "Twitter/X", type: "bird CLI", key: "TWITTER_ENABLED", status: process.env.TWITTER_ENABLED === "true" },
     ];
 
     for (const ch of channels) {
@@ -873,6 +905,248 @@ function showChannels() {
         console.log(`  ${c("cyan", ch.name.padEnd(12))} ${ch.type.padEnd(10)} ${status}`);
     }
     console.log();
+}
+
+/**
+ * Show all configured skills
+ */
+async function showSkills() {
+    console.log(c("bold", "Configured Skills:\n"));
+
+    const skills = [
+        { name: "GitHub", key: "GITHUB_TOKEN", tools: ["github_repos", "github_issues", "github_prs"] },
+        { name: "Notion", key: "NOTION_API_KEY", tools: ["notion_search", "notion_page", "notion_database"] },
+        { name: "Weather", key: "OPENWEATHERMAP_API_KEY", tools: ["weather_current", "weather_forecast"] },
+        { name: "Spotify", key: "SPOTIFY_CLIENT_ID", tools: ["spotify_play", "spotify_search", "spotify_queue"] },
+        { name: "Trello", key: "TRELLO_API_KEY", tools: ["trello_boards", "trello_cards", "trello_create"] },
+        { name: "1Password", key: "OP_CONNECT_TOKEN", tools: ["1password_get", "1password_list"] },
+        { name: "Apple Notes", key: null, tools: ["apple_notes_list", "apple_notes_search"], platform: "darwin" },
+        { name: "Apple Reminders", key: null, tools: ["apple_reminders_list", "apple_reminders_create"], platform: "darwin" },
+        { name: "Twitter/X", key: "TWITTER_ENABLED", tools: ["twitter_timeline", "twitter_post", "twitter_search", "twitter_mentions"] },
+        { name: "Google Calendar", key: null, file: "~/.openwhale/google/credentials.json", tools: ["calendar_events", "calendar_create"] },
+        { name: "Gmail", key: null, file: "~/.openwhale/google/credentials.json", tools: ["gmail_read", "gmail_send", "gmail_search"] },
+        { name: "Google Drive", key: null, file: "~/.openwhale/google/credentials.json", tools: ["drive_list", "drive_upload", "drive_download"] },
+    ];
+
+    let readyCount = 0;
+    for (const skill of skills) {
+        // Check availability
+        let available = false;
+        if (skill.platform && process.platform !== skill.platform) {
+            continue; // Skip platform-specific skills on wrong platform
+        }
+        if (skill.key) {
+            available = !!process.env[skill.key];
+        } else if (skill.file) {
+            const { existsSync } = await import("node:fs");
+            const { homedir } = await import("node:os");
+            const path = skill.file.replace("~", homedir());
+            available = existsSync(path);
+        } else {
+            available = true; // Platform-specific skills with no key (e.g., Apple Notes)
+        }
+
+        const status = available ? c("green", "● Ready") : c("dim", "○ Not configured");
+        if (available) readyCount++;
+
+        console.log(`  ${c("cyan", skill.name.padEnd(16))} ${status}`);
+        console.log(`    Tools: ${c("dim", skill.tools.join(", "))}`);
+    }
+
+    console.log(`\n  ${c("bold", `${readyCount} skills ready`)}\n`);
+}
+
+/**
+ * Handle Twitter/X commands
+ */
+async function handleTwitterCommand(subcommand?: string) {
+    const { exec } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execAsync = promisify(exec);
+
+    switch (subcommand) {
+        case "status":
+            console.log(c("bold", "\n🐦 Twitter/X Status\n"));
+            try {
+                const { stdout } = await execAsync("bird whoami --json 2>/dev/null");
+                const user = JSON.parse(stdout);
+                console.log(`  ${c("green", "● Connected")} as @${user.username || user.screen_name}`);
+                console.log(`    Name: ${user.name || "N/A"}`);
+            } catch {
+                console.log(`  ${c("red", "○ Not connected")}`);
+                console.log(c("dim", "  Run 'bird check' to debug auth issues"));
+            }
+            break;
+
+        case "timeline":
+            console.log(c("bold", "\n📰 Home Timeline\n"));
+            try {
+                const { stdout } = await execAsync("bird home -n 5 --json 2>/dev/null");
+                const tweets = JSON.parse(stdout);
+                for (const tweet of tweets) {
+                    console.log(`  🐦 ${c("cyan", `@${tweet.author?.username || "unknown"}`)}`);
+                    console.log(`     ${tweet.text?.slice(0, 100)}${tweet.text?.length > 100 ? "..." : ""}`);
+                    console.log();
+                }
+            } catch (err) {
+                console.log(c("red", `  Failed to fetch timeline: ${err instanceof Error ? err.message : "Unknown error"}`));
+            }
+            break;
+
+        case "post":
+            const text = process.argv.slice(4).join(" ");
+            if (!text) {
+                console.log(c("red", "Usage: openwhale twitter post <text>"));
+                return;
+            }
+            console.log(c("yellow", `\n⏳ Posting tweet...`));
+            try {
+                await execAsync(`bird tweet "${text.replace(/"/g, '\\"')}"`);
+                console.log(c("green", "✅ Tweet posted!"));
+            } catch (err) {
+                console.log(c("red", `❌ Failed: ${err instanceof Error ? err.message : "Unknown error"}`));
+            }
+            break;
+
+        default:
+            console.log(`${c("bold", "Twitter/X Commands:")}
+  ${c("cyan", "status")}     Check connection status
+  ${c("cyan", "timeline")}   Show home timeline
+  ${c("cyan", "post")}       Post a tweet
+
+${c("bold", "Setup:")}
+  1. Install bird CLI: npm install -g @steipete/bird
+  2. Log into X.com in your browser
+  3. Run: bird check (verify cookies)
+  4. Add TWITTER_ENABLED=true to .env
+`);
+    }
+}
+
+/**
+ * Handle memory commands
+ */
+async function handleMemoryCommand(subcommand?: string) {
+    const { existsSync, readdirSync, readFileSync } = await import("node:fs");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    const memoryDir = join(homedir(), ".openwhale", "memory");
+
+    switch (subcommand) {
+        case "status":
+            console.log(c("bold", "\n🧠 Memory Status\n"));
+            if (!existsSync(memoryDir)) {
+                console.log(`  ${c("dim", "No memory directory yet")}`);
+                break;
+            }
+            const files = readdirSync(memoryDir);
+            const mdFiles = files.filter(f => f.endsWith(".md"));
+            console.log(`  Location: ${c("dim", memoryDir)}`);
+            console.log(`  Files: ${mdFiles.length} markdown files`);
+            console.log(`  Memory file: ${existsSync(join(memoryDir, "MEMORY.md")) ? c("green", "exists") : c("dim", "not created")}`);
+            break;
+
+        case "search":
+            const query = process.argv.slice(4).join(" ");
+            if (!query) {
+                console.log(c("red", "Usage: openwhale memory search <query>"));
+                return;
+            }
+            console.log(c("bold", `\n🔍 Searching for: ${query}\n`));
+            if (!existsSync(memoryDir)) {
+                console.log(`  ${c("dim", "No memories yet")}`);
+                break;
+            }
+            const searchFiles = readdirSync(memoryDir).filter(f => f.endsWith(".md"));
+            let found = 0;
+            for (const file of searchFiles) {
+                const content = readFileSync(join(memoryDir, file), "utf-8");
+                if (content.toLowerCase().includes(query.toLowerCase())) {
+                    console.log(`  📄 ${c("cyan", file)}`);
+                    const lines = content.split("\n").filter(l => l.toLowerCase().includes(query.toLowerCase()));
+                    for (const line of lines.slice(0, 3)) {
+                        console.log(`     ${c("dim", line.slice(0, 80))}`);
+                    }
+                    found++;
+                }
+            }
+            console.log(`\n  Found in ${found} files\n`);
+            break;
+
+        default:
+            console.log(`${c("bold", "Memory Commands:")}
+  ${c("cyan", "status")}    Show memory status
+  ${c("cyan", "search")}    Search memories
+
+${c("bold", "Memory Location:")}
+  ${memoryDir}
+`);
+    }
+}
+
+/**
+ * Handle extensions commands
+ */
+async function handleExtensionsCommand(subcommand?: string) {
+    const { existsSync, readdirSync, readFileSync } = await import("node:fs");
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    const extDir = join(homedir(), ".openwhale", "extensions");
+
+    switch (subcommand) {
+        case "list":
+            console.log(c("bold", "\n🔧 Extensions\n"));
+            if (!existsSync(extDir)) {
+                console.log(`  ${c("dim", "No extensions directory yet")}`);
+                console.log(c("dim", "  Create extensions via chat: 'create an extension that...'"));
+                break;
+            }
+            const files = readdirSync(extDir).filter(f => f.endsWith(".ts") || f.endsWith(".js"));
+            if (files.length === 0) {
+                console.log(`  ${c("dim", "No extensions installed")}`);
+            } else {
+                for (const file of files) {
+                    console.log(`  • ${c("cyan", file.replace(/\.(ts|js)$/, ""))}`);
+                }
+                console.log(`\n  ${files.length} extension(s) found\n`);
+            }
+            break;
+
+        case "run":
+            const extName = process.argv[4];
+            if (!extName) {
+                console.log(c("red", "Usage: openwhale extensions run <name>"));
+                return;
+            }
+            const extPath = join(extDir, `${extName}.ts`);
+            if (!existsSync(extPath)) {
+                console.log(c("red", `Extension not found: ${extName}`));
+                return;
+            }
+            console.log(c("yellow", `⏳ Running extension: ${extName}...`));
+            try {
+                const { exec } = await import("node:child_process");
+                const { promisify } = await import("node:util");
+                const execAsync = promisify(exec);
+                const { stdout } = await execAsync(`npx tsx ${extPath}`);
+                console.log(stdout);
+            } catch (err) {
+                console.log(c("red", `Failed: ${err instanceof Error ? err.message : "Unknown error"}`));
+            }
+            break;
+
+        default:
+            console.log(`${c("bold", "Extensions Commands:")}
+  ${c("cyan", "list")}    List all extensions
+  ${c("cyan", "run")}     Run an extension manually
+
+${c("bold", "Creating Extensions:")}
+  Ask the AI in chat: "create an extension that checks Bitcoin price daily"
+  
+${c("bold", "Extensions Location:")}
+  ${extDir}
+`);
+    }
 }
 
 /**

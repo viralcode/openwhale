@@ -26,18 +26,186 @@
 
 ---
 
-## What is this?
+## What is OpenWhale?
 
-OpenWhale is an AI assistant that can take action. It connects to multiple AI models, talks on your behalf through WhatsApp/Telegram/Discord, browses the web, executes code, manages your calendar, and basically does whatever you need it to do.
+OpenWhale is a **self-extensible AI assistant** that doesn't just chat — it takes action. Connect it to multiple AI models, let it talk on your behalf through WhatsApp/Telegram/Discord/Twitter, browse the web with real browser automation, execute code, manage your calendar, send emails, and basically do whatever you need it to do.
 
-Think of it as Claude, GPT-4, or DeepSeek with arms and legs.
+Think of it as **Claude, GPT-4, or DeepSeek with arms and legs**.
+
+<p align="center">
+  <img src="images/dashboardhome.png" alt="OpenWhale Dashboard" width="800" />
+</p>
+
+---
+
+## ✨ Core Features
+
+### 🤖 8 AI Providers
+Switch between any major AI model on the fly. One assistant, unlimited model choices.
+
+| Provider | Top Models |
+|----------|------------|
+| **Anthropic** | Claude Sonnet 5, Opus 4.5, Sonnet 4.5 |
+| **OpenAI** | GPT-5.2, GPT-5, GPT-4o, o4-mini |
+| **Google Gemini** | Gemini 3 Pro, Gemini 2.5 Pro |
+| **Qwen** | Qwen3-Max, QwQ-Plus, Qwen3-Coder |
+| **DeepSeek** | DeepSeek Chat, DeepSeek Coder, DeepSeek Reasoner |
+| **Groq** | Llama 3.3 70B, Mixtral 8x7B |
+| **Together AI** | Any open-source model |
+| **Ollama** | Local models (Llama, Mistral, Phi) — no API key! |
+
+<p align="center">
+  <img src="images/aiproviders.png" alt="AI Providers" width="600" />
+</p>
+
+---
+
+### 💬 4 Messaging Channels
+Your AI responds across all platforms — unified inbox, one brain.
+
+| Channel | How it Works |
+|---------|--------------|
+| **WhatsApp** | Scan QR code, uses your personal account |
+| **Telegram** | Create a bot with @BotFather |
+| **Discord** | Add bot to your server |
+| **Twitter/X** | Auto-reply to mentions via bird CLI (cookie auth, no API!) |
+
+---
+
+### 🛠️ 15 Built-in Tools
+The AI can actually DO things, not just talk about them.
+
+| Tool | Capability |
+|------|------------|
+| **exec** | Run any shell command on your machine |
+| **file** | Read, write, list files and directories |
+| **browser** | Full web automation — navigate, click, type, screenshot |
+| **screenshot** | Capture your screen, AI analyzes what it sees |
+| **code_exec** | Run Python/JavaScript/TypeScript code on-the-fly |
+| **web_fetch** | Fetch any URL, parse APIs and web pages |
+| **memory** | Remember things across conversations forever |
+| **cron** | Schedule tasks to run at specific times |
+| **canvas** | Generate and manipulate images |
+| **tts** | Text-to-speech (AI speaks out loud) |
+| **image** | Analyze and process images with vision |
+| **nodes** | Structured data and knowledge graphs |
+| **camera** | Take photos/video from connected cameras |
+| **location** | Get current geolocation |
+| **extend** | Create self-extensions for automated workflows |
+
+<p align="center">
+  <img src="images/tools.png" alt="Available Tools" width="800" />
+</p>
+
+---
+
+### 🔌 9 API Skills (External Integrations)
+Connect to your favorite services — the AI handles the API calls.
+
+| Skill | What it Does |
+|-------|--------------|
+| **GitHub** | Manage repos, issues, PRs, commits |
+| **Notion** | Search, create, update pages and databases |
+| **Google Calendar** | View and create events |
+| **Gmail** | Read, send, and search emails |
+| **Google Drive** | Upload, download, list files |
+| **Google Tasks** | Manage your to-do lists |
+| **Weather** | Current conditions and forecasts |
+| **Spotify** | Control playback, search music, manage playlists |
+| **Trello** | Manage boards, lists, and cards |
+| **1Password** | Securely fetch passwords and secrets |
+| **Apple Notes/Reminders** | Native macOS integration |
+| **Twitter/X** | Post, search, timeline, mentions, follow |
+
+<p align="center">
+  <img src="images/api-skills.png" alt="API Skills" width="800" />
+</p>
+
+---
+
+### 📝 50+ Markdown Skills (Community)
+Community-built skills from [OpenClaw](https://github.com/VoltAgent/awesome-openclaw-skills) — instant expertise in any domain.
+
+- **Frontend**: UI/UX design, React best practices, design systems
+- **Backend**: Architecture patterns, NextJS, Vercel deployment
+- **AI/Video**: ComfyUI, Remotion video toolkit, vision models
+- **Platform**: Apple HIG, Linux service management, Xcode builds
+- **Productivity**: Resume builder, email templates, artifact creation
+
+<p align="center">
+  <img src="images/mdskills.png" alt="Markdown Skills" width="800" />
+</p>
+
+Create your own skills with the built-in Skill Creator:
+
+<p align="center">
+  <img src="images/skill-creator.png" alt="Skill Creator" width="800" />
+</p>
+
+---
+
+### ⚡ Self-Extension System
+The AI can create its own automations. Just ask.
+
+- *"Create an extension that checks Bitcoin price every hour and sends it to WhatsApp"*
+- *"Make an extension that reminds me to drink water"*
+- *"Create a daily standup summary extension"*
+
+Extensions support cron scheduling, multi-channel output, and persist across restarts.
+
+<p align="center">
+  <img src="images/extensions.png" alt="Extensions" width="600" />
+</p>
+
+---
+
+### 🌐 Browser Automation
+Two backends to choose from:
+
+| Backend | Best For |
+|---------|----------|
+| **Playwright** | Simple scraping, headless automation, zero setup |
+| **BrowserOS** | Real browser with your extensions, cookies, and logins |
+
+BrowserOS lets the AI control YOUR actual browser — including logged-in sessions, AdBlock, 1Password, and everything else.
+
+---
+
+### 🧠 Persistent Memory
+OpenWhale remembers everything, even after restarts.
+
+- **Long-term Memory** — Facts and preferences in MEMORY.md
+- **Daily Notes** — Automatic daily logging
+- **Vector Search** — Find related content by meaning (local embeddings, no API needed!)
+- **Session Persistence** — Continue conversations across restarts
+
+---
+
+### 🔒 Enterprise Security
+Production-ready security out of the box.
+
+- JWT authentication with session management
+- API key protection
+- Rate limiting
+- Audit logs
+- Multi-user support
+- Sandboxed code execution
+
+---
 
 ## Why OpenWhale?
 
-- **It's agentic** — not just a chatbot. It can use tools, run commands, send messages, and interact with the real world.
-- **Use any model** — Claude, GPT-4, DeepSeek, Groq, Gemini, Ollama. Switch whenever you want.
-- **Runs anywhere** — Docker, bare metal, your Raspberry Pi. Whatever works for you.
-- **Actually secure** — JWT auth, API keys, rate limiting, audit logs. The boring stuff that matters.
+| Feature | OpenWhale | ChatGPT | Claude | Typical Chatbot |
+|---------|-----------|---------|--------|-----------------|
+| **Multi-model support** | ✅ 8 providers | ❌ GPT only | ❌ Claude only | ❌ Single model |
+| **Run shell commands** | ✅ Full access | ❌ No | ❌ No | ❌ No |
+| **Browser automation** | ✅ Playwright + BrowserOS | ❌ Limited | ✅ Limited | ❌ No |
+| **WhatsApp/Telegram/Discord** | ✅ All channels | ❌ No | ❌ No | ❌ Maybe one |
+| **Twitter integration** | ✅ Full API | ❌ No | ❌ No | ❌ No |
+| **Self-extensible** | ✅ Creates own tools | ❌ No | ❌ No | ❌ No |
+| **Runs locally** | ✅ Your machine | ❌ Cloud only | ❌ Cloud only | ❌ Usually cloud |
+| **Open source** | ✅ MIT license | ❌ Closed | ❌ Closed | ❌ Varies |
+| **Persistent memory** | ✅ Vector search | ✅ Limited | ✅ Limited | ❌ Usually no |
 
 ---
 
