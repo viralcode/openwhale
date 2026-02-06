@@ -1724,7 +1724,17 @@ function renderSkills() {
             </div>
             <div class="skill-editor-body">
               <div class="skill-editor-sidebar">
-                <div class="skill-tree-header">Files</div>
+                <div class="skill-tree-header">
+                  <span>Files</span>
+                  <div style="display: flex; gap: 4px;">
+                    <button class="btn btn-ghost btn-icon" onclick="promptNewFile()" title="New File">
+                      ${icon('plus', 14)}
+                    </button>
+                    <button class="btn btn-ghost btn-icon" onclick="promptNewFolder()" title="New Folder">
+                      ${icon('folder', 14)}
+                    </button>
+                  </div>
+                </div>
                 <div class="skill-tree">
                   ${renderFileTree(state.editingSkillTree, state.editingSkillPath)}
                 </div>
@@ -3207,6 +3217,78 @@ window.createNewSkill = async function () {
     }
   } catch (e) {
     showAlert('Failed to create skill: ' + e.message, 'Error');
+  }
+};
+
+window.promptNewFile = async function () {
+  const fileName = await showPrompt('Enter file name (e.g., guide.md, config.json):', 'New File');
+  if (!fileName) return;
+
+  if (!state.editingSkillDir) {
+    showAlert('No skill directory selected', 'Error');
+    return;
+  }
+
+  try {
+    const res = await api('/md-skills/create-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parentDir: state.editingSkillDir,
+        fileName: fileName
+      })
+    });
+
+    if (res.error) {
+      showAlert(res.error, 'Error');
+      return;
+    }
+
+    // Reload tree and open the new file
+    const treeRes = await api('/md-skills/tree?dir=' + encodeURIComponent(state.editingSkillDir));
+    state.editingSkillTree = treeRes.tree || [];
+
+    if (res.path) {
+      await selectSkillFile(res.path);
+    }
+    render();
+    showAlert('File created!', 'Success');
+  } catch (e) {
+    showAlert('Failed to create file: ' + e.message, 'Error');
+  }
+};
+
+window.promptNewFolder = async function () {
+  const folderName = await showPrompt('Enter folder name (e.g., reference, scripts):', 'New Folder');
+  if (!folderName) return;
+
+  if (!state.editingSkillDir) {
+    showAlert('No skill directory selected', 'Error');
+    return;
+  }
+
+  try {
+    const res = await api('/md-skills/create-folder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        skillDir: state.editingSkillDir,
+        folderName: folderName
+      })
+    });
+
+    if (res.error) {
+      showAlert(res.error, 'Error');
+      return;
+    }
+
+    // Reload tree
+    const treeRes = await api('/md-skills/tree?dir=' + encodeURIComponent(state.editingSkillDir));
+    state.editingSkillTree = treeRes.tree || [];
+    render();
+    showAlert('Folder created!', 'Success');
+  } catch (e) {
+    showAlert('Failed to create folder: ' + e.message, 'Error');
   }
 };
 
