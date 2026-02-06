@@ -1,0 +1,11 @@
+{
+  "owner": "seanphan",
+  "slug": "agenticflow-skill",
+  "displayName": "Agenticflow Skills",
+  "latest": {
+    "version": "0.1.0",
+    "publishedAt": 1769956038395,
+    "commit": "https://github.com/clawdbot/skills/commit/4d45bb22a0f7fdbc7db034fdfa0c73c22dd6b10e"
+  },
+  "history": []
+}

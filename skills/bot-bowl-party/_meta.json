@@ -1,0 +1,11 @@
+{
+  "owner": "fsa317",
+  "slug": "bot-bowl-party",
+  "displayName": "Bot Bowl Party",
+  "latest": {
+    "version": "1.0.2",
+    "publishedAt": 1769983715952,
+    "commit": "https://github.com/clawdbot/skills/commit/287549bc969a0b00b31aa7cf17098936638f5203"
+  },
+  "history": []
+}

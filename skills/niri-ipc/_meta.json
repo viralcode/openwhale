@@ -1,0 +1,11 @@
+{
+  "owner": "atefr",
+  "slug": "niri-ipc",
+  "displayName": "Niri IPC",
+  "latest": {
+    "version": "1.0.0",
+    "publishedAt": 1769912109884,
+    "commit": "https://github.com/clawdbot/skills/commit/f679ef8acdfcf9af45141c20cf5aeaeb0e586ad0"
+  },
+  "history": []
+}

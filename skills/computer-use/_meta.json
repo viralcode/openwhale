@@ -1,0 +1,22 @@
+{
+  "owner": "ram-raghav-s",
+  "slug": "computer-use",
+  "displayName": "Computer Use",
+  "latest": {
+    "version": "1.2.0",
+    "publishedAt": 1770016721448,
+    "commit": "https://github.com/clawdbot/skills/commit/f134566f7e120193df8e9ab22cdf58e1545133c8"
+  },
+  "history": [
+    {
+      "version": "1.1.0",
+      "publishedAt": 1769992531799,
+      "commit": "https://github.com/clawdbot/skills/commit/aacb521283802ab13598a7e5130f0afaeb2504e0"
+    },
+    {
+      "version": "1.0.1",
+      "publishedAt": 1769945440223,
+      "commit": "https://github.com/clawdbot/skills/commit/c98159094bd73135c0e4186de5d6701e9c6ac82f"
+    }
+  ]
+}

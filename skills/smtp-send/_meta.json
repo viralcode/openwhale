@@ -1,0 +1,11 @@
+{
+  "owner": "xiwan",
+  "slug": "smtp-send",
+  "displayName": "smtp-send",
+  "latest": {
+    "version": "1.0.0",
+    "publishedAt": 1769954521885,
+    "commit": "https://github.com/clawdbot/skills/commit/31a9f1a4c846555f5429de2fa242b8450338c1e6"
+  },
+  "history": []
+}

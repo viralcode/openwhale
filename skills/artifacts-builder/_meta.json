@@ -1,0 +1,11 @@
+{
+  "owner": "seanphan",
+  "slug": "artifacts-builder",
+  "displayName": "Artifacts Builder",
+  "latest": {
+    "version": "0.1.0",
+    "publishedAt": 1769956215939,
+    "commit": "https://github.com/clawdbot/skills/commit/c146a7be38ce05fbe3de8d3d29a980ef5ed2cd78"
+  },
+  "history": []
+}

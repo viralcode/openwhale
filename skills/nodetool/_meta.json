@@ -1,0 +1,11 @@
+{
+  "owner": "georgi",
+  "slug": "nodetool",
+  "displayName": "Nodetool",
+  "latest": {
+    "version": "0.6.3",
+    "publishedAt": 1769875101015,
+    "commit": "https://github.com/clawdbot/skills/commit/3998f2eeac3017dfb8919b4a201815df1408fb0e"
+  },
+  "history": []
+}
