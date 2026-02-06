@@ -1811,13 +1811,13 @@ function renderMdSkillsGrid() {
   if (totalPages > 1) {
     html += `
       <div class="pagination" style="display: flex; justify-content: center; gap: 8px; margin-top: 24px; align-items: center;">
-        <button class="btn btn-ghost" ${page === 0 ? 'disabled' : ''} onclick="state.mdSkillsPage = ${page - 1}; render();">
+        <button class="btn btn-ghost" ${page === 0 ? 'disabled' : ''} onclick="setMdSkillsPage(${page - 1})">
           ${icon('arrowLeft', 16)} Prev
         </button>
         <span style="color: var(--text-secondary); font-size: 14px; padding: 0 12px;">
           Page ${page + 1} of ${totalPages}
         </span>
-        <button class="btn btn-ghost" ${page >= totalPages - 1 ? 'disabled' : ''} onclick="state.mdSkillsPage = ${page + 1}; render();">
+        <button class="btn btn-ghost" ${page >= totalPages - 1 ? 'disabled' : ''} onclick="setMdSkillsPage(${page + 1})">
           Next ${icon('arrowRight', 16)}
         </button>
       </div>
@@ -3183,6 +3183,16 @@ window.handleMdSkillsSearch = function (input) {
       searchInput.setSelectionRange(cursorPos, cursorPos);
     }
   }, 0);
+};
+
+window.setMdSkillsPage = function (page) {
+  state.mdSkillsPage = page;
+  render();
+  // Scroll to top of skills section
+  const skillsSection = document.querySelector('.skills-grid');
+  if (skillsSection) {
+    skillsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
 };
 
 window.closeCreateSkillModal = function () {
