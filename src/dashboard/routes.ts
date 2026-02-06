@@ -35,7 +35,7 @@ const configStore = new Map<string, unknown>();
 const setupState = { completed: false, currentStep: 0, stepsCompleted: [] as string[] };
 
 // In-memory caches for configs (synced with DB)
-const providerConfigs = new Map<string, { enabled: boolean; apiKey?: string; baseUrl?: string }>();
+const providerConfigs = new Map<string, { enabled: boolean; apiKey?: string; baseUrl?: string; selectedModel?: string }>();
 const skillConfigs = new Map<string, { enabled: boolean; apiKey?: string }>();
 const channelConfigs = new Map<string, { enabled: boolean; connected: boolean; settings?: unknown }>();
 
@@ -56,6 +56,7 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
                 if (p.type === "anthropic") process.env.ANTHROPIC_API_KEY = p.apiKey;
                 if (p.type === "openai") process.env.OPENAI_API_KEY = p.apiKey;
                 if (p.type === "google") process.env.GOOGLE_API_KEY = p.apiKey;
+                if (p.type === "deepseek") process.env.DEEPSEEK_API_KEY = p.apiKey;
             }
         }
 
@@ -123,6 +124,7 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
 
 async function saveProviderToDB(db: DrizzleDB, type: string, cfg: { enabled: boolean; apiKey?: string; baseUrl?: string }) {
     try {
+        console.log(`[Dashboard] Saving provider ${type} to database...`);
         await db.insert(providerConfig)
             .values({
                 id: type,
@@ -136,8 +138,9 @@ async function saveProviderToDB(db: DrizzleDB, type: string, cfg: { enabled: boo
                 target: providerConfig.id,
                 set: { enabled: cfg.enabled, apiKey: cfg.apiKey, baseUrl: cfg.baseUrl }
             });
+        console.log(`[Dashboard] ✓ Provider ${type} saved to database`);
     } catch (e) {
-        console.error("[Dashboard] Failed to save provider config:", e);
+        console.error(`[Dashboard] Failed to save provider config for ${type}:`, e);
     }
 }
 
@@ -671,8 +674,34 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
     dashboard.post("/api/chat", async (c) => {
         const { message, model: requestModel } = await c.req.json();
 
-        // Get model from request, or fall back to stored default, or use claude as last resort
-        const effectiveModel = requestModel || configStore.get("defaultModel") || "claude-sonnet-4-20250514";
+        // Find the enabled provider and use its selected model
+        let effectiveModel = requestModel;
+        if (!effectiveModel) {
+            // Debug: log all provider configs
+            console.log("[Dashboard] Provider configs:", Array.from(providerConfigs.entries()).map(([k, v]) => ({ type: k, enabled: v.enabled, hasKey: !!v.apiKey })));
+
+            // Check which provider is enabled in providerConfigs
+            for (const [type, config] of providerConfigs.entries()) {
+                if (config.enabled && config.apiKey) {
+                    // Use the selected model for this provider, or a default
+                    const defaultModels: Record<string, string> = {
+                        anthropic: "claude-sonnet-4-20250514",
+                        openai: "gpt-4o",
+                        google: "gemini-2.0-flash",
+                        deepseek: "deepseek-chat",
+                        ollama: "llama3.2",
+                    };
+                    effectiveModel = config.selectedModel || defaultModels[type] || "deepseek-chat";
+                    console.log(`[Dashboard] Using enabled provider: ${type}, model: ${effectiveModel}`);
+                    break;
+                }
+            }
+            // Fallback if no provider is enabled
+            if (!effectiveModel) {
+                effectiveModel = configStore.get("defaultModel") || "claude-sonnet-4-20250514";
+                console.log(`[Dashboard] No enabled provider found, falling back to: ${effectiveModel}`);
+            }
+        }
 
         // Check for commands first
         const commandResult = processSessionCommand("dashboard", message);
@@ -1082,15 +1111,18 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
     // Save provider config
     dashboard.post("/api/providers/:type/config", async (c) => {
         const type = c.req.param("type");
-        const { apiKey, baseUrl, enabled } = await c.req.json();
+        const { apiKey, baseUrl, enabled, selectedModel } = await c.req.json();
 
         const existing = providerConfigs.get(type) || { enabled: false };
         providerConfigs.set(type, {
             ...existing,
             enabled: enabled ?? existing.enabled,
             apiKey: apiKey || existing.apiKey,
-            baseUrl: baseUrl || (existing as { baseUrl?: string }).baseUrl
+            baseUrl: baseUrl || existing.baseUrl,
+            selectedModel: selectedModel || existing.selectedModel
         });
+
+        console.log(`[Dashboard] Provider ${type} config updated: enabled=${enabled ?? existing.enabled}, selectedModel=${selectedModel || existing.selectedModel}`);
 
         // Update env vars
         if (apiKey) {
@@ -1103,35 +1135,27 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         // Persist to database
         await saveProviderToDB(db, type, providerConfigs.get(type)!);
 
-        // Dynamically register provider if it's not already registered
-        if (apiKey && !registry.hasProvider(type)) {
-            console.log(`[Dashboard] Dynamically registering ${type} provider...`);
+        // Dynamically register provider when API key is provided
+        // Always re-register to ensure the provider uses the latest API key
+        if (apiKey) {
+            console.log(`[Dashboard] Registering ${type} provider with API key...`);
+            let provider = null;
+
             if (type === "anthropic") {
-                const provider = createAnthropicProvider();
-                if (provider) {
-                    registry.register("anthropic", provider);
-                    console.log("✓ Anthropic provider registered dynamically");
-                }
+                provider = createAnthropicProvider();
             } else if (type === "openai") {
-                const provider = createOpenAIProvider();
-                if (provider) {
-                    registry.register("openai", provider);
-                    console.log("✓ OpenAI provider registered dynamically");
-                }
+                provider = createOpenAIProvider();
             } else if (type === "google") {
-                const provider = createGoogleProvider();
-                if (provider) {
-                    registry.register("google", provider);
-                    console.log("✓ Google provider registered dynamically");
-                }
+                provider = createGoogleProvider();
             } else if (type === "deepseek") {
-                const provider = createDeepSeekProvider();
-                if (provider) {
-                    registry.register("deepseek", provider);
-                    console.log("✓ DeepSeek provider registered dynamically");
-                } else {
-                    console.error("[Dashboard] Failed to create DeepSeek provider - check API key");
-                }
+                provider = createDeepSeekProvider();
+            }
+
+            if (provider) {
+                registry.register(type, provider);
+                console.log(`✓ ${type} provider registered dynamically`);
+            } else {
+                console.error(`[Dashboard] Failed to create ${type} provider - API key may be invalid`);
             }
         }
 

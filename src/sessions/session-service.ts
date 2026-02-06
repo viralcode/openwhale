@@ -195,6 +195,7 @@ export async function processMessage(
 
     // Ensure provider is available for the selected model
     const provider = registry.getProvider(model);
+    console.log(`[SessionService] Model requested: ${model}, Provider found: ${provider?.name || 'NONE'}`);
     if (!provider) {
         throw new Error(`No provider available for model: ${model}. Please configure the appropriate API key.`);
     }

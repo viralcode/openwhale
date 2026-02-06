@@ -2777,21 +2777,13 @@ window.saveProvider = async function (type) {
   const baseUrl = document.getElementById(`baseurl-${type}`)?.value;
   const selectedModel = document.getElementById(`model-${type}`)?.value;
 
-  // Save provider config
-  await saveProviderConfig(type, { apiKey, baseUrl, enabled: true });
+  // Save provider config with selected model
+  await saveProviderConfig(type, { apiKey, baseUrl, enabled: true, selectedModel });
 
-  // If a model was selected, set it as the current model
+  // If a model was selected, update state
   if (selectedModel) {
     state.currentModel = selectedModel;
-    try {
-      await api('/config', {
-        method: 'POST',
-        body: JSON.stringify({ model: selectedModel })
-      });
-      await showAlert(`Saved! Model set to ${selectedModel}`, '✅ Success');
-    } catch (e) {
-      console.error('Failed to save model:', e);
-    }
+    await showAlert(`Saved! Using ${type} with model ${selectedModel}`, '✅ Success');
     render();
   }
 };
