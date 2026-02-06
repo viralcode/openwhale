@@ -70,9 +70,30 @@ pnpm approve-builds
 cp .env.example .env
 # Add your API keys to .env
 
-# Run it
+# Start the server
 pnpm run dev
 ```
+
+### Running Commands
+
+OpenWhale has two modes:
+
+1. **Server mode** (`npm run dev`) - Runs the web dashboard, API, and all channels
+2. **CLI mode** (`npm run cli <command>`) - Run standalone commands
+
+```bash
+# Server (runs dashboard, WhatsApp, Telegram, Discord, etc.)
+npm run dev
+
+# CLI commands (use when server is NOT needed)
+npm run cli chat                    # Interactive chat
+npm run cli browser install         # Install BrowserOS
+npm run cli browser status          # Check browser backends
+npm run cli whatsapp login          # Connect WhatsApp
+npm run cli providers               # List AI providers
+```
+
+> ⚠️ **Note:** CLI commands that need the server (like `browser use`) will call the server API, so make sure the server is running first!
 
 ### Docker (Recommended for Production)
 
@@ -233,6 +254,98 @@ These are the built-in capabilities the AI can use. You don't need to configure 
 | **nodes** | Work with structured data and knowledge graphs |
 
 ---
+
+## Browser Automation
+
+OpenWhale supports **two browser automation backends** — choose based on your needs:
+
+### 1. Playwright (Default)
+
+Built-in headless Chrome browser. Works out of the box.
+
+- ✅ **Zero setup** — just works
+- ✅ **Headless** — runs in background
+- ✅ **Fast** — optimized for automation
+- ❌ No extensions
+- ❌ No saved logins/cookies
+
+**Best for:** Simple web scraping, screenshots, form filling
+
+### 2. BrowserOS (Recommended for AI Agents)
+
+A real Chrome browser with AI automation superpowers. The AI controls *your* actual browser.
+
+- ✅ **Your extensions** — AdBlock, 1Password, etc. all work
+- ✅ **Your logins** — Already signed into sites? AI can use them
+- ✅ **Visible browser** — Watch what the AI does in real-time
+- ✅ **Privacy-first** — Runs locally, no cloud
+- ✅ **Anti-detection** — Looks like a real user, not a bot
+- ✅ **Local AI support** — Works with Ollama models
+- ✅ **Visual workflows** — See and debug AI actions
+
+**Best for:** Complex tasks, logged-in services, anything requiring real browser behavior
+
+### Quick Setup
+
+```bash
+# Install BrowserOS automatically
+npm run setup
+
+# Or manually
+npm run cli browser install
+
+# Check status
+npm run cli browser status
+
+# Switch backends
+npm run cli browser use browseros  # Use BrowserOS
+npm run cli browser use playwright  # Use Playwright (default)
+```
+
+### Why BrowserOS?
+
+| Scenario | Playwright | BrowserOS |
+|----------|------------|-----------|
+| Scrape public website | ✅ Great | ✅ Great |
+| Login to your email | ❌ Need to re-auth | ✅ Use existing session |
+| Book a flight | ❌ Often blocked | ✅ Works like real user |
+| Use site with 2FA | ❌ Can't handle | ✅ Already authenticated |
+| Debug AI actions | ❌ Headless | ✅ Watch in real-time |
+| Use adblocker | ❌ No extensions | ✅ All extensions work |
+
+### Enabling BrowserOS MCP Server
+
+After installing BrowserOS, you need to enable the MCP server for OpenWhale to control it:
+
+1. **Open BrowserOS**
+2. **Navigate to** `chrome://browseros/mcp` in the address bar
+3. **Enable the MCP server** toggle
+4. The MCP server runs at `http://127.0.0.1:9000/mcp` by default
+
+Then verify and switch to BrowserOS:
+```bash
+# Check if BrowserOS MCP is running
+npm run cli browser status
+
+# Should show: BrowserOS ● Running at http://127.0.0.1:9000
+#              Tools: 42 available
+
+# Switch to BrowserOS backend
+npm run cli browser use browseros
+
+# List available tools
+npm run cli browser tools
+```
+
+**Available Tools (42):**
+- `browser_navigate` - Navigate to URLs
+- `browser_click_element` - Click on page elements
+- `browser_type_text` - Type text into inputs
+- `browser_get_screenshot` - Capture screenshots
+- `browser_get_page_content` - Extract page HTML/text
+- `browser_execute_javascript` - Run custom JS
+- `browser_search_history` - Search browser history
+- Plus 35 more for tabs, bookmarks, network, console...
 
 ## Memory System
 
@@ -465,6 +578,12 @@ npm run cli skills     # See skill status
 npm run cli whatsapp login   # Scan QR code
 npm run cli whatsapp status  # Check connection
 npm run cli whatsapp logout  # Disconnect
+
+# Browser automation
+npm run cli browser install  # Auto-install BrowserOS
+npm run cli browser status   # Check available backends
+npm run cli browser use browseros   # Switch to BrowserOS
+npm run cli browser use playwright  # Switch to Playwright (default)
 
 # Background daemon (keeps running after terminal closes)
 npm run cli daemon install   # Install as system service

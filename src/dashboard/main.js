@@ -555,6 +555,21 @@ function scrollToBottom() {
   }, 100);
 }
 
+// Clear chat history
+async function clearChat() {
+  const confirmed = await showConfirm('Clear all messages in this conversation?', 'Clear Chat');
+  if (!confirmed) return;
+
+  try {
+    await api('/chat/history', { method: 'DELETE' });
+    state.messages = [];
+    render();
+    await showAlert('Conversation cleared!', 'Success');
+  } catch (e) {
+    await showAlert(`Failed to clear chat: ${e.message}`, 'Error');
+  }
+}
+
 // Setup Wizard Functions
 async function loadPrerequisites() {
   try {
@@ -996,8 +1011,8 @@ function renderSidebar() {
     { id: 'overview', iconName: 'layoutDashboard', label: 'Overview' },
     { id: 'channels', iconName: 'radio', label: 'Channels' },
     { id: 'providers', iconName: 'bot', label: 'Providers' },
-    { id: 'skills', iconName: 'wrench', label: 'Skills' },
-    { id: 'tools', iconName: 'tool', label: 'Tools' },
+    { id: 'skills', iconName: 'sparkles', label: 'Skills' },
+    { id: 'tools', iconName: 'zap', label: 'Tools' },
     { id: 'extensions', iconName: 'puzzle', label: 'Extensions' },
     { id: 'settings', iconName: 'settings', label: 'Settings' },
   ];
@@ -1042,23 +1057,21 @@ function renderHeader() {
 
   return `
     <header class="header">
-      <h1 class="header-title">${titles[state.view] || 'Dashboard'}</h1>
-      <div class="header-actions">
-        ${state.view === 'chat' ? `
-          <div class="model-selector">
-            <span>${icon('bot', 16)}</span>
-            <select id="model-select">
-              ${enabledProviders.map(p => p.models.map(m => `
-                <option value="${m}" ${state.currentModel === m ? 'selected' : ''}>${m}</option>
-              `).join('')).join('')}
-            </select>
+      ${state.view === 'chat' ? `
+        <div></div>
+        <button class="btn btn-ghost" onclick="clearChat()" title="Clear conversation">
+          ${icon('trash', 16)}
+          <span style="margin-left: 4px;">Clear Chat</span>
+        </button>
+      ` : `
+        <h1 class="header-title">${titles[state.view] || 'Dashboard'}</h1>
+        <div class="header-actions">
+          <div class="status-indicator">
+            <span class="status-dot${state.channels.some(c => c.connected) ? '' : ' offline'}"></span>
+            <span>${state.channels.filter(c => c.connected).length} connected</span>
           </div>
-        ` : ''}
-        <div class="status-indicator">
-          <span class="status-dot${state.channels.some(c => c.connected) ? '' : ' offline'}"></span>
-          <span>${state.channels.filter(c => c.connected).length} connected</span>
         </div>
-      </div>
+      `}
     </header>
   `;
 }
@@ -1081,20 +1094,27 @@ function renderChat() {
   return `
     <div class="chat-container">
       <div class="chat-messages" id="chat-messages">
-        ${state.messages.length === 0 ? `
-          <div class="empty-state">
-            <div class="empty-state-icon">${icon('whale', 64)}</div>
-            <div class="empty-state-title">How can I help you today?</div>
-            <p>I can help you manage your channels, write code, or just chat.</p>
-          </div>
-        ` : state.messages.map(renderMessage).join('')}
-        ${state.isSending ? `
-          <div class="message assistant">
-            <div class="message-content">
-              <span class="status-dot connecting" style="display:inline-block"></span> Thinking...
+        <div class="chat-messages-inner">
+          ${state.messages.length === 0 ? `
+            <div class="empty-state">
+              <div class="empty-state-icon" style="font-size: 64px;">🐋</div>
+              <div class="empty-state-title">How can I help you today?</div>
+              <p>I can help you manage your channels, write code, or just chat.</p>
             </div>
-          </div>
-        ` : ''}
+          ` : state.messages.map(renderMessage).join('')}
+          ${state.isSending ? `
+            <div class="message assistant thinking-message">
+              <div class="message-avatar" style="font-size: 18px;">🐋</div>
+              <div class="message-body">
+                <div class="typing-indicator">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+          ` : ''}
+        </div>
       </div>
       <div class="chat-input-container">
         <div class="chat-input-wrapper">
@@ -1106,8 +1126,7 @@ function renderChat() {
             onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"
           ></textarea>
           <button class="send-btn" id="send-btn" onclick="sendMessage()" ${state.isSending ? 'disabled' : ''}>
-            <span>Send</span>
-            ${icon('arrowRight', 18)}
+            ${icon('arrowRight', 20)}
           </button>
         </div>
       </div>
@@ -1117,6 +1136,12 @@ function renderChat() {
 
 function renderMessage(msg) {
   const roleClass = msg.role === 'user' ? 'user' : msg.role === 'system' ? 'system' : 'assistant';
+  const isUser = msg.role === 'user';
+  const isSystem = msg.role === 'system';
+
+  // Format time
+  const date = msg.createdAt ? new Date(msg.createdAt) : new Date();
+  const timeStr = date.toLocaleString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
   let content = escapeHtml(msg.content);
   // Simple markdown rendering
@@ -1127,29 +1152,69 @@ function renderMessage(msg) {
 
   let toolCallsHtml = '';
   if (msg.toolCalls && msg.toolCalls.length > 0) {
-    toolCallsHtml = msg.toolCalls.map((tc, i) => `
+    toolCallsHtml = msg.toolCalls.map((tc, i) => {
+      // Check for image in result metadata (supports multiple formats)
+      let imageSrc = null;
+      const resultMeta = typeof tc.result === 'object' ? tc.result?.metadata : null;
+      const tcMeta = tc.metadata;
+
+      // Check for direct image data URL
+      if (tcMeta?.image) {
+        imageSrc = tcMeta.image;
+      } else if (resultMeta?.image) {
+        imageSrc = resultMeta.image;
+      }
+      // Check for base64 (screenshot tool format)
+      else if (tcMeta?.base64) {
+        const mimeType = tcMeta.mimeType || 'image/png';
+        imageSrc = `data:${mimeType};base64,${tcMeta.base64}`;
+      } else if (resultMeta?.base64) {
+        const mimeType = resultMeta.mimeType || 'image/png';
+        imageSrc = `data:${mimeType};base64,${resultMeta.base64}`;
+      }
+
+      return `
       <div class="tool-call">
-        <div class="tool-call-header" onclick="toggleToolCall(${msg.id}, ${i})">
-          <span class="tool-call-icon">${icon('wrench', 16)}</span>
+        <div class="tool-call-header" onclick="toggleToolCall('${msg.id}', ${i})">
+          <span class="tool-call-icon">${icon('wrench', 14)}</span>
           <span class="tool-call-name">${tc.name}</span>
           <span class="tool-call-status ${tc.status}">${tc.status}</span>
         </div>
         <div class="tool-call-body" id="tool-${msg.id}-${i}">
-          <div>Arguments:</div>
+          <div style="color: var(--text-muted); margin-bottom: 4px;">Arguments:</div>
           <div class="tool-call-args">${JSON.stringify(tc.arguments, null, 2)}</div>
           ${tc.result ? `
-            <div style="margin-top: 12px">Result:</div>
+            <div style="color: var(--text-muted); margin: 12px 0 4px;">Result:</div>
+            ${imageSrc ? `
+              <div class="tool-call-result-image">
+                <img src="${imageSrc}" alt="Tool Result" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 8px;">
+              </div>
+            ` : ''}
             <div class="tool-call-result">${typeof tc.result === 'string' ? escapeHtml(tc.result) : JSON.stringify(tc.result, null, 2)}</div>
           ` : ''}
         </div>
       </div>
-    `).join('');
+    `}).join('');
   }
+
+  // Icons
+  let avatarIcon = icon('bot', 18);
+  if (isUser) avatarIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  if (isSystem) avatarIcon = icon('alertCircle', 18);
 
   return `
     <div class="message ${roleClass}">
-      <div class="message-content">${content}</div>
-      ${toolCallsHtml}
+      <div class="message-avatar">
+        ${avatarIcon}
+      </div>
+      <div class="message-body">
+        <div class="message-header">
+          <span class="message-author">${isUser ? 'You' : isSystem ? 'System' : 'Assistant'}</span>
+          <span class="message-time">${timeStr}</span>
+        </div>
+        <div class="message-content">${content}</div>
+        ${toolCallsHtml}
+      </div>
     </div>
   `;
 }
@@ -1686,6 +1751,30 @@ function renderSettings() {
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
     </div>
     
+    <!-- Browser Automation Settings -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Browser Automation</h3>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Browser Backend</label>
+        <select class="form-input" id="browser-backend" onchange="updateBrowserBackend()">
+          <option value="playwright">Playwright (Headless Chrome)</option>
+          <option value="browseros" id="browseros-option" disabled>BrowserOS (Not Available)</option>
+        </select>
+        <div class="form-hint">Choose which browser engine to use for automation</div>
+      </div>
+      
+      <div id="browseros-status" style="margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--bg-tertiary);">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span id="browseros-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted);"></span>
+          <span id="browseros-status-text" style="color: var(--text-secondary); font-size: 13px;">Checking BrowserOS...</span>
+        </div>
+        <div id="browseros-tools" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);"></div>
+      </div>
+    </div>
+    
     ${isAdmin ? `
     <!-- User Management (Admin Only) -->
     <div class="card">
@@ -2167,6 +2256,11 @@ function bindEvents() {
     modelSelect.addEventListener('change', (e) => {
       state.currentModel = e.target.value;
     });
+  }
+
+  // Browser settings init (for settings page)
+  if (state.view === 'settings') {
+    initBrowserSettings();
   }
 }
 
@@ -2680,6 +2774,77 @@ window.saveSettings = async function () {
   }
 };
 
+// Browser automation settings
+window.updateBrowserBackend = async function () {
+  const backend = document.getElementById('browser-backend')?.value;
+
+  try {
+    await api('/settings/browser', {
+      method: 'POST',
+      body: JSON.stringify({ backend })
+    });
+    await showAlert(`Browser backend set to ${backend === 'browseros' ? 'BrowserOS' : 'Playwright'}`, '✅ Success');
+  } catch (e) {
+    await showAlert('Failed to update: ' + e.message, '❌ Error');
+  }
+};
+
+window.checkBrowserOSStatus = async function () {
+  const indicator = document.getElementById('browseros-indicator');
+  const statusText = document.getElementById('browseros-status-text');
+  const toolsDiv = document.getElementById('browseros-tools');
+  const browserosOption = document.getElementById('browseros-option');
+  const backendSelect = document.getElementById('browser-backend');
+
+  if (!indicator) return; // Not on settings page
+
+  try {
+    const status = await api('/settings/browser/status');
+    const settings = await api('/settings/browser');
+
+    if (status.browseros?.available) {
+      // Fully available - MCP enabled and responding
+      indicator.style.background = '#10b981';
+      statusText.textContent = `BrowserOS running at ${status.browseros.url}`;
+      if (status.browseros.version) {
+        statusText.textContent += ` (v${status.browseros.version})`;
+      }
+      const toolCount = status.browseros.toolCount || 42;
+      toolsDiv.textContent = `${toolCount} browser automation tools available`;
+
+      // Enable the BrowserOS option
+      if (browserosOption) {
+        browserosOption.disabled = false;
+        browserosOption.textContent = 'BrowserOS (Full Browser)';
+      }
+
+      // Set current selection
+      if (backendSelect && settings.backend) {
+        backendSelect.value = settings.backend;
+      }
+    } else if (status.browseros?.running) {
+      // Running but MCP not enabled
+      indicator.style.background = '#f59e0b';
+      statusText.textContent = 'BrowserOS running, but MCP server not enabled';
+      toolsDiv.innerHTML = `<span style="color: #f59e0b;">⚠️ Enable MCP server:</span> Open BrowserOS → <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px;">chrome://browseros/mcp</code> → Enable`;
+    } else {
+      // Not running
+      indicator.style.background = '#6b7280';
+      statusText.textContent = status.browseros?.error || 'BrowserOS not running';
+      toolsDiv.innerHTML = '<a href="https://browseros.com" target="_blank" style="color: var(--primary);">Download BrowserOS</a> or run: npm run cli browser install';
+    }
+  } catch (e) {
+    indicator.style.background = '#ef4444';
+    statusText.textContent = 'Failed to check status';
+    toolsDiv.textContent = e.message || '';
+  }
+};
+
+// Check BrowserOS status when settings page loads
+window.initBrowserSettings = function () {
+  setTimeout(checkBrowserOSStatus, 500);
+};
+
 window.resetSetup = async function () {
   const confirmed = await showConfirm('This will reset all configuration.', '⚠️ Reset Setup?');
   if (confirmed) {
@@ -2852,3 +3017,6 @@ function getProviderIcon(type) {
   };
   return icon(iconMap[type] || 'bot');
 }
+
+// Expose functions globally for inline onclick handlers (required for ES modules)
+window.clearChat = clearChat;

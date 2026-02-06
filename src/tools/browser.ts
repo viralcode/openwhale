@@ -51,10 +51,11 @@ const ActRequestSchema = z.object({
     fn: z.string().optional().describe("JavaScript function to evaluate"),
 });
 
-const BrowserActionSchema = z.discriminatedUnion("action", [
+// Preprocess to accept 'command' as alias for 'action' (AI models sometimes hallucinate this)
+const BrowserActionRawSchema = z.discriminatedUnion("action", [
     // Status & Lifecycle
     z.object({ action: z.literal("status") }),
-    z.object({ action: z.literal("start"), headless: z.boolean().optional().default(true) }),
+    z.object({ action: z.literal("start"), headless: z.boolean().optional().default(false) }),
     z.object({ action: z.literal("stop") }),
 
     // Tabs
@@ -62,7 +63,7 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
     z.object({
         action: z.literal("open"),
         url: z.string().url(),
-        headless: z.boolean().optional().default(true),
+        headless: z.boolean().optional().default(false),
     }),
     z.object({ action: z.literal("focus"), targetId: z.string() }),
     z.object({ action: z.literal("close"), targetId: z.string().optional() }),
@@ -72,7 +73,7 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
         action: z.literal("navigate"),
         url: z.string().url(),
         waitUntil: z.enum(["load", "domcontentloaded", "networkidle"]).optional().default("domcontentloaded"),
-        headless: z.boolean().optional().default(true),
+        headless: z.boolean().optional().default(false),
     }),
 
     // Snapshot & Screenshot
@@ -176,7 +177,16 @@ const BrowserActionSchema = z.discriminatedUnion("action", [
     }),
 ]);
 
-type BrowserAction = z.infer<typeof BrowserActionSchema>;
+// Wrap with preprocess to accept 'command' as alias for 'action'
+const BrowserActionSchema = z.preprocess((data) => {
+    if (data && typeof data === 'object' && 'command' in data && !('action' in data)) {
+        const { command, ...rest } = data as { command: string;[key: string]: unknown };
+        return { action: command, ...rest };
+    }
+    return data;
+}, BrowserActionRawSchema);
+
+type BrowserAction = z.infer<typeof BrowserActionRawSchema>;
 type ActRequest = z.infer<typeof ActRequestSchema>;
 
 // ============================================================================
@@ -763,6 +773,47 @@ class BrowserManager {
 const browserManager = new BrowserManager();
 
 // ============================================================================
+// BROWSER BACKEND SELECTION
+// ============================================================================
+
+// Get configured browser backend from settings
+async function getBrowserBackend(): Promise<"playwright" | "browseros"> {
+    try {
+        // Try to get setting from raw SQLite database
+        const { db } = await import("../db/index.js");
+
+        const row = db.prepare("SELECT settings FROM tool_config WHERE id = ?").get("browser") as { settings?: string } | undefined;
+
+        if (row?.settings) {
+            const settings = typeof row.settings === "string" ? JSON.parse(row.settings) : row.settings;
+
+            if (settings.backend === "browseros") {
+                // Try to ensure BrowserOS is running
+                const { isBrowserOSAvailable, ensureBrowserOSRunning } = await import("./browser-os.js");
+                const status = await isBrowserOSAvailable();
+                if (status.available) {
+                    return "browseros";
+                }
+
+                // Not running, try to launch it
+                console.log("[Browser] BrowserOS not running, attempting to launch...");
+                const launchResult = await ensureBrowserOSRunning();
+                if (launchResult.success) {
+                    console.log("[Browser] BrowserOS launched successfully");
+                    return "browseros";
+                }
+
+                console.log(`[Browser] BrowserOS launch failed: ${launchResult.error}, falling back to Playwright`);
+            }
+        }
+
+        return "playwright";
+    } catch {
+        return "playwright";
+    }
+}
+
+// ============================================================================
 // BROWSER TOOL
 // ============================================================================
 
@@ -785,6 +836,67 @@ For interactions, first take a snapshot to get refs, then use act with ref param
 
     async execute(params: BrowserAction, _context: ToolCallContext): Promise<ToolResult> {
         try {
+            // Check for BrowserOS backend
+            const backend = await getBrowserBackend();
+
+            if (backend === "browseros") {
+                // Auto-launch BrowserOS if not running
+                const { ensureBrowserOSRunning, BrowserOSBackend } = await import("./browser-os.js");
+                console.log("[Browser] BrowserOS backend configured, checking/launching...");
+                const launchResult = await ensureBrowserOSRunning();
+                console.log(`[Browser] ensureBrowserOSRunning result: success=${launchResult.success}, wasLaunched=${launchResult.wasLaunched}, error=${launchResult.error || "none"}`);
+                if (!launchResult.success) {
+                    console.log(`[Browser] BrowserOS launch failed: ${launchResult.error}, falling back to Playwright`);
+                    // Fall through to Playwright
+                } else {
+                    if (launchResult.wasLaunched) {
+                        console.log("[Browser] Auto-launched BrowserOS");
+                    }
+                    const browserOS = new BrowserOSBackend();
+
+                    // Map actions to BrowserOS
+                    switch (params.action) {
+                        case "start":
+                            // BrowserOS is already running, no need to start
+                            return {
+                                success: true,
+                                content: "BrowserOS is ready (already running)",
+                            };
+                        case "stop":
+                            // Don't stop BrowserOS from here
+                            return {
+                                success: true,
+                                content: "BrowserOS browser remains open",
+                            };
+                        case "navigate":
+                            return await browserOS.navigate(params.url);
+                        case "open":
+                            return await browserOS.navigate(params.url);
+                        case "snapshot":
+                            return await browserOS.snapshot();
+                        case "screenshot":
+                            return await browserOS.screenshot();
+                        case "click":
+                            return await browserOS.click(params.selector);
+                        case "type":
+                            return await browserOS.type(params.selector, params.text);
+                        case "press":
+                            return await browserOS.press(params.key);
+                        case "status":
+                            const status = await browserOS.getStatus();
+                            return {
+                                success: true,
+                                content: JSON.stringify({ ...status, backend: "browseros" }, null, 2),
+                                metadata: status,
+                            };
+                        default:
+                            // For unsupported actions, fall through to Playwright
+                            console.log(`[Browser] Action '${params.action}' not supported by BrowserOS, using Playwright`);
+                    }
+                }
+            }
+
+            // Use Playwright (fallback or default)
             switch (params.action) {
                 // ========== LIFECYCLE ==========
                 case "status": {

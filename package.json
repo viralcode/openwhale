@@ -23,7 +23,9 @@
     "db:studio": "drizzle-kit studio",
     "docker:build": "docker build -t openwhale .",
     "docker:up": "docker-compose up -d",
-    "docker:down": "docker-compose down"
+    "docker:down": "docker-compose down",
+    "setup": "tsx src/cli.ts browser install",
+    "postinstall": "echo '\n🐋 OpenWhale installed!\n\n  Optional: Run npm run setup to install BrowserOS\n  Start server: npm run dev\n  CLI commands: npm run cli <command>\n'"
   },
   "engines": {
     "node": ">=22.0.0"

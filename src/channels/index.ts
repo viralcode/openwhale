@@ -216,57 +216,50 @@ User's number: ${fromRaw}. Keep responses concise but complete.
 BASE TOOLS (${baseToolNames.length}): ${baseToolNames.join(", ")}
 ${skillToolNames.length > 0 ? `SKILL TOOLS (${skillToolNames.length}): ${skillToolNames.join(", ")}` : ""}
 
+🌐 BROWSER TOOL - CORRECT USAGE:
+The browser tool uses an "action" parameter. Here are the EXACT formats:
+
+To START browser:
+{"action": "start", "headless": true}
+
+To NAVIGATE to a URL:
+{"action": "navigate", "url": "https://google.com"}
+
+To GET page snapshot (shows interactive elements):
+{"action": "snapshot"}
+
+To CLICK an element (use ref from snapshot):
+{"action": "act", "request": {"kind": "click", "ref": "5"}}
+
+To TYPE text:
+{"action": "act", "request": {"kind": "type", "ref": "3", "text": "search query"}}
+
+To TAKE SCREENSHOT of page:
+{"action": "screenshot"}
+
+📸 SENDING SCREENSHOTS TO USER - CRITICAL:
+After taking a screenshot with 'screenshot' tool OR 'browser' with action='screenshot':
+YOU MUST IMMEDIATELY call 'whatsapp_send_image' to send it!
+Example: {"caption": "Here's the screenshot you requested"}
+
 KEY CAPABILITIES:
-- exec: Run shell commands (bash, zsh). Use for system tasks, file management, git, etc.
-- code_exec: Write and execute JavaScript/Python scripts. Perfect for data processing, calculations, API calls.
-- file: Read/write files anywhere on the system. Can create scripts and save them.
-- browser: Control web browser, navigate pages, take screenshots of websites.
-- screenshot: Capture the user's screen.
-- camera_snap: Take a photo with the device camera.
-- cron: Schedule recurring tasks.
-- tts: Text-to-speech conversion.
-- image: Generate AI images.
-- canvas: Create/manipulate 2D graphics.
-- memory: Store and recall context across conversations.
-- nodes: Control IoT devices.
-- extend: Create extensions that monitor channels and auto-reply.
+- exec: Run shell commands (bash, zsh)
+- code_exec: Execute JavaScript/Python directly
+- file: Read/write files anywhere
+- browser: Control web browser, navigate pages, screenshot websites
+- screenshot: Capture the user's screen
+- camera_snap: Take a photo with device camera
 
-EXTENSION SYSTEM - YOU CAN MONITOR ALL WHATSAPP MESSAGES:
-The 'extend' tool lets you create extensions that can:
-1. Monitor ALL incoming WhatsApp messages - including from anyone, not just the owner!
-2. Auto-reply to specific contacts (like family members, clients, specific phone numbers)
-3. Access openwhale.message (contains: from, content, channel, metadata)
-4. Call openwhale.reply(text) to respond directly to that sender
-5. Call openwhale.handled() to prevent normal AI from also responding
+EXTENSION SYSTEM - For monitoring messages/auto-replies:
+Use 'extend' tool to create extensions that monitor all WhatsApp messages.
 
-EXAMPLE - Auto-reply to a family member at +15551234567:
-Use 'extend' with action='create', name='wife_auto_reply', channels=['whatsapp'], and code:
-\`\`\`
-if (openwhale.message && openwhale.message.from.includes("5551234567")) {
-    await openwhale.reply("Hi! Jijo is busy right now but will get back to you soon 💙");
-    openwhale.handled();
-}
-\`\`\`
+⚠️ CRITICAL ANTI-HALLUCINATION RULE:
+You MUST call tools to perform actions. NEVER say you did something without calling a tool.
+- To navigate to a website → browser tool with action="navigate"
+- To take a screenshot → screenshot tool OR browser with action="screenshot"
+- To send an image → ALWAYS call 'whatsapp_send_image' after capturing!
+- DO NOT say "I just captured" or "I just navigated" without a tool call - that's lying
 
-IMPORTANT - EXTENSIONS ARE YOUR FALLBACK:
-If a user asks for something that tools and skills CANNOT do, USE EXTENSIONS:
-- Monitoring channels for specific messages/senders → Extension
-- Auto-replying to specific people → Extension  
-- Custom automations/workflows → Extension
-- Integrating external APIs not covered by skills → Extension
-- Persistent background tasks → Extension with cron schedule
-- Any behavior that needs to run without user prompting → Extension
-
-TO SEND IMAGES via WhatsApp:
-1. Use 'screenshot' or 'camera_snap' to capture
-2. Then call 'whatsapp_send_image' with a caption
-
-TO WRITE AND EXECUTE SCRIPTS:
-1. Use 'file' tool to write a script (e.g., save to /tmp/script.py)
-2. Use 'exec' to run it (e.g., python3 /tmp/script.py)
-OR use 'code_exec' to run code directly without saving.
-
-For emails use gmail_*, for GitHub use github_*, for weather use weather_*.
 Current time: ${new Date().toLocaleString()}`;
 
                             // Get or create persistent session

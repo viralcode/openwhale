@@ -1045,6 +1045,19 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                     "qwen2.5",
                     "deepseek-r1"
                 ]
+            },
+            {
+                name: "DeepSeek",
+                type: "deepseek",
+                enabled: providerConfigs.get("deepseek")?.enabled ?? !!process.env.DEEPSEEK_API_KEY,
+                hasKey: !!(providerConfigs.get("deepseek")?.apiKey || process.env.DEEPSEEK_API_KEY),
+                supportsTools: true,
+                supportsVision: false,
+                models: [
+                    "deepseek-chat",
+                    "deepseek-coder",
+                    "deepseek-reasoner"
+                ]
             }
         ];
 
@@ -1069,6 +1082,7 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             if (type === "anthropic") process.env.ANTHROPIC_API_KEY = apiKey;
             if (type === "openai") process.env.OPENAI_API_KEY = apiKey;
             if (type === "google") process.env.GOOGLE_API_KEY = apiKey;
+            if (type === "deepseek") process.env.DEEPSEEK_API_KEY = apiKey;
         }
 
         // Persist to database
@@ -1314,6 +1328,122 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             .all();
 
         return c.json({ logs });
+    });
+
+    // ============== BROWSER SETTINGS ==============
+
+    // Get browser automation settings
+    dashboard.get("/api/settings/browser", async (c) => {
+        try {
+            const { db: rawDb } = await import("../db/index.js");
+
+            // Read settings with raw SQL for reliability
+            let settings: { backend?: string; browserosUrl?: string } = {};
+            try {
+                const result = rawDb.prepare("SELECT settings FROM tool_config WHERE id = ?").get("browser") as { settings: string } | undefined;
+                if (result?.settings) {
+                    settings = JSON.parse(result.settings);
+                }
+            } catch {
+                // Table might not exist yet
+            }
+
+            return c.json({
+                ok: true,
+                backend: settings.backend || "playwright",
+                browserosUrl: settings.browserosUrl || "http://127.0.0.1:9201",
+            });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Update browser automation settings
+    dashboard.post("/api/settings/browser", async (c) => {
+        try {
+            const { backend, browserosUrl } = await c.req.json() as {
+                backend?: "playwright" | "browseros";
+                browserosUrl?: string;
+            };
+
+            const settings = {
+                backend: backend || "playwright",
+                browserosUrl: browserosUrl || "http://127.0.0.1:9201",
+            };
+
+            // Use raw SQLite directly for reliability
+            try {
+                const { db: rawDb } = await import("../db/index.js");
+
+                // Create table if not exists
+                rawDb.exec(`
+                    CREATE TABLE IF NOT EXISTS tool_config (
+                        id TEXT PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        settings TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    )
+                `);
+
+                // Upsert the settings
+                const settingsJson = JSON.stringify(settings);
+                rawDb.prepare(`
+                    INSERT INTO tool_config (id, name, settings, updated_at) 
+                    VALUES (?, ?, ?, datetime('now'))
+                    ON CONFLICT(id) DO UPDATE SET settings = excluded.settings, updated_at = datetime('now')
+                `).run("browser", "Browser Automation", settingsJson);
+
+                console.log("[Browser Settings] Saved:", settings);
+            } catch (dbError) {
+                console.error("[Browser Settings] DB error:", dbError);
+                throw dbError;
+            }
+
+            return c.json({ ok: true, ...settings });
+        } catch (error) {
+            console.error("[Browser Settings] Save error:", error);
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Check BrowserOS availability
+    dashboard.get("/api/settings/browser/status", async (c) => {
+        try {
+            const { isBrowserOSAvailable } = await import("../tools/browser-os.js");
+            const { toolConfig } = await import("../db/config-schema.js");
+
+            // Get configured URL (gracefully handle missing table)
+            let url = "http://127.0.0.1:9201";
+            try {
+                const result = await db.select().from(toolConfig).where(eq(toolConfig.id, "browser")).get();
+                const settings = result?.settings as { browserosUrl?: string } || {};
+                url = settings.browserosUrl || url;
+            } catch {
+                // Table might not exist yet, use default URL
+            }
+
+            const status = await isBrowserOSAvailable(url);
+
+            return c.json({
+                ok: true,
+                browseros: {
+                    url,
+                    available: status.available,
+                    running: status.running,
+                    mcpEnabled: status.mcpEnabled,
+                    version: status.version,
+                    toolCount: status.toolCount,
+                    error: status.error,
+                },
+                playwright: {
+                    available: true, // Playwright is always available
+                },
+            });
+        } catch (error) {
+            console.error("[Browser Status API] Error:", error);
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
     });
 
     // ============== EXTENSIONS ==============

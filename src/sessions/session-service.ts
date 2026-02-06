@@ -46,6 +46,7 @@ export interface ToolCallInfo {
     name: string;
     arguments: Record<string, unknown>;
     result?: unknown;
+    metadata?: Record<string, unknown>;  // Preserves metadata like base64 images
     status: "pending" | "running" | "completed" | "error";
 }
 
@@ -378,6 +379,7 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
                         if (tool) {
                             const result = await toolRegistry.execute(tc.name, tc.arguments, context);
                             toolInfo.result = result.content || result.error;
+                            toolInfo.metadata = result.metadata;  // Preserve metadata (images, etc.)
                             toolInfo.status = result.success ? "completed" : "error";
                         } else {
                             // Try skill tools
@@ -385,6 +387,7 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
                             if (skillTool) {
                                 const result = await skillTool.execute(tc.arguments, context);
                                 toolInfo.result = result.content || result.error;
+                                toolInfo.metadata = result.metadata;  // Preserve metadata
                                 toolInfo.status = result.success ? "completed" : "error";
                             } else {
                                 toolInfo.result = `Unknown tool: ${tc.name}`;

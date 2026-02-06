@@ -220,6 +220,9 @@ async function main() {
         case "server":
             await startServer();
             break;
+        case "browser":
+            await handleBrowserCommand(process.argv[3]);
+            break;
         case "daemon":
             await handleDaemonCommand(process.argv[3]);
             break;
@@ -467,6 +470,325 @@ ${c("bold", "Usage:")}
     }
 }
 
+/**
+ * Handle browser automation commands (status, use, config)
+ */
+async function handleBrowserCommand(subcommand?: string) {
+    const { isBrowserOSAvailable, DEFAULT_BROWSEROS_URL } = await import("./tools/browser-os.js");
+    const { existsSync, mkdirSync, createWriteStream, unlinkSync } = await import("node:fs");
+    const { join } = await import("node:path");
+    const { homedir } = await import("node:os");
+    const { exec } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execAsync = promisify(exec);
+
+    // Check BrowserOS availability
+    const browserosStatus = await isBrowserOSAvailable();
+
+    switch (subcommand) {
+        case "install":
+            console.log(c("bold", "\n🌐 Installing BrowserOS\n"));
+
+            // Determine download URL based on platform
+            const platform = process.platform;
+            let downloadUrl: string;
+            let filename: string;
+
+            switch (platform) {
+                case "darwin":
+                    downloadUrl = "https://files.browseros.com/download/BrowserOS.dmg";
+                    filename = "BrowserOS.dmg";
+                    break;
+                case "win32":
+                    downloadUrl = "https://files.browseros.com/download/BrowserOS_installer.exe";
+                    filename = "BrowserOS_installer.exe";
+                    break;
+                case "linux":
+                    downloadUrl = "https://files.browseros.com/download/BrowserOS.AppImage";
+                    filename = "BrowserOS.AppImage";
+                    break;
+                default:
+                    console.log(c("red", `Unsupported platform: ${platform}`));
+                    return;
+            }
+
+            // Check if already installed
+            if (browserosStatus.available) {
+                console.log(c("green", "✅ BrowserOS is already installed and running!"));
+                return;
+            }
+
+            // Download location
+            const downloadDir = join(homedir(), ".openwhale", "downloads");
+            if (!existsSync(downloadDir)) {
+                mkdirSync(downloadDir, { recursive: true });
+            }
+            const downloadPath = join(downloadDir, filename);
+
+            console.log(c("dim", `Downloading from: ${downloadUrl}`));
+            console.log(c("dim", `Saving to: ${downloadPath}`));
+
+            try {
+                // Download the file
+                console.log(c("yellow", "⏳ Downloading BrowserOS..."));
+                const response = await fetch(downloadUrl);
+
+                if (!response.ok) {
+                    throw new Error(`Download failed: ${response.status}`);
+                }
+
+                const fileStream = createWriteStream(downloadPath);
+                const reader = response.body?.getReader();
+
+                if (!reader) {
+                    throw new Error("Failed to get download stream");
+                }
+
+                // Stream download with progress
+                const contentLength = parseInt(response.headers.get("content-length") || "0");
+                let downloaded = 0;
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    fileStream.write(value);
+                    downloaded += value.length;
+
+                    if (contentLength > 0) {
+                        const percent = Math.round((downloaded / contentLength) * 100);
+                        process.stdout.write(`\r  Progress: ${percent}% (${Math.round(downloaded / 1024 / 1024)}MB)`);
+                    }
+                }
+
+                fileStream.end();
+                console.log(c("green", "\n  ✓ Download complete!"));
+
+                // Install based on platform
+                console.log(c("yellow", "⏳ Installing..."));
+
+                if (platform === "darwin") {
+                    // macOS: Mount DMG and copy to Applications
+                    console.log(c("dim", "  Mounting DMG..."));
+                    await execAsync(`hdiutil attach "${downloadPath}" -nobrowse -quiet`);
+
+                    console.log(c("dim", "  Copying to Applications..."));
+                    try {
+                        await execAsync(`cp -R "/Volumes/BrowserOS/BrowserOS.app" /Applications/`);
+                    } catch {
+                        // Try alternate volume name
+                        await execAsync(`cp -R /Volumes/BrowserOS*/BrowserOS*.app /Applications/`);
+                    }
+
+                    console.log(c("dim", "  Unmounting DMG..."));
+                    await execAsync(`hdiutil detach "/Volumes/BrowserOS" -quiet || true`);
+
+                    console.log(c("green", "✅ BrowserOS installed to /Applications/BrowserOS.app"));
+                    console.log(c("dim", "\n  To start: Open BrowserOS from Applications or run:"));
+                    console.log(c("cyan", "    open /Applications/BrowserOS.app"));
+
+                } else if (platform === "win32") {
+                    // Windows: Run installer
+                    console.log(c("dim", "  Running installer..."));
+                    await execAsync(`start /wait "${downloadPath}"`);
+                    console.log(c("green", "✅ BrowserOS installer completed"));
+
+                } else if (platform === "linux") {
+                    // Linux: Make AppImage executable and move to bin
+                    const binPath = join(homedir(), ".local", "bin");
+                    if (!existsSync(binPath)) {
+                        mkdirSync(binPath, { recursive: true });
+                    }
+
+                    const appImageDest = join(binPath, "BrowserOS.AppImage");
+                    await execAsync(`chmod +x "${downloadPath}"`);
+                    await execAsync(`mv "${downloadPath}" "${appImageDest}"`);
+
+                    console.log(c("green", `✅ BrowserOS installed to ${appImageDest}`));
+                    console.log(c("dim", "\n  To start: Run:"));
+                    console.log(c("cyan", `    ${appImageDest}`));
+                }
+
+                // Cleanup download (except Linux which moves it)
+                if (platform !== "linux" && existsSync(downloadPath)) {
+                    unlinkSync(downloadPath);
+                }
+
+                console.log(c("dim", "\n  After starting BrowserOS, run:"));
+                console.log(c("cyan", "    openwhale browser use browseros"));
+
+            } catch (error: any) {
+                console.error(c("red", `\n❌ Installation failed: ${error.message}`));
+                console.log(c("dim", "\nManual install:"));
+                console.log(c("cyan", `  ${downloadUrl}`));
+            }
+            break;
+
+        case "status":
+            console.log(c("bold", "\n🌐 Browser Automation Status\n"));
+
+            const { isBrowserOSInstalled } = await import("./tools/browser-os.js");
+            const installStatus = await isBrowserOSInstalled();
+
+            // Playwright status (always available)
+            console.log(`  ${c("cyan", "Playwright".padEnd(12))} ${c("green", "● Available")} (built-in)`);
+
+            // BrowserOS status
+            if (browserosStatus.available) {
+                console.log(`  ${c("cyan", "BrowserOS".padEnd(12))} ${c("green", "● Running")} at ${DEFAULT_BROWSEROS_URL}`);
+                if (browserosStatus.version) {
+                    console.log(`    Version: ${browserosStatus.version}`);
+                }
+                // Show available tools
+                try {
+                    const { listBrowserOSTools } = await import("./tools/browser-os.js");
+                    const tools = await listBrowserOSTools();
+                    if (tools.length > 0) {
+                        console.log(`    Tools: ${tools.length} available`);
+                    }
+                } catch {
+                    // Ignore tool listing errors
+                }
+            } else if (installStatus.installed) {
+                console.log(`  ${c("cyan", "BrowserOS".padEnd(12))} ${c("yellow", "○ Installed")} (not running)`);
+                console.log(c("dim", `    Path: ${installStatus.path}`));
+                console.log(c("dim", `    Start with: npm run cli browser start`));
+            } else {
+                console.log(`  ${c("cyan", "BrowserOS".padEnd(12))} ${c("dim", "○ Not installed")}`);
+                console.log(c("dim", `    Install with: npm run cli browser install`));
+            }
+
+            console.log();
+            break;
+
+        case "start":
+            console.log(c("bold", "\n🌐 Starting BrowserOS\n"));
+            const { launchBrowserOS } = await import("./tools/browser-os.js");
+
+            const launchResult = await launchBrowserOS();
+            if (launchResult.success) {
+                console.log(c("green", "✅ BrowserOS MCP server is responding!"));
+                console.log(c("dim", "\nNow you can switch to BrowserOS backend:"));
+                console.log(c("cyan", "  npm run cli browser use browseros"));
+            } else {
+                // Check if app launched but MCP not responding
+                const { isBrowserOSInstalled } = await import("./tools/browser-os.js");
+                const installed = await isBrowserOSInstalled();
+
+                if (installed.installed && launchResult.error?.includes("not responding")) {
+                    console.log(c("yellow", "⚠️ BrowserOS app launched, but MCP server not responding"));
+                    console.log(c("bold", "\nTo enable the MCP server:"));
+                    console.log(c("dim", "  1. Open BrowserOS"));
+                    console.log(c("dim", "  2. Navigate to: ") + c("cyan", "chrome://browseros/mcp"));
+                    console.log(c("dim", "  3. Enable the MCP server"));
+                    console.log(c("dim", "  4. Copy the MCP URL (default: http://127.0.0.1:9201/mcp)"));
+                    console.log(c("dim", "\nOnce enabled, run this command again."));
+                } else {
+                    console.log(c("red", `❌ Failed to start: ${launchResult.error}`));
+                }
+            }
+            break;
+
+        case "use":
+            const backend = process.argv[4];
+            if (!backend || !["playwright", "browseros"].includes(backend)) {
+                console.log(c("red", "Usage: openwhale browser use <playwright|browseros>"));
+                return;
+            }
+
+            if (backend === "browseros" && !browserosStatus.available) {
+                // Try to auto-launch if installed
+                const { ensureBrowserOSRunning } = await import("./tools/browser-os.js");
+                console.log(c("yellow", "⚠️ BrowserOS is not running. Attempting to start..."));
+
+                const ensureResult = await ensureBrowserOSRunning();
+                if (!ensureResult.success) {
+                    console.log(c("red", `❌ ${ensureResult.error}`));
+                    return;
+                }
+
+                if (ensureResult.wasLaunched) {
+                    console.log(c("green", "✓ BrowserOS started successfully!"));
+                }
+            }
+
+            // Set the backend via dashboard API (if server running) or local config
+            try {
+                const res = await fetch("http://localhost:7777/dashboard/api/settings/browser", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ backend }),
+                    signal: AbortSignal.timeout(2000),
+                });
+
+                if (res.ok) {
+                    console.log(c("green", `✅ Browser backend set to: ${backend}`));
+                } else {
+                    console.log(c("yellow", `⚠️ Could not save setting (server not running)`));
+                    console.log(c("dim", `Start the server with 'openwhale serve' to persist settings`));
+                }
+            } catch {
+                console.log(c("yellow", `⚠️ Server not running - setting will not persist`));
+                console.log(c("dim", `To persist: start server with 'openwhale serve', then run this command again`));
+            }
+            break;
+
+        case "tools":
+            console.log(c("bold", "\n🛠️ BrowserOS MCP Tools\n"));
+
+            if (!browserosStatus.available) {
+                console.log(c("yellow", "BrowserOS MCP server is not running."));
+                console.log(c("dim", "Start BrowserOS and enable MCP: npm run cli browser start"));
+                break;
+            }
+
+            try {
+                const { listBrowserOSTools } = await import("./tools/browser-os.js");
+                const availableTools = await listBrowserOSTools();
+
+                if (availableTools.length === 0) {
+                    console.log(c("dim", "No tools available from BrowserOS MCP."));
+                } else {
+                    console.log(`Found ${c("cyan", String(availableTools.length))} tools:\n`);
+                    for (const tool of availableTools) {
+                        console.log(`  • ${c("cyan", tool)}`);
+                    }
+                }
+            } catch (err) {
+                console.log(c("red", `Failed to list tools: ${err instanceof Error ? err.message : "Unknown error"}`));
+            }
+            console.log();
+            break;
+
+        default:
+            console.log(`${c("bold", "Browser Automation Commands:")}
+  ${c("cyan", "install")}   Download and install BrowserOS automatically
+  ${c("cyan", "start")}     Launch BrowserOS if installed
+  ${c("cyan", "status")}    Show available browser backends
+  ${c("cyan", "tools")}     List available BrowserOS MCP tools
+  ${c("cyan", "use")}       Switch between backends (auto-launches BrowserOS if needed)
+
+${c("bold", "Backends:")}
+  ${c("cyan", "playwright")}  Built-in Playwright (headless Chrome, default)
+  ${c("cyan", "browseros")}   BrowserOS - full browser with extensions & AI
+
+${c("bold", "Usage:")}
+  npm run cli browser install             Auto-install BrowserOS
+  npm run cli browser start               Start BrowserOS & enable MCP
+  npm run cli browser status              Check which backends are available
+  npm run cli browser tools               List available MCP tools
+  npm run cli browser use playwright      Use built-in Playwright
+  npm run cli browser use browseros       Use BrowserOS (auto-starts if needed)
+
+${c("bold", "BrowserOS Features:")}
+  • Real Chrome with all your extensions
+  • AI agents run on YOUR browser, not cloud
+  • Visual workflows and scheduled tasks
+  • Privacy-first with local models support
+`);
+    }
+}
+
 function showHelp() {
     console.log(`${c("bold", "Usage:")} openwhale <command> [options]
 
@@ -474,6 +796,7 @@ ${c("bold", "Commands:")}
   ${c("cyan", "chat")}       Start an AGENTIC chat session (Claude can use tools!)
   ${c("cyan", "whatsapp")}   WhatsApp connection management
     ${c("dim", "login")}     Pair WhatsApp via QR code
+  ${c("cyan", "browser")}    Browser automation settings (Playwright/BrowserOS)
   ${c("cyan", "test")}       Run tests on all features
   ${c("cyan", "providers")}  List available AI providers
   ${c("cyan", "tools")}      List available agent tools

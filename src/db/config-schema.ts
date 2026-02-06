@@ -111,3 +111,14 @@ export const authSessions = sqliteTable("auth_sessions", {
     expiresAt: integer("expires_at", { mode: "timestamp" }).notNull(),
     createdAt: integer("created_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
 });
+
+/**
+ * Tool-specific configuration (browser backend, etc.)
+ */
+export const toolConfig = sqliteTable("tool_config", {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    settings: text("settings", { mode: "json" }).$type<Record<string, unknown>>(),
+    updatedAt: integer("updated_at", { mode: "timestamp" }).$defaultFn(() => new Date()),
+});
+

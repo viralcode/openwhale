@@ -151,7 +151,8 @@ export function loadConversationHistory(
 
                 if (entry.type === "message") {
                     const { role, content } = entry.message;
-                    if (role === "user" || role === "assistant") {
+                    // Filter out empty messages to prevent Claude API errors
+                    if ((role === "user" || role === "assistant") && content && content.trim().length > 0) {
                         messages.push({ role, content });
                     }
                 }
