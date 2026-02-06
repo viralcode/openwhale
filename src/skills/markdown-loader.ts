@@ -51,6 +51,19 @@ interface ParsedMarkdownSkill {
     baseDir: string;
 }
 
+// ============== UTILITY FUNCTIONS ==============
+
+/**
+ * Sanitize a skill name to be a valid OpenAI tool name.
+ * Must match pattern: ^[a-zA-Z0-9_-]+$
+ */
+function sanitizeToolName(name: string): string {
+    return name
+        .replace(/\s+/g, '_')           // spaces to underscores
+        .replace(/[^a-zA-Z0-9_-]/g, '')  // remove invalid chars
+        .slice(0, 64);                   // max 64 chars
+}
+
 // ============== FRONTMATTER PARSING ==============
 
 /**
@@ -241,8 +254,9 @@ export function loadMarkdownSkillsFromDir(dir: string): ParsedMarkdownSkill[] {
  * This tool allows the AI to execute shell commands described in the skill
  */
 function createExecTool(skillName: string): SkillTool {
+    const safeName = sanitizeToolName(skillName);
     return {
-        name: `${skillName}_exec`,
+        name: `${safeName}_exec`,
         description: `Execute a shell command for the ${skillName} skill. Use commands from the skill documentation.`,
         parameters: {
             type: "object",
@@ -303,8 +317,9 @@ export async function markdownSkillToSkill(parsed: ParsedMarkdownSkill): Promise
     ];
 
     // Add a help tool that returns the skill's documentation
+    const safeName = sanitizeToolName(frontmatter.name);
     tools.push({
-        name: `${frontmatter.name}_help`,
+        name: `${safeName}_help`,
         description: `Get documentation and usage examples for the ${frontmatter.name} skill`,
         parameters: {
             type: "object",
