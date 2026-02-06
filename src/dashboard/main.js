@@ -312,6 +312,7 @@ document.addEventListener('DOMContentLoaded', async () => {
       state.view = 'setup';
     } else {
       state.view = location.hash.slice(1) || 'chat';
+      await loadConfig();
       await loadData();
     }
   }
@@ -427,6 +428,7 @@ async function loadData() {
       await loadExtensions();
       break;
     case 'settings':
+      await loadProviders();
       await loadUsers();
       break;
     case 'overview':
@@ -476,6 +478,16 @@ async function loadTools() {
   try {
     const data = await api('/tools');
     state.tools = data.tools || [];
+  } catch (e) { console.error(e); }
+}
+
+async function loadConfig() {
+  try {
+    const config = await api('/config');
+    if (config.defaultModel) {
+      state.currentModel = config.defaultModel;
+    }
+    state.config = config;
   } catch (e) { console.error(e); }
 }
 
@@ -1055,23 +1067,17 @@ function renderHeader() {
 
   const enabledProviders = state.providers.filter(p => p.enabled);
 
+  // Only show header for chat view
+  if (state.view !== 'chat') {
+    return '';
+  }
   return `
     <header class="header">
-      ${state.view === 'chat' ? `
-        <div></div>
-        <button class="btn btn-ghost" onclick="clearChat()" title="Clear conversation">
-          ${icon('trash', 16)}
-          <span style="margin-left: 4px;">Clear Chat</span>
-        </button>
-      ` : `
-        <h1 class="header-title">${titles[state.view] || 'Dashboard'}</h1>
-        <div class="header-actions">
-          <div class="status-indicator">
-            <span class="status-dot${state.channels.some(c => c.connected) ? '' : ' offline'}"></span>
-            <span>${state.channels.filter(c => c.connected).length} connected</span>
-          </div>
-        </div>
-      `}
+      <div></div>
+      <button class="btn btn-ghost" onclick="clearChat()" title="Clear conversation">
+        ${icon('trash', 16)}
+        <span style="margin-left: 4px;">Clear Chat</span>
+      </button>
     </header>
   `;
 }
@@ -1397,7 +1403,7 @@ function renderProviders() {
     
     <div class="bento-grid">
       ${state.providers.map(p => `
-        <div class="bento-item bento-md bento-short" style="display: flex; flex-direction: column; justify-content: space-between;">
+        <div class="bento-item bento-md" style="display: flex; flex-direction: column; justify-content: space-between;">
           <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
             <div style="display: flex; align-items: center; gap: 12px;">
               <span class="stat-icon ${p.enabled ? 'blue' : 'gray'}">${getProviderIcon(p.type)}</span>
@@ -1420,6 +1426,14 @@ function renderProviders() {
                    placeholder="${p.enabled ? '••••••••' : 'Enter API Key'}"
                    id="apikey-${p.type}"
                    style="font-size: 13px; height: 36px;">
+          </div>
+          
+          <div class="form-group" style="margin-bottom: 12px;">
+            <select class="form-input" id="model-${p.type}">
+              ${p.models.map(m => `
+                <option value="${m}" ${state.currentModel === m ? 'selected' : ''}>${m}</option>
+              `).join('')}
+            </select>
           </div>
           
           <button class="btn btn-secondary" onclick="saveProvider('${p.type}')" style="width: 100%; justify-content: center;">
@@ -1736,8 +1750,8 @@ function renderSettings() {
       <div class="form-group">
         <label class="form-label">Default Model</label>
         <select class="form-input" id="default-model">
-          ${state.providers.filter(p => p.enabled).map(p =>
-    p.models.map(m => `<option value="${m}" ${state.currentModel === m ? 'selected' : ''}>${m}</option>`).join('')
+          ${state.providers.map(p =>
+    p.models.map(m => `<option value="${m}" ${state.currentModel === m ? 'selected' : ''}>${p.name}: ${m}</option>`).join('')
   ).join('')}
         </select>
       </div>
@@ -2665,7 +2679,17 @@ window.toggleTool = function (name, enabled) {
 };
 
 window.toggleProvider = async function (type, enabled) {
+  if (enabled) {
+    // Disable all other providers first (radio button behavior)
+    for (const p of state.providers) {
+      if (p.type !== type && p.enabled) {
+        await saveProviderConfig(p.type, { enabled: false });
+      }
+    }
+  }
   await saveProviderConfig(type, { enabled });
+  await loadProviders();
+  render();
 };
 
 window.toggleSkill = async function (id, enabled) {
@@ -2751,7 +2775,25 @@ window.deleteExtension = async function (name) {
 window.saveProvider = async function (type) {
   const apiKey = document.getElementById(`apikey-${type}`)?.value;
   const baseUrl = document.getElementById(`baseurl-${type}`)?.value;
+  const selectedModel = document.getElementById(`model-${type}`)?.value;
+
+  // Save provider config
   await saveProviderConfig(type, { apiKey, baseUrl, enabled: true });
+
+  // If a model was selected, set it as the current model
+  if (selectedModel) {
+    state.currentModel = selectedModel;
+    try {
+      await api('/config', {
+        method: 'POST',
+        body: JSON.stringify({ model: selectedModel })
+      });
+      await showAlert(`Saved! Model set to ${selectedModel}`, '✅ Success');
+    } catch (e) {
+      console.error('Failed to save model:', e);
+    }
+    render();
+  }
 };
 
 window.saveSkill = async function (id) {

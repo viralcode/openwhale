@@ -72,6 +72,10 @@ export class ProviderRegistry {
         this.providers.set(id, provider);
     }
 
+    hasProvider(id: string): boolean {
+        return this.providers.has(id);
+    }
+
     setFallbackOrder(order: string[]): void {
         this.fallbackOrder = order.filter(id => this.providers.has(id));
     }

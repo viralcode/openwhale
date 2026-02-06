@@ -22,5 +22,15 @@ export const db: BetterSqlite3.Database = new Database(dbPath);
 // Enable WAL mode for better performance
 db.pragma("journal_mode = WAL");
 
+// Ensure config table exists (for storing defaultModel and other settings)
+db.exec(`
+    CREATE TABLE IF NOT EXISTS config (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        category TEXT DEFAULT 'general',
+        updated_at INTEGER
+    )
+`);
+
 // Re-export the connection module for drizzle users
 export { createDatabase, type DrizzleDB } from "./connection.js";

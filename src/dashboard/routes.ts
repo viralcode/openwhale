@@ -8,6 +8,7 @@ import type { DrizzleDB } from "../db/connection.js";
 import type { OpenWhaleConfig } from "../config/loader.js";
 import { sessions, users, messages, auditLogs } from "../db/schema.js";
 import { providerConfig, skillConfig, channelConfig, setupState as setupStateTable, dashboardUsers, authSessions } from "../db/config-schema.js";
+import { db as sqliteDb } from "../db/index.js";
 import { desc, sql, eq } from "drizzle-orm";
 import { readFileSync } from "node:fs";
 import { join, dirname } from "node:path";
@@ -16,13 +17,16 @@ import { execSync, exec } from "node:child_process";
 import { promisify } from "node:util";
 import { randomUUID, createHash } from "node:crypto";
 import {
-    initializeProvider,
     setModel,
     processMessage as processSessionMessage,
     processCommand as processSessionCommand,
     getChatHistory,
     clearChatHistory,
 } from "../sessions/session-service.js";
+import { registry } from "../providers/index.js";
+import { createAnthropicProvider } from "../providers/anthropic.js";
+import { createOpenAIProvider, createDeepSeekProvider } from "../providers/openai-compatible.js";
+import { createGoogleProvider } from "../providers/google.js";
 
 const execAsync = promisify(exec);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -96,6 +100,19 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
             setupState.completed = setup[0].completed ?? false;
             setupState.currentStep = setup[0].currentStep ?? 0;
             setupState.stepsCompleted = setup[0].stepsCompleted ?? [];
+        }
+
+        // Load general config using raw SQL
+        try {
+            const configs = sqliteDb.prepare("SELECT key, value FROM config").all() as { key: string, value: string }[];
+            for (const c of configs) {
+                configStore.set(c.key, c.value);
+            }
+            if (configStore.has("defaultModel")) {
+                console.log(`[Dashboard] Default model: ${configStore.get("defaultModel")}`);
+            }
+        } catch {
+            // Table might not exist yet, that's ok
         }
 
         console.log("[Dashboard] Loaded configs from database");
@@ -652,7 +669,10 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
     // Send chat message - now uses unified SessionService
     dashboard.post("/api/chat", async (c) => {
-        const { message, model } = await c.req.json();
+        const { message, model: requestModel } = await c.req.json();
+
+        // Get model from request, or fall back to stored default, or use claude as last resort
+        const effectiveModel = requestModel || configStore.get("defaultModel") || "claude-sonnet-4-20250514";
 
         // Check for commands first
         const commandResult = processSessionCommand("dashboard", message);
@@ -667,18 +687,13 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         }
 
         try {
-            // Initialize provider if needed
-            const apiKey = providerConfigs.get("anthropic")?.apiKey || process.env.ANTHROPIC_API_KEY;
-            if (apiKey) {
-                initializeProvider(apiKey, model);
-            }
-            if (model) {
-                setModel(model);
-            }
+            // Set the model for this request (registry will pick the right provider)
+            setModel(effectiveModel);
+            console.log(`[Dashboard] Using model: ${effectiveModel}`);
 
             // Process message with full tool support (iterative loop)
             const response = await processSessionMessage("dashboard", message, {
-                model,
+                model: effectiveModel,
                 onToolStart: (tool) => console.log(`[Dashboard] 🔧 Starting: ${tool.name}`),
                 onToolEnd: (tool) => console.log(`[Dashboard] ✅ Completed: ${tool.name} (${tool.status})`),
             });
@@ -1031,7 +1046,7 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             {
                 name: "Ollama",
                 type: "ollama",
-                enabled: true,
+                enabled: providerConfigs.get("ollama")?.enabled ?? false,
                 hasKey: true,
                 supportsTools: true,
                 supportsVision: true,
@@ -1087,6 +1102,38 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
         // Persist to database
         await saveProviderToDB(db, type, providerConfigs.get(type)!);
+
+        // Dynamically register provider if it's not already registered
+        if (apiKey && !registry.hasProvider(type)) {
+            console.log(`[Dashboard] Dynamically registering ${type} provider...`);
+            if (type === "anthropic") {
+                const provider = createAnthropicProvider();
+                if (provider) {
+                    registry.register("anthropic", provider);
+                    console.log("✓ Anthropic provider registered dynamically");
+                }
+            } else if (type === "openai") {
+                const provider = createOpenAIProvider();
+                if (provider) {
+                    registry.register("openai", provider);
+                    console.log("✓ OpenAI provider registered dynamically");
+                }
+            } else if (type === "google") {
+                const provider = createGoogleProvider();
+                if (provider) {
+                    registry.register("google", provider);
+                    console.log("✓ Google provider registered dynamically");
+                }
+            } else if (type === "deepseek") {
+                const provider = createDeepSeekProvider();
+                if (provider) {
+                    registry.register("deepseek", provider);
+                    console.log("✓ DeepSeek provider registered dynamically");
+                } else {
+                    console.error("[Dashboard] Failed to create DeepSeek provider - check API key");
+                }
+            }
+        }
 
         return c.json({ ok: true });
     });
@@ -1247,9 +1294,16 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         for (const [key, value] of Object.entries(data)) {
             configStore.set(key, value);
             if (key === "ownerPhone") process.env.OWNER_PHONE = String(value);
-            if (key === "defaultModel") configStore.set("defaultModel", value);
+
+            // Persist to database using raw SQL
+            try {
+                sqliteDb.prepare("INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)").run(key, String(value));
+            } catch (e) {
+                console.error(`[Dashboard] Failed to persist config ${key}:`, e);
+            }
         }
 
+        console.log(`[Dashboard] Config saved, defaultModel: ${configStore.get("defaultModel")}`);
         return c.json({ ok: true });
     });
 

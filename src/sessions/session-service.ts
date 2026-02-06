@@ -13,7 +13,7 @@
  */
 
 import { randomUUID } from "crypto";
-import { AnthropicProvider } from "../providers/anthropic.js";
+import { registry } from "../providers/index.js";
 import { toolRegistry } from "../tools/index.js";
 import { skillRegistry } from "../skills/base.js";
 import type { ToolCallContext } from "../tools/base.js";
@@ -59,7 +59,6 @@ import { db } from "../db/index.js";
 
 // ============== SINGLETON STATE ==============
 
-let aiProvider: AnthropicProvider | null = null;
 let currentModel = "claude-sonnet-4-20250514";
 
 // Dashboard-specific message store (with tool call info)
@@ -143,7 +142,7 @@ function persistMessage(msg: ChatMessage): void {
 // ============== INITIALIZATION ==============
 
 export function initializeProvider(apiKey: string, model?: string): void {
-    aiProvider = new AnthropicProvider(apiKey);
+    // Legacy function - provider initialization now handled by registry
     if (model) currentModel = model;
     ensureDbInit(); // Load history on init
     console.log(`[SessionService] Provider initialized with model: ${currentModel}`);
@@ -153,8 +152,9 @@ export function setModel(model: string): void {
     currentModel = model;
 }
 
-export function getProvider(): AnthropicProvider | null {
-    return aiProvider;
+export function getProvider(): unknown {
+    // Returns the provider from registry for the current model
+    return registry.getProvider(currentModel);
 }
 
 // ============== MESSAGE HISTORY ==============
@@ -193,15 +193,10 @@ export async function processMessage(
 ): Promise<ChatMessage> {
     const { model = currentModel, maxIterations = 10, onToolStart, onToolEnd } = options;
 
-    // Ensure provider is initialized
-    if (!aiProvider) {
-        // Try to initialize from environment
-        const apiKey = process.env.ANTHROPIC_API_KEY;
-        if (apiKey) {
-            initializeProvider(apiKey);
-        } else {
-            throw new Error("No AI provider configured. Please add an API key.");
-        }
+    // Ensure provider is available for the selected model
+    const provider = registry.getProvider(model);
+    if (!provider) {
+        throw new Error(`No provider available for model: ${model}. Please configure the appropriate API key.`);
     }
 
     // Create user message
@@ -331,7 +326,7 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
         while (iterations < maxIterations) {
             iterations++;
 
-            const response = await aiProvider!.complete({
+            const response = await registry.complete({
                 model,
                 messages: msgHistory,
                 systemPrompt: fullSystemPrompt,
@@ -468,7 +463,7 @@ export function processCommand(sessionId: string, message: string): string | nul
 
     if (cmd === "/status") {
         const msgs = dashboardMessages.length;
-        const provider = aiProvider ? "Connected" : "Not configured";
+        const provider = registry.getProvider(currentModel) ? "Connected" : "Not configured";
         return `📊 **Status**\n- Messages: ${msgs}\n- Model: ${currentModel}\n- Provider: ${provider}`;
     }
 
