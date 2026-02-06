@@ -73,6 +73,8 @@ const ICONS = {
   download: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>',
   penTool: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>',
   info: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
+  folder: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>',
+  code: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
 };
 
 // Icon helper function
@@ -112,8 +114,10 @@ let state = {
   mdSkills: [], // Markdown-based skills from ~/.openwhale/skills/
   mdSkillsLoading: false,
   skillsTab: 'api', // 'api' or 'markdown'
+  editingSkillDir: null,
   editingSkillPath: null,
   editingSkillContent: null,
+  editingSkillTree: [],
   editingSkillLoading: false
 };
 
@@ -1683,32 +1687,78 @@ function renderSkills() {
           <div class="skill-editor-modal">
             <div class="skill-editor-header">
               <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
-                ${icon('file', 18)} Edit Skill
+                ${icon('file', 18)} ${state.editingSkillPath.split('/').pop()}
               </h3>
               <div style="display: flex; gap: 8px;">
                 <button class="btn btn-primary" onclick="saveMdSkill()">
                   ${icon('check', 14)} Save
                 </button>
                 <button class="btn btn-ghost" onclick="closeMdSkillEditor()">
-                  ${icon('x', 14)} Cancel
+                  ${icon('x', 14)} Close
                 </button>
               </div>
             </div>
-            <div class="skill-editor-content">
-              ${state.editingSkillLoading ? `
-                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">
-                  <div class="spinner" style="margin-right: 12px;"></div>
-                  Loading skill content...
+            <div class="skill-editor-body">
+              <div class="skill-editor-sidebar">
+                <div class="skill-tree-header">Files</div>
+                <div class="skill-tree">
+                  ${renderFileTree(state.editingSkillTree, state.editingSkillPath)}
                 </div>
-              ` : `
-                <textarea id="skill-editor-content" class="skill-editor-textarea" spellcheck="false">${state.editingSkillContent || ''}</textarea>
-              `}
+              </div>
+              <div class="skill-editor-content">
+                ${state.editingSkillLoading ? `
+                  <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">
+                    <div class="spinner" style="margin-right: 12px;"></div>
+                    Loading...
+                  </div>
+                ` : `
+                  <textarea id="skill-editor-content" class="skill-editor-textarea" spellcheck="false">${escapeHtml(state.editingSkillContent || '')}</textarea>
+                `}
+              </div>
             </div>
           </div>
         </div>
       ` : ''}
     `}
   `;
+}
+
+// Helper to escape HTML in content
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Render skill file tree recursively
+function renderFileTree(nodes, currentPath, depth = 0) {
+  if (!nodes || nodes.length === 0) return '';
+
+  return nodes.map(node => {
+    const isActive = node.path === currentPath;
+    const indent = depth * 16;
+
+    if (node.type === 'directory') {
+      return `
+        <div class="skill-tree-folder" style="padding-left: ${indent}px;">
+          <div class="skill-tree-item folder">
+            ${icon('folder', 14)} ${node.name}
+          </div>
+          ${renderFileTree(node.children, currentPath, depth + 1)}
+        </div>
+      `;
+    } else {
+      const fileIcon = node.name.endsWith('.md') ? 'file' :
+        node.name.endsWith('.py') ? 'code' :
+          node.name.endsWith('.js') || node.name.endsWith('.ts') ? 'code' :
+            node.name.endsWith('.sh') ? 'terminal' : 'file';
+      return `
+        <div class="skill-tree-item file ${isActive ? 'active' : ''}" 
+             style="padding-left: ${indent + 8}px;"
+             onclick="selectSkillFile('${node.path.replace(/'/g, "\\'")}')">
+          ${icon(fileIcon, 14)} ${node.name}
+        </div>
+      `;
+    }
+  }).join('');
 }
 
 function switchSkillsTab(tab) {
@@ -2958,14 +3008,23 @@ window.switchSkillsTab = function (tab) {
 };
 
 window.editMdSkill = async function (skillPath) {
+  // skillPath is path to SKILL.md, get skill directory
+  const skillDir = skillPath.replace(/\/SKILL\.md$/, '');
+  state.editingSkillDir = skillDir;
   state.editingSkillPath = skillPath;
   state.editingSkillContent = null;
+  state.editingSkillTree = [];
   state.editingSkillLoading = true;
   render();
 
   try {
-    const res = await api('/md-skills/content?path=' + encodeURIComponent(skillPath));
-    state.editingSkillContent = res.content;
+    // Load file tree
+    const treeRes = await api('/md-skills/tree?dir=' + encodeURIComponent(skillDir));
+    state.editingSkillTree = treeRes.tree || [];
+
+    // Load initial file content
+    const contentRes = await api('/md-skills/content?path=' + encodeURIComponent(skillPath));
+    state.editingSkillContent = contentRes.content;
   } catch (e) {
     state.editingSkillContent = '# Error loading skill\n\n' + e.message;
   }
@@ -2973,9 +3032,26 @@ window.editMdSkill = async function (skillPath) {
   render();
 };
 
+window.selectSkillFile = async function (filePath) {
+  state.editingSkillPath = filePath;
+  state.editingSkillLoading = true;
+  render();
+
+  try {
+    const res = await api('/md-skills/content?path=' + encodeURIComponent(filePath));
+    state.editingSkillContent = res.content;
+  } catch (e) {
+    state.editingSkillContent = '# Error loading file\n\n' + e.message;
+  }
+  state.editingSkillLoading = false;
+  render();
+};
+
 window.closeMdSkillEditor = function () {
+  state.editingSkillDir = null;
   state.editingSkillPath = null;
   state.editingSkillContent = null;
+  state.editingSkillTree = [];
   state.editingSkillLoading = false;
   render();
 };

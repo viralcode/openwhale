@@ -1281,6 +1281,55 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         }
     });
 
+    // Get full directory tree for a skill
+    dashboard.get("/api/md-skills/tree", async (c) => {
+        const { readdirSync, existsSync } = await import("fs");
+        const { join } = await import("path");
+        const skillDir = c.req.query("dir");
+
+        if (!skillDir || !existsSync(skillDir)) {
+            return c.json({ error: "Skill directory not found" }, 404);
+        }
+
+        interface FileNode {
+            name: string;
+            path: string;
+            type: "file" | "directory";
+            children?: FileNode[];
+        }
+
+        function buildTree(dir: string): FileNode[] {
+            const items: FileNode[] = [];
+            try {
+                const entries = readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                    if (entry.name.startsWith('.') || entry.name === '_meta.json') continue;
+                    const fullPath = join(dir, entry.name);
+                    if (entry.isDirectory()) {
+                        items.push({
+                            name: entry.name,
+                            path: fullPath,
+                            type: "directory",
+                            children: buildTree(fullPath)
+                        });
+                    } else if (entry.name.endsWith('.md') || entry.name.endsWith('.txt') || entry.name.endsWith('.json') || entry.name.endsWith('.py') || entry.name.endsWith('.js') || entry.name.endsWith('.ts') || entry.name.endsWith('.sh')) {
+                        items.push({
+                            name: entry.name,
+                            path: fullPath,
+                            type: "file"
+                        });
+                    }
+                }
+            } catch (e) { }
+            return items.sort((a, b) => {
+                if (a.type !== b.type) return a.type === "directory" ? -1 : 1;
+                return a.name.localeCompare(b.name);
+            });
+        }
+
+        return c.json({ tree: buildTree(skillDir) });
+    });
+
     // Save skill content
     dashboard.post("/api/md-skills/save", async (c) => {
         const { writeFileSync, existsSync } = await import("fs");
