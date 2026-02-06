@@ -352,8 +352,11 @@ async function api(endpoint, options = {}) {
     headers,
     ...options
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  const data = await res.json();
+  if (!res.ok && !data.error) {
+    data.error = `HTTP ${res.status}`;
+  }
+  return data;
 }
 
 // Auth Functions
