@@ -3297,11 +3297,6 @@ window.viewChannelMessages = async function (type) {
 };
 
 // Helpers
-function escapeHtml(text) {
-  const div = document.createElement('div');
-  div.textContent = text;
-  return div.innerHTML;
-}
 
 function formatNumber(num) {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
