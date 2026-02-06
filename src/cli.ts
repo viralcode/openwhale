@@ -238,6 +238,15 @@ async function main() {
         case "daemon":
             await handleDaemonCommand(process.argv[3]);
             break;
+        case "pairing":
+            await handlePairingCommand(process.argv[3], process.argv[4], process.argv[5]);
+            break;
+        case "voice":
+            await handleVoiceCommand(process.argv[3]);
+            break;
+        case "canvas":
+            await handleCanvasCommand(process.argv[3]);
+            break;
         case "help":
         case "--help":
         case "-h":
@@ -1147,6 +1156,208 @@ ${c("bold", "Extensions Location:")}
   ${extDir}
 `);
     }
+}
+
+/**
+ * Handle pairing commands (DM pairing security)
+ */
+async function handlePairingCommand(subcommand?: string, channel?: string, code?: string) {
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { existsSync, readFileSync } = await import("node:fs");
+
+    const CHANNELS = ["whatsapp", "telegram", "discord", "slack", "twitter", "imessage"] as const;
+    type ChannelId = typeof CHANNELS[number];
+
+    // Inline implementations since module may not exist yet
+    const credsDir = join(homedir(), ".openwhale", "credentials");
+
+    const readJSON = <T>(path: string, fallback: T): T => {
+        try { return JSON.parse(readFileSync(path, "utf-8")) as T; } catch { return fallback; }
+    };
+
+    switch (subcommand) {
+        case "approve":
+            if (!channel || !code) {
+                console.log(c("red", "Usage: openwhale pairing approve <channel> <code>"));
+                console.log(c("dim", "Example: openwhale pairing approve whatsapp A3K9F7V2"));
+                return;
+            }
+            if (!CHANNELS.includes(channel as ChannelId)) {
+                console.log(c("red", `Invalid channel. Valid: ${CHANNELS.join(", ")}`));
+                return;
+            }
+            const pairingFile = join(credsDir, `${channel}-pairing.json`);
+            const allowFile = join(credsDir, `${channel}-allowFrom.json`);
+            if (!existsSync(pairingFile)) {
+                console.log(c("red", `No pending pairing requests for ${channel}`));
+                return;
+            }
+            const store = readJSON<{ requests: Array<{ id: string; code: string }> }>(pairingFile, { requests: [] });
+            const normalizedCode = code.toUpperCase();
+            const entry = store.requests.find(r => r.code.toUpperCase() === normalizedCode);
+            if (!entry) {
+                console.log(c("red", `Pairing code not found: ${code}`));
+                console.log(c("dim", "Use 'openwhale pairing list' to see pending requests"));
+                return;
+            }
+            // Remove from pending, add to allowlist
+            store.requests = store.requests.filter(r => r.code.toUpperCase() !== normalizedCode);
+            const { writeFileSync, mkdirSync } = await import("node:fs");
+            mkdirSync(credsDir, { recursive: true });
+            writeFileSync(pairingFile, JSON.stringify({ version: 1, requests: store.requests }, null, 2));
+            const allow = readJSON<{ allowFrom: string[] }>(allowFile, { allowFrom: [] });
+            if (!allow.allowFrom.includes(entry.id)) {
+                allow.allowFrom.push(entry.id);
+                writeFileSync(allowFile, JSON.stringify({ version: 1, allowFrom: allow.allowFrom }, null, 2));
+            }
+            console.log(c("green", `✓ Approved: ${entry.id} on ${channel}`));
+            break;
+
+        case "list":
+            const listChannel = channel as ChannelId | undefined;
+            console.log(c("bold", "\n🔐 Pending Pairing Requests\n"));
+            let foundAny = false;
+            for (const ch of (listChannel ? [listChannel] : CHANNELS)) {
+                const file = join(credsDir, `${ch}-pairing.json`);
+                if (!existsSync(file)) continue;
+                const data = readJSON<{ requests: Array<{ id: string; code: string; createdAt: string }> }>(file, { requests: [] });
+                if (data.requests.length > 0) {
+                    console.log(`  ${c("cyan", ch.toUpperCase())}`);
+                    for (const req of data.requests) {
+                        console.log(`    • ${req.id} → ${c("yellow", req.code)}`);
+                    }
+                    foundAny = true;
+                }
+            }
+            if (!foundAny) {
+                console.log(`  ${c("dim", "No pending pairing requests")}`);
+            }
+            console.log();
+            break;
+
+        case "allowlist":
+            const alChannel = channel as ChannelId | undefined;
+            console.log(c("bold", "\n✅ Allowlists\n"));
+            for (const ch of (alChannel ? [alChannel] : CHANNELS)) {
+                const file = join(credsDir, `${ch}-allowFrom.json`);
+                if (!existsSync(file)) continue;
+                const data = readJSON<{ allowFrom: string[] }>(file, { allowFrom: [] });
+                if (data.allowFrom.length > 0) {
+                    console.log(`  ${c("cyan", ch.toUpperCase())}: ${data.allowFrom.join(", ")}`);
+                }
+            }
+            console.log();
+            break;
+
+        default:
+            console.log(`${c("bold", "Pairing Commands (DM Security):")}
+  ${c("cyan", "approve")} <channel> <code>    Approve a pairing request
+  ${c("cyan", "list")} [channel]             List pending pairing requests
+  ${c("cyan", "allowlist")} [channel]        Show approved senders
+
+${c("bold", "Channels:")} ${CHANNELS.join(", ")}
+
+${c("bold", "How it works:")}
+  When an unknown sender messages you, they receive a pairing code.
+  Use 'openwhale pairing approve <channel> <code>' to allow them.
+`);
+    }
+}
+
+/**
+ * Handle voice commands (wake word, talk mode)
+ */
+async function handleVoiceCommand(subcommand?: string) {
+    const { homedir } = await import("node:os");
+    const { join } = await import("node:path");
+    const { existsSync, readFileSync, writeFileSync, mkdirSync } = await import("node:fs");
+
+    const configPath = join(homedir(), ".openwhale", "settings", "voicewake.json");
+    const DEFAULT_TRIGGERS = ["openwhale", "claude", "computer"];
+
+    const readConfig = () => {
+        try {
+            return JSON.parse(readFileSync(configPath, "utf-8")) as { triggers: string[]; enabled: boolean };
+        } catch {
+            return { triggers: DEFAULT_TRIGGERS, enabled: false };
+        }
+    };
+
+    const saveConfig = (cfg: { triggers: string[]; enabled: boolean }) => {
+        mkdirSync(join(homedir(), ".openwhale", "settings"), { recursive: true });
+        writeFileSync(configPath, JSON.stringify(cfg, null, 2));
+    };
+
+    switch (subcommand) {
+        case "status":
+            const cfg = readConfig();
+            console.log(c("bold", "\n🎤 Voice Wake Status\n"));
+            console.log(`  Enabled: ${cfg.enabled ? c("green", "Yes") : c("dim", "No")}`);
+            console.log(`  Triggers: ${cfg.triggers.map(t => c("cyan", t)).join(", ")}`);
+            console.log();
+            break;
+
+        case "enable":
+            const enableCfg = readConfig();
+            enableCfg.enabled = true;
+            saveConfig(enableCfg);
+            console.log(c("green", "✓ Voice wake enabled"));
+            break;
+
+        case "disable":
+            const disableCfg = readConfig();
+            disableCfg.enabled = false;
+            saveConfig(disableCfg);
+            console.log(c("yellow", "Voice wake disabled"));
+            break;
+
+        case "triggers":
+            const triggers = process.argv.slice(4);
+            if (triggers.length === 0) {
+                const current = readConfig();
+                console.log(`Current triggers: ${current.triggers.join(", ")}`);
+                console.log(c("dim", "Usage: openwhale voice triggers word1 word2 ..."));
+                return;
+            }
+            const triggerCfg = readConfig();
+            triggerCfg.triggers = triggers.map(t => t.toLowerCase().trim()).filter(Boolean);
+            saveConfig(triggerCfg);
+            console.log(c("green", `✓ Triggers set: ${triggerCfg.triggers.join(", ")}`));
+            break;
+
+        default:
+            console.log(`${c("bold", "Voice Commands:")}
+  ${c("cyan", "status")}                Show voice wake status
+  ${c("cyan", "enable")}                Enable voice wake
+  ${c("cyan", "disable")}               Disable voice wake
+  ${c("cyan", "triggers")} <words...>   Set wake words
+
+${c("bold", "Default Triggers:")} openwhale, claude, computer
+
+${c("bold", "ElevenLabs TTS:")}
+  Set ELEVENLABS_API_KEY for voice responses
+`);
+    }
+}
+
+/**
+ * Handle canvas commands
+ */
+async function handleCanvasCommand(_subcommand?: string) {
+    console.log(`${c("bold", "Canvas Commands (A2UI):")}
+  View the canvas at: http://localhost:7777/__openwhale__/canvas
+
+${c("bold", "Using Canvas:")}
+  In chat, ask the AI to:
+  - "Push a dashboard to the canvas"
+  - "Show a chart on the canvas"
+  - "Reset the canvas"
+
+${c("bold", "Canvas Tool:")}
+  The AI can use canvas_push, canvas_reset, canvas_eval
+  to control the visual workspace.
+`);
 }
 
 /**
