@@ -76,6 +76,9 @@ A complete list of everything OpenWhale can do.
 | **tts** | Text-to-speech | "Say good morning out loud" |
 | **image** | Image analysis | "What's in this screenshot?" |
 | **nodes** | Knowledge graphs | "Create a node for this project" |
+| **camera** | Photo/video capture | "Take a photo with my camera" |
+| **location** | Geolocation | "Get my current location" |
+| **extend** | Self-extension | "Create a daily Bitcoin price alert" |
 
 ---
 
@@ -115,6 +118,22 @@ A complete list of everything OpenWhale can do.
 | **1Password** | Secrets | "Get my AWS credentials" |
 | **Apple Notes** | Notes (macOS) | "Add to my grocery list" |
 | **Apple Reminders** | Reminders (macOS) | "Remind me at 3pm" |
+| **Twitter/X** | Tweet, timeline, mentions | "What's new on my Twitter?" |
+
+### Twitter/X API Skill (via bird CLI)
+
+Full Twitter/X integration using cookie-based auth — no API keys needed!
+
+| Tool | Description |
+|------|-------------|
+| `twitter_timeline` | Get your home timeline |
+| `twitter_mentions` | Get tweets mentioning you |
+| `twitter_post` | Post a new tweet |
+| `twitter_reply` | Reply to a tweet |
+| `twitter_search` | Search for tweets |
+| `twitter_user` | Get info about a user |
+| `twitter_follow` | Follow a user |
+| `twitter_bookmarks` | Get your bookmarked tweets |
 
 ---
 

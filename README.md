@@ -284,6 +284,9 @@ These are the built-in capabilities the AI can use. You don't need to configure 
 | **tts** | Text-to-speech (say things out loud) |
 | **image** | Analyze and process images |
 | **nodes** | Work with structured data and knowledge graphs |
+| **camera** | Take photos or record video from connected cameras |
+| **location** | Get current geolocation data |
+| **extend** | Create self-extensions for automated workflows |
 
 ---
 
