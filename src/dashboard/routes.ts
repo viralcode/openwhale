@@ -698,6 +698,17 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             }
             // Fallback if no provider is enabled
             if (!effectiveModel) {
+                // Check if ANY provider has an API key configured
+                const anyProviderConfigured = Array.from(providerConfigs.values()).some(c => c.apiKey);
+                if (!anyProviderConfigured && providerConfigs.size === 0) {
+                    // First-time user - no providers configured at all
+                    return c.json({
+                        id: randomUUID(),
+                        role: "assistant",
+                        content: "👋 Welcome to OpenWhale! To get started, please go to **AI Providers** in the sidebar and configure at least one AI provider (like DeepSeek, OpenAI, or Anthropic) with your API key.",
+                        createdAt: new Date().toISOString()
+                    });
+                }
                 effectiveModel = configStore.get("defaultModel") || "claude-sonnet-4-20250514";
                 console.log(`[Dashboard] No enabled provider found, falling back to: ${effectiveModel}`);
             }
