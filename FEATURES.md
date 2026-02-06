@@ -55,6 +55,7 @@ A complete list of everything OpenWhale can do.
 - **WhatsApp** — Connect your personal account via QR code
 - **Telegram** — Create a bot and connect with a token
 - **Discord** — Add a bot to your server
+- **Twitter/X** — Auto-reply to mentions via bird CLI (cookie auth, no API keys!)
 - **Unified Inbox** — All messages from all channels in one place
 
 ---

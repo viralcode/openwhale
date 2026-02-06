@@ -5,6 +5,7 @@ export { DiscordAdapter, createDiscordAdapter } from "./discord.js";
 export { SlackAdapter, createSlackAdapter } from "./slack.js";
 export { webAdapter } from "./web.js";
 export { WhatsAppAdapter, createWhatsAppAdapter } from "./whatsapp.js";
+export { TwitterAdapter, createTwitterAdapter } from "./twitter.js";
 
 // Initialize all available channels
 import { channelRegistry } from "./base.js";
@@ -12,6 +13,7 @@ import { createTelegramAdapter } from "./telegram.js";
 import { createDiscordAdapter } from "./discord.js";
 import { createSlackAdapter } from "./slack.js";
 import { webAdapter } from "./web.js";
+import { createTwitterAdapter } from "./twitter.js";
 // import { createWhatsAppAdapter } from "./whatsapp.js"; // Now using whatsapp-baileys.ts
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -69,6 +71,21 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
             await slack.connect();
         } catch (err) {
             console.error("Failed to connect Slack:", err);
+        }
+    }
+
+    // Register Twitter if configured
+    const twitter = createTwitterAdapter();
+    if (twitter) {
+        if (aiProvider) {
+            twitter.setAIProvider(aiProvider, currentModel);
+        }
+        channelRegistry.register(twitter);
+        try {
+            await twitter.connect();
+            console.log("[Twitter] ✓ Connected with AI processing enabled");
+        } catch (err) {
+            console.error("Failed to connect Twitter:", err);
         }
     }
 

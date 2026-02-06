@@ -75,6 +75,7 @@ const ICONS = {
   info: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
   folder: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/></svg>',
   code: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+  search: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>',
 };
 
 // Icon helper function
@@ -113,12 +114,15 @@ let state = {
   extensions: [], // For self-extension system
   mdSkills: [], // Markdown-based skills from ~/.openwhale/skills/
   mdSkillsLoading: false,
+  mdSkillsSearch: '',
+  mdSkillsPage: 0,
   skillsTab: 'api', // 'api' or 'markdown'
   editingSkillDir: null,
   editingSkillPath: null,
   editingSkillContent: null,
   editingSkillTree: [],
-  editingSkillLoading: false
+  editingSkillLoading: false,
+  showCreateSkillModal: false
 };
 
 // ============================================
@@ -1640,11 +1644,25 @@ function renderSkills() {
   }).join('')}
       </div>
     ` : `
-      <div class="md-skills-info" style="background: var(--bg-elevated); padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-subtle);">
-        <p style="margin: 0; color: var(--text-secondary);">
-          ${icon('info', 16)} <strong>${state.mdSkills.length} OpenClaw community skills</strong> loaded from <code>~/.openwhale/skills/</code>. 
-          These are SKILL.md files that extend AI capabilities with specialized knowledge.
-        </p>
+      <!-- Search and Create Header -->
+      <div style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;">
+        <div style="flex: 1; min-width: 200px; position: relative;">
+          <input type="text" 
+                 placeholder="Search skills..." 
+                 value="${state.mdSkillsSearch}"
+                 oninput="state.mdSkillsSearch = this.value; state.mdSkillsPage = 0; render();"
+                 style="width: 100%; padding: 10px 12px 10px 36px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-elevated); color: var(--text-primary); font-size: 14px;"
+          />
+          <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">
+            ${icon('search', 16)}
+          </span>
+        </div>
+        <div style="display: flex; gap: 8px; align-items: center;">
+          <span style="color: var(--text-secondary); font-size: 13px;">${state.mdSkills.length} skills</span>
+          <button class="btn btn-primary" onclick="showCreateSkillModal()">
+            ${icon('plus', 16)} Create Skill
+          </button>
+        </div>
       </div>
       
       ${state.mdSkillsLoading ? `
@@ -1653,34 +1671,39 @@ function renderSkills() {
           Loading skills...
         </div>
       ` : `
-        <div class="skills-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
-          ${state.mdSkills.length === 0 ? `
-            <div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px;">
-              <div style="font-size: 48px; margin-bottom: 16px;">📦</div>
-              <h3>No Markdown Skills Installed</h3>
-              <p style="color: var(--text-secondary);">Download skills from OpenClaw community or create your own in ~/.openwhale/skills/</p>
+        ${renderMdSkillsGrid()}
+      `}
+      
+      ${state.showCreateSkillModal ? `
+        <div class="skill-editor-overlay" onclick="event.target === this && closeCreateSkillModal()">
+          <div class="create-skill-modal">
+            <div class="skill-editor-header">
+              <h3 style="margin: 0;">${icon('plus', 18)} Create New Skill</h3>
+              <button class="btn btn-ghost" onclick="closeCreateSkillModal()">
+                ${icon('x', 16)}
+              </button>
             </div>
-          ` : state.mdSkills.map(skill => `
-            <div class="skill-card" style="padding: 16px;">
-              <div class="skill-header" style="gap: 12px;">
-                <div class="skill-icon-wrap" style="background: var(--accent-blue); width: 40px; height: 40px;">
-                  ${icon('file', 20)}
-                </div>
-                <div class="skill-info" style="flex: 1; min-width: 0;">
-                  <h3 class="skill-name" style="font-size: 14px; margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${skill.name}</h3>
-                  <div class="skill-desc" style="font-size: 12px; color: var(--text-tertiary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${skill.description || 'No description'}</div>
-                </div>
+            <div style="padding: 24px;">
+              <div style="margin-bottom: 16px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 500;">Skill Name *</label>
+                <input type="text" id="new-skill-name" placeholder="e.g., My Custom Tool" 
+                       style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary);"/>
               </div>
-              <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
-                <span class="status-badge success" style="font-size: 11px;">✓ Installed</span>
-                <button class="btn btn-ghost" style="margin-left: auto; padding: 6px 12px; font-size: 12px;" onclick="editMdSkill('${skill.path.replace(/'/g, "\\'")}')">
-                  ${icon('penTool', 14)} Edit
+              <div style="margin-bottom: 24px;">
+                <label style="display: block; margin-bottom: 6px; font-weight: 500;">Description</label>
+                <textarea id="new-skill-desc" placeholder="What does this skill do?" rows="3"
+                          style="width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary); resize: vertical;"></textarea>
+              </div>
+              <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                <button class="btn btn-ghost" onclick="closeCreateSkillModal()">Cancel</button>
+                <button class="btn btn-primary" onclick="createNewSkill()">
+                  ${icon('check', 14)} Create Skill
                 </button>
               </div>
             </div>
-          `).join('')}
+          </div>
         </div>
-      `}
+      ` : ''}
       
       ${state.editingSkillPath ? `
         <div class="skill-editor-overlay" onclick="event.target === this && closeMdSkillEditor()">
@@ -1721,6 +1744,73 @@ function renderSkills() {
       ` : ''}
     `}
   `;
+}
+
+// Render MD skills grid with pagination and search
+function renderMdSkillsGrid() {
+  const searchTerm = state.mdSkillsSearch.toLowerCase();
+  const filtered = state.mdSkills.filter(s =>
+    s.name.toLowerCase().includes(searchTerm) ||
+    (s.description || '').toLowerCase().includes(searchTerm)
+  );
+  const perPage = 12;
+  const totalPages = Math.ceil(filtered.length / perPage);
+  const page = Math.min(Math.max(0, state.mdSkillsPage), Math.max(0, totalPages - 1));
+  const paginated = filtered.slice(page * perPage, (page + 1) * perPage);
+
+  if (filtered.length === 0) {
+    return `
+      <div class="empty-state" style="text-align: center; padding: 60px;">
+        <div style="font-size: 48px; margin-bottom: 16px;">🔍</div>
+        <h3>No skills found</h3>
+        <p style="color: var(--text-secondary);">${searchTerm ? 'Try a different search term' : 'Create your first skill to get started'}</p>
+      </div>
+    `;
+  }
+
+  let html = `<div class="md-skills-grid">`;
+
+  for (const skill of paginated) {
+    const safePath = skill.path.replace(/'/g, "\\'");
+    html += `
+      <div class="md-skill-card" onclick="editMdSkill('${safePath}')">
+        <div class="md-skill-header">
+          <div class="md-skill-icon">${icon('file', 24)}</div>
+          <div class="md-skill-meta">
+            <h3>${escapeHtml(skill.name)}</h3>
+            <span class="status-badge success">Active</span>
+          </div>
+        </div>
+        <p class="md-skill-desc">${escapeHtml(skill.description || 'No description provided')}</p>
+        <div class="md-skill-footer">
+          <span style="color: var(--text-tertiary); font-size: 12px;">${skill.path.split('/').pop()}</span>
+          <button class="btn btn-ghost btn-sm" onclick="event.stopPropagation(); editMdSkill('${safePath}')">
+            ${icon('penTool', 14)} Edit
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  html += `</div>`;
+
+  if (totalPages > 1) {
+    html += `
+      <div class="pagination" style="display: flex; justify-content: center; gap: 8px; margin-top: 24px; align-items: center;">
+        <button class="btn btn-ghost" ${page === 0 ? 'disabled' : ''} onclick="state.mdSkillsPage = ${page - 1}; render();">
+          ${icon('arrowLeft', 16)} Prev
+        </button>
+        <span style="color: var(--text-secondary); font-size: 14px; padding: 0 12px;">
+          Page ${page + 1} of ${totalPages}
+        </span>
+        <button class="btn btn-ghost" ${page >= totalPages - 1 ? 'disabled' : ''} onclick="state.mdSkillsPage = ${page + 1}; render();">
+          Next ${icon('arrowRight', 16)}
+        </button>
+      </div>
+    `;
+  }
+
+  return html;
 }
 
 // Helper to escape HTML in content
@@ -3054,6 +3144,53 @@ window.closeMdSkillEditor = function () {
   state.editingSkillTree = [];
   state.editingSkillLoading = false;
   render();
+};
+
+window.showCreateSkillModal = function () {
+  state.showCreateSkillModal = true;
+  render();
+};
+
+window.closeCreateSkillModal = function () {
+  state.showCreateSkillModal = false;
+  render();
+};
+
+window.createNewSkill = async function () {
+  const nameInput = document.getElementById('new-skill-name');
+  const descInput = document.getElementById('new-skill-desc');
+
+  const name = nameInput?.value?.trim();
+  const description = descInput?.value?.trim();
+
+  if (!name) {
+    showAlert('Please enter a skill name', 'Validation Error');
+    return;
+  }
+
+  try {
+    const res = await api('/md-skills/create', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, description })
+    });
+
+    if (res.error) {
+      showAlert(res.error, 'Error');
+      return;
+    }
+
+    state.showCreateSkillModal = false;
+    await loadSkills(); // Reload skills list
+    showAlert('Skill created successfully!', 'Success');
+
+    // Open the new skill for editing
+    if (res.path) {
+      editMdSkill(res.path + '/SKILL.md');
+    }
+  } catch (e) {
+    showAlert('Failed to create skill: ' + e.message, 'Error');
+  }
 };
 
 window.saveMdSkill = async function () {

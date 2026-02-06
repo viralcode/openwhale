@@ -1347,6 +1347,106 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         }
     });
 
+    // Create a new skill
+    dashboard.post("/api/md-skills/create", async (c) => {
+        const { mkdirSync, writeFileSync, existsSync } = await import("fs");
+        const { join } = await import("path");
+        const { homedir } = await import("os");
+        const { name, description } = await c.req.json();
+
+        if (!name || !name.trim()) {
+            return c.json({ error: "Skill name is required" }, 400);
+        }
+
+        const skillsDir = join(homedir(), ".openwhale", "skills");
+        const safeName = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const skillDir = join(skillsDir, safeName);
+
+        if (existsSync(skillDir)) {
+            return c.json({ error: "Skill already exists" }, 400);
+        }
+
+        try {
+            mkdirSync(skillDir, { recursive: true });
+            const content = `---
+name: ${safeName}
+description: ${description || 'A custom skill'}
+---
+
+# ${name}
+
+${description || 'Add your skill documentation here.'}
+
+## Usage
+
+Describe how to use this skill.
+
+## Commands
+
+\`\`\`bash
+# Example command
+echo "Hello from ${name}"
+\`\`\`
+`;
+            writeFileSync(join(skillDir, "SKILL.md"), content);
+            return c.json({ success: true, path: skillDir });
+        } catch (e) {
+            return c.json({ error: "Failed to create skill" }, 500);
+        }
+    });
+
+    // Create a folder within a skill
+    dashboard.post("/api/md-skills/create-folder", async (c) => {
+        const { mkdirSync, existsSync } = await import("fs");
+        const { join } = await import("path");
+        const { skillDir, folderName } = await c.req.json();
+
+        if (!skillDir || !folderName) {
+            return c.json({ error: "Skill directory and folder name are required" }, 400);
+        }
+
+        const safeName = folderName.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
+        const folderPath = join(skillDir, safeName);
+
+        if (existsSync(folderPath)) {
+            return c.json({ error: "Folder already exists" }, 400);
+        }
+
+        try {
+            mkdirSync(folderPath, { recursive: true });
+            return c.json({ success: true, path: folderPath });
+        } catch (e) {
+            return c.json({ error: "Failed to create folder" }, 500);
+        }
+    });
+
+    // Create a file within a skill
+    dashboard.post("/api/md-skills/create-file", async (c) => {
+        const { writeFileSync, existsSync } = await import("fs");
+        const { join } = await import("path");
+        const { parentDir, fileName, content = "" } = await c.req.json();
+
+        if (!parentDir || !fileName) {
+            return c.json({ error: "Parent directory and file name are required" }, 400);
+        }
+
+        const filePath = join(parentDir, fileName);
+
+        if (existsSync(filePath)) {
+            return c.json({ error: "File already exists" }, 400);
+        }
+
+        try {
+            const defaultContent = fileName.endsWith('.md')
+                ? `# ${fileName.replace('.md', '')}\n\nAdd content here.`
+                : content;
+            writeFileSync(filePath, defaultContent);
+            return c.json({ success: true, path: filePath });
+        } catch (e) {
+            return c.json({ error: "Failed to create file" }, 500);
+        }
+    });
+
     // Save skill config
     dashboard.post("/api/skills/:id/config", async (c) => {
         const id = c.req.param("id");

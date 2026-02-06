@@ -232,6 +232,38 @@ Your session is saved in `~/.openwhale/whatsapp-auth/` so you don't need to scan
 5. Invite bot to your server using the OAuth2 URL generator
 6. Restart OpenWhale
 
+### Twitter/X
+
+OpenWhale uses the **bird CLI** for Twitter/X integration — no API keys needed! It uses cookie-based authentication.
+
+**Install bird:**
+```bash
+# npm (cross-platform)
+npm install -g @steipete/bird
+
+# Homebrew (macOS)
+brew install steipete/tap/bird
+```
+
+**Setup:**
+1. Open your browser and log into X/Twitter
+2. Run `bird check` to verify cookie detection
+3. Test with `bird whoami` — should show your username
+4. Add to `.env`:
+   ```bash
+   TWITTER_ENABLED=true
+   TWITTER_POLL_INTERVAL=60000  # Poll every 60 seconds
+   ```
+5. Restart OpenWhale
+6. The AI will respond to mentions of your account
+
+**How it works:**
+- Polls for mentions every 60 seconds (configurable)
+- Auto-replies to mentions using AI
+- Can post tweets, reply to threads, and read timelines
+
+> ⚠️ **Note:** Twitter/X may rate-limit or flag automated posting. Use with caution on accounts you care about.
+
 ---
 
 ## Tools

@@ -41,7 +41,7 @@ export {
 /**
  * Channel types for session key generation
  */
-export type ChannelType = "whatsapp" | "telegram" | "discord" | "slack" | "web" | "dashboard" | "cli";
+export type ChannelType = "whatsapp" | "telegram" | "discord" | "slack" | "web" | "dashboard" | "cli" | "twitter";
 
 /**
  * Session context passed to AI handlers
