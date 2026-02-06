@@ -1836,12 +1836,16 @@ function renderFileTree(nodes, currentPath, depth = 0) {
   return nodes.map(node => {
     const isActive = node.path === currentPath;
     const indent = depth * 16;
+    const safePath = node.path.replace(/'/g, "\\'");
 
     if (node.type === 'directory') {
       return `
         <div class="skill-tree-folder" style="padding-left: ${indent}px;">
           <div class="skill-tree-item folder">
-            ${icon('folder', 14)} ${node.name}
+            <span>${icon('folder', 14)} ${node.name}</span>
+            <button class="btn-tree-action" onclick="event.stopPropagation(); promptNewFileInFolder('${safePath}')" title="Add file in ${node.name}">
+              ${icon('plus', 12)}
+            </button>
           </div>
           ${renderFileTree(node.children, currentPath, depth + 1)}
         </div>
@@ -1854,7 +1858,7 @@ function renderFileTree(nodes, currentPath, depth = 0) {
       return `
         <div class="skill-tree-item file ${isActive ? 'active' : ''}" 
              style="padding-left: ${indent + 8}px;"
-             onclick="selectSkillFile('${node.path.replace(/'/g, "\\'")}')">
+             onclick="selectSkillFile('${safePath}')">
           ${icon(fileIcon, 14)} ${node.name}
         </div>
       `;
@@ -3289,6 +3293,39 @@ window.promptNewFolder = async function () {
     showAlert('Folder created!', 'Success');
   } catch (e) {
     showAlert('Failed to create folder: ' + e.message, 'Error');
+  }
+};
+
+window.promptNewFileInFolder = async function (folderPath) {
+  const fileName = await showPrompt('Enter file name (e.g., guide.md, script.sh):', 'New File');
+  if (!fileName) return;
+
+  try {
+    const res = await api('/md-skills/create-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        parentDir: folderPath,
+        fileName: fileName
+      })
+    });
+
+    if (res.error) {
+      showAlert(res.error, 'Error');
+      return;
+    }
+
+    // Reload tree and open the new file
+    const treeRes = await api('/md-skills/tree?dir=' + encodeURIComponent(state.editingSkillDir));
+    state.editingSkillTree = treeRes.tree || [];
+
+    if (res.path) {
+      await selectSkillFile(res.path);
+    }
+    render();
+    showAlert('File created!', 'Success');
+  } catch (e) {
+    showAlert('Failed to create file: ' + e.message, 'Error');
   }
 };
 

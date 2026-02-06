@@ -1545,10 +1545,40 @@ select.form-input option {
   color: var(--text-tertiary);
   font-weight: 500;
   cursor: default;
+  justify-content: space-between;
+}
+
+.skill-tree-item.folder span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .skill-tree-folder {
   margin-bottom: 4px;
+}
+
+.btn-tree-action {
+  opacity: 0;
+  padding: 2px 4px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-tertiary);
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+}
+
+.skill-tree-item.folder:hover .btn-tree-action {
+  opacity: 1;
+}
+
+.btn-tree-action:hover {
+  background: var(--accent-blue);
+  color: white;
+  border-color: var(--accent-blue);
 }
 
 .skill-editor-content {
