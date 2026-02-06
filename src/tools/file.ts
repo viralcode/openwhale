@@ -90,13 +90,21 @@ export const fileTool: AgentTool<FileAction> = {
                         await fs.mkdir(path.dirname(filePath), { recursive: true });
                     }
                     await fs.writeFile(filePath, params.content, "utf-8");
-                    return { success: true, content: `Wrote ${params.content.length} bytes to ${params.path}` };
+                    return {
+                        success: true,
+                        content: `Wrote ${params.content.length} bytes to ${params.path}`,
+                        metadata: { path: params.path, sizeBytes: params.content.length, action: "write" },
+                    };
                 }
 
                 case "append": {
                     const filePath = validatePath(params.path);
                     await fs.appendFile(filePath, params.content, "utf-8");
-                    return { success: true, content: `Appended ${params.content.length} bytes to ${params.path}` };
+                    return {
+                        success: true,
+                        content: `Appended ${params.content.length} bytes to ${params.path}`,
+                        metadata: { path: params.path, sizeBytes: params.content.length, action: "append" },
+                    };
                 }
 
                 case "delete": {
@@ -137,14 +145,22 @@ export const fileTool: AgentTool<FileAction> = {
                 case "mkdir": {
                     const dirPath = validatePath(params.path);
                     await fs.mkdir(dirPath, { recursive: params.recursive });
-                    return { success: true, content: `Created directory: ${params.path}` };
+                    return {
+                        success: true,
+                        content: `Created directory: ${params.path}`,
+                        metadata: { path: params.path, action: "mkdir" },
+                    };
                 }
 
                 case "copy": {
                     const src = validatePath(params.source);
                     const dst = validatePath(params.destination);
                     await fs.cp(src, dst, { recursive: true });
-                    return { success: true, content: `Copied ${params.source} to ${params.destination}` };
+                    return {
+                        success: true,
+                        content: `Copied ${params.source} to ${params.destination}`,
+                        metadata: { path: params.destination, action: "copy" },
+                    };
                 }
 
                 case "move": {

@@ -1052,6 +1052,61 @@ select.form-input option {
   overflow-x: auto;
 }
 
+/* ===== FILE CHIP (tool-created files) ===== */
+.tool-file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  margin-top: 10px;
+  background: rgba(99, 102, 241, 0.1);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.tool-file-chip:hover {
+  background: rgba(99, 102, 241, 0.18);
+  border-color: rgba(99, 102, 241, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.15);
+}
+
+.tool-file-chip .file-icon {
+  display: flex;
+  align-items: center;
+  color: var(--accent-indigo);
+}
+
+.tool-file-chip .file-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-file-chip .file-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  background: var(--accent-indigo);
+  color: white;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: all 0.15s ease;
+}
+
+.tool-file-chip .file-download-btn:hover {
+  background: var(--accent-blue);
+  box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
+}
+
 /* ===== TYPING INDICATOR ===== */
 .typing-indicator {
   display: flex;

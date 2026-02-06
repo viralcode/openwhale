@@ -1349,6 +1349,25 @@ function renderMessage(msg) {
         imageSrc = `data:${mimeType};base64,${resultMeta.base64}`;
       }
 
+      // Check for created file path in metadata
+      let fileChipHtml = '';
+      const filePath = tcMeta?.path || resultMeta?.path;
+      if (filePath && tc.status === 'completed') {
+        const fileName = filePath.split('/').pop() || filePath;
+        const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+        const fileIcon = ext === 'pdf' ? icon('fileText', 16) : icon('file', 16);
+        const downloadUrl = `${API_BASE}/files/download?path=${encodeURIComponent(filePath)}`;
+        fileChipHtml = `
+          <div class="tool-file-chip">
+            <span class="file-icon">${fileIcon}</span>
+            <span class="file-name" title="${escapeHtml(filePath)}">${escapeHtml(fileName)}</span>
+            <a href="${downloadUrl}" class="file-download-btn" target="_blank" download="${escapeHtml(fileName)}">
+              ${icon('download', 12)} Download
+            </a>
+          </div>
+        `;
+      }
+
       return `
       <div class="tool-call">
         <div class="tool-call-header" onclick="toggleToolCall('${msg.id}', ${i})">
@@ -1367,6 +1386,7 @@ function renderMessage(msg) {
               </div>
             ` : ''}
             <div class="tool-call-result">${typeof tc.result === 'string' ? escapeHtml(tc.result) : JSON.stringify(tc.result, null, 2)}</div>
+            ${fileChipHtml}
           ` : ''}
         </div>
       </div>

@@ -706,6 +706,56 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         return c.json({ success: true, message: "Chat history cleared" });
     });
 
+    // Download a file created by tools
+    dashboard.get("/api/files/download", async (c) => {
+        const filePath = c.req.query("path");
+        if (!filePath) {
+            return c.json({ error: "Missing path parameter" }, 400);
+        }
+
+        const { resolve, basename, extname } = await import("node:path");
+        const resolved = resolve(filePath);
+        const cwd = process.cwd();
+
+        // Security: only allow files within workspace
+        if (!resolved.startsWith(cwd)) {
+            return c.json({ error: "Access denied: path outside workspace" }, 403);
+        }
+
+        try {
+            const fileBuffer = await fs.readFile(resolved);
+            const fileName = basename(resolved);
+            const ext = extname(resolved).toLowerCase();
+
+            // MIME type mapping
+            const mimeTypes: Record<string, string> = {
+                ".pdf": "application/pdf",
+                ".md": "text/markdown",
+                ".txt": "text/plain",
+                ".json": "application/json",
+                ".csv": "text/csv",
+                ".html": "text/html",
+                ".png": "image/png",
+                ".jpg": "image/jpeg",
+                ".jpeg": "image/jpeg",
+                ".gif": "image/gif",
+                ".svg": "image/svg+xml",
+            };
+
+            const contentType = mimeTypes[ext] || "application/octet-stream";
+
+            return new Response(fileBuffer, {
+                headers: {
+                    "Content-Type": contentType,
+                    "Content-Disposition": `attachment; filename="${fileName}"`,
+                    "Content-Length": String(fileBuffer.length),
+                },
+            });
+        } catch (err) {
+            return c.json({ error: `File not found: ${filePath}` }, 404);
+        }
+    });
+
     // Send chat message - now uses unified SessionService
     dashboard.post("/api/chat", async (c) => {
         const { message, model: requestModel } = await c.req.json();
