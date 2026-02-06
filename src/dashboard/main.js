@@ -72,6 +72,7 @@ const ICONS = {
   gitBranch: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="6" x2="6" y1="3" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>',
   download: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>',
   penTool: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19 7-7 3 3-7 7-3-3z"/><path d="m18 13-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="m2 2 7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>',
+  info: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>',
 };
 
 // Icon helper function
@@ -107,7 +108,13 @@ let state = {
   user: null,
   sessionId: localStorage.getItem('owSessionId') || null,
   users: [], // For admin user management
-  extensions: [] // For self-extension system
+  extensions: [], // For self-extension system
+  mdSkills: [], // Markdown-based skills from ~/.openwhale/skills/
+  mdSkillsLoading: false,
+  skillsTab: 'api', // 'api' or 'markdown'
+  editingSkillPath: null,
+  editingSkillContent: null,
+  editingSkillLoading: false
 };
 
 // ============================================
@@ -479,7 +486,15 @@ async function loadSkills() {
   try {
     const data = await api('/skills');
     state.skills = data.skills || [];
-  } catch (e) { console.error(e); }
+    // Also load markdown skills
+    state.mdSkillsLoading = true;
+    const mdData = await api('/md-skills');
+    state.mdSkills = mdData.mdSkills || [];
+    state.mdSkillsLoading = false;
+  } catch (e) {
+    state.mdSkillsLoading = false;
+    console.error(e);
+  }
 }
 
 async function loadTools() {
@@ -1528,25 +1543,25 @@ function renderSkills() {
       desc: 'Pages & Databases',
       placeholder: 'secret_xxxx...',
       helpUrl: 'https://www.notion.so/profile/integrations/form/new-integration',
-      helpText: 'Create a new integration → Copy the "Internal Integration Secret" → Paste here. Then share pages/databases with your integration to grant access.'
+      helpText: 'Create an integration at notion.so/profile/integrations → New integration. Give it a name and select Read, Update, Insert capabilities.'
     },
     {
       id: 'google',
-      name: 'Google',
-      iconName: 'globe',
+      name: 'Google Services',
+      iconName: 'mail',
       desc: 'Calendar, Gmail, Drive',
-      placeholder: 'OAuth Credentials JSON',
+      placeholder: 'Google API credentials',
       helpUrl: 'https://console.cloud.google.com/apis/credentials',
-      helpText: 'Create OAuth 2.0 credentials in Google Cloud Console. Enable Calendar, Gmail, Drive APIs. Download credentials JSON.'
+      helpText: 'Create OAuth 2.0 credentials in Google Cloud Console. Enable Gmail, Calendar, and Drive APIs for your project.'
     },
     {
       id: 'onepassword',
       name: '1Password',
       iconName: 'key',
-      desc: 'Secure Passwords',
-      placeholder: 'API Token',
-      helpUrl: 'https://developer.1password.com/docs/connect/',
-      helpText: 'Requires 1Password Connect server. Generate an API token from your Connect server settings.'
+      desc: 'Secure Credential Access',
+      placeholder: 'op connect token...',
+      helpUrl: 'https://developer.1password.com/docs/connect',
+      helpText: '1Password Connect lets you access credentials securely. Set up a Connect server and generate an access token.'
     }
   ];
 
@@ -1558,59 +1573,147 @@ function renderSkills() {
       </div>
     </div>
 
-    <div class="skills-grid">
-      ${skillList.map(s => {
+    <div class="tabs" style="margin-bottom: 24px;">
+      <button class="tab-btn ${state.skillsTab === 'api' ? 'active' : ''}" onclick="switchSkillsTab('api')">
+        ${icon('key', 16)} API Skills
+      </button>
+      <button class="tab-btn ${state.skillsTab === 'markdown' ? 'active' : ''}" onclick="switchSkillsTab('markdown')">
+        ${icon('file', 16)} MD Skills <span class="badge">${state.mdSkills.length}</span>
+      </button>
+    </div>
+
+    ${state.skillsTab === 'api' ? `
+      <div class="skills-grid">
+        ${skillList.map(s => {
     const skillData = state.skills.find(sk => sk.id === s.id);
     const isEnabled = skillData?.enabled || false;
     const hasKey = skillData?.hasKey || false;
 
     return `
-        <div class="skill-card ${isEnabled ? 'enabled' : ''} ${hasKey ? 'configured' : ''}">
-          <div class="skill-header">
-            <div class="skill-icon-wrap">
-              <span class="skill-icon">${icon(s.iconName, 24)}</span>
+            <div class="skill-card ${isEnabled ? 'enabled' : ''} ${hasKey ? 'configured' : ''}">
+              <div class="skill-header">
+                <div class="skill-icon-wrap">
+                  <span class="skill-icon">${icon(s.iconName, 24)}</span>
+                </div>
+                <div class="skill-info">
+                  <h3 class="skill-name">${s.name}</h3>
+                  <div class="skill-desc">${s.desc}</div>
+                </div>
+                <label class="toggle">
+                  <input type="checkbox" ${isEnabled ? 'checked' : ''}
+                         onchange="toggleSkill('${s.id}', this.checked)">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>
+              
+              <div class="skill-body">
+                <div class="skill-status">
+                  ${hasKey ? `
+                    <span class="status-badge success">✓ Configured</span>
+                  ` : `
+                    <span class="status-badge warning">Not configured</span>
+                  `}
+                </div>
+                
+                <div class="skill-help">
+                  <p>${s.helpText}</p>
+                  <a href="${s.helpUrl}" target="_blank" rel="noopener" class="skill-link">
+                    ${icon('externalLink', 14)} Get API Key
+                  </a>
+                </div>
+                
+                <div class="skill-form">
+                  <input type="password" class="form-input" 
+                         placeholder="${s.placeholder}"
+                         id="skill-${s.id}">
+                  <button class="btn btn-primary" onclick="saveSkill('${s.id}')">
+                    ${hasKey ? 'Update' : 'Connect'}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div class="skill-info">
-              <h3 class="skill-name">${s.name}</h3>
-              <div class="skill-desc">${s.desc}</div>
+          `;
+  }).join('')}
+      </div>
+    ` : `
+      <div class="md-skills-info" style="background: var(--bg-elevated); padding: 16px; border-radius: 12px; margin-bottom: 20px; border: 1px solid var(--border-subtle);">
+        <p style="margin: 0; color: var(--text-secondary);">
+          ${icon('info', 16)} <strong>${state.mdSkills.length} OpenClaw community skills</strong> loaded from <code>~/.openwhale/skills/</code>. 
+          These are SKILL.md files that extend AI capabilities with specialized knowledge.
+        </p>
+      </div>
+      
+      ${state.mdSkillsLoading ? `
+        <div style="display: flex; align-items: center; justify-content: center; padding: 60px; color: var(--text-secondary);">
+          <div class="spinner" style="margin-right: 12px;"></div>
+          Loading skills...
+        </div>
+      ` : `
+        <div class="skills-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+          ${state.mdSkills.length === 0 ? `
+            <div class="empty-state" style="grid-column: 1/-1; text-align: center; padding: 40px;">
+              <div style="font-size: 48px; margin-bottom: 16px;">📦</div>
+              <h3>No Markdown Skills Installed</h3>
+              <p style="color: var(--text-secondary);">Download skills from OpenClaw community or create your own in ~/.openwhale/skills/</p>
             </div>
-            <label class="toggle">
-              <input type="checkbox" ${isEnabled ? 'checked' : ''}
-                     onchange="toggleSkill('${s.id}', this.checked)">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-          
-          <div class="skill-body">
-            <div class="skill-status">
-              ${hasKey ? `
-                <span class="status-badge success">✓ Configured</span>
+          ` : state.mdSkills.map(skill => `
+            <div class="skill-card" style="padding: 16px;">
+              <div class="skill-header" style="gap: 12px;">
+                <div class="skill-icon-wrap" style="background: var(--accent-blue); width: 40px; height: 40px;">
+                  ${icon('file', 20)}
+                </div>
+                <div class="skill-info" style="flex: 1; min-width: 0;">
+                  <h3 class="skill-name" style="font-size: 14px; margin: 0 0 4px 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${skill.name}</h3>
+                  <div class="skill-desc" style="font-size: 12px; color: var(--text-tertiary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;">${skill.description || 'No description'}</div>
+                </div>
+              </div>
+              <div style="margin-top: 12px; display: flex; gap: 8px; align-items: center;">
+                <span class="status-badge success" style="font-size: 11px;">✓ Installed</span>
+                <button class="btn btn-ghost" style="margin-left: auto; padding: 6px 12px; font-size: 12px;" onclick="editMdSkill('${skill.path.replace(/'/g, "\\'")}')">
+                  ${icon('penTool', 14)} Edit
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `}
+      
+      ${state.editingSkillPath ? `
+        <div class="skill-editor-overlay" onclick="event.target === this && closeMdSkillEditor()">
+          <div class="skill-editor-modal">
+            <div class="skill-editor-header">
+              <h3 style="margin: 0; display: flex; align-items: center; gap: 8px;">
+                ${icon('file', 18)} Edit Skill
+              </h3>
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-primary" onclick="saveMdSkill()">
+                  ${icon('check', 14)} Save
+                </button>
+                <button class="btn btn-ghost" onclick="closeMdSkillEditor()">
+                  ${icon('x', 14)} Cancel
+                </button>
+              </div>
+            </div>
+            <div class="skill-editor-content">
+              ${state.editingSkillLoading ? `
+                <div style="display: flex; align-items: center; justify-content: center; height: 100%; color: var(--text-secondary);">
+                  <div class="spinner" style="margin-right: 12px;"></div>
+                  Loading skill content...
+                </div>
               ` : `
-                <span class="status-badge warning">Not configured</span>
+                <textarea id="skill-editor-content" class="skill-editor-textarea" spellcheck="false">${state.editingSkillContent || ''}</textarea>
               `}
-            </div>
-            
-            <div class="skill-help">
-              <p>${s.helpText}</p>
-              <a href="${s.helpUrl}" target="_blank" rel="noopener" class="skill-link">
-                ${icon('externalLink', 14)} Get API Key
-              </a>
-            </div>
-            
-            <div class="skill-form">
-              <input type="password" class="form-input" 
-                     placeholder="${s.placeholder}"
-                     id="skill-${s.id}">
-              <button class="btn btn-primary" onclick="saveSkill('${s.id}')">
-                ${hasKey ? 'Update' : 'Connect'}
-              </button>
             </div>
           </div>
         </div>
-      `;
-  }).join('')}
-    </div>
+      ` : ''}
+    `}
   `;
+}
+
+function switchSkillsTab(tab) {
+  state.skillsTab = tab;
+  render();
 }
 
 
@@ -2847,6 +2950,53 @@ window.saveProvider = async function (type) {
 window.saveSkill = async function (id) {
   const apiKey = document.getElementById(`skill-${id}`)?.value;
   await saveSkillConfig(id, { apiKey, enabled: !!apiKey });
+};
+
+window.switchSkillsTab = function (tab) {
+  state.skillsTab = tab;
+  render();
+};
+
+window.editMdSkill = async function (skillPath) {
+  state.editingSkillPath = skillPath;
+  state.editingSkillContent = null;
+  state.editingSkillLoading = true;
+  render();
+
+  try {
+    const res = await api('/md-skills/content?path=' + encodeURIComponent(skillPath));
+    state.editingSkillContent = res.content;
+  } catch (e) {
+    state.editingSkillContent = '# Error loading skill\n\n' + e.message;
+  }
+  state.editingSkillLoading = false;
+  render();
+};
+
+window.closeMdSkillEditor = function () {
+  state.editingSkillPath = null;
+  state.editingSkillContent = null;
+  state.editingSkillLoading = false;
+  render();
+};
+
+window.saveMdSkill = async function () {
+  const textarea = document.getElementById('skill-editor-content');
+  if (!textarea || !state.editingSkillPath) return;
+
+  try {
+    await api('/md-skills/save', {
+      method: 'POST',
+      body: JSON.stringify({ path: state.editingSkillPath, content: textarea.value })
+    });
+    await showAlert('Skill saved!', '✅ Success');
+    state.editingSkillPath = null;
+    state.editingSkillContent = null;
+    await loadSkills();
+    render();
+  } catch (e) {
+    await showAlert('Failed to save: ' + e.message, '❌ Error');
+  }
 };
 
 window.saveSettings = async function () {

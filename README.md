@@ -466,6 +466,34 @@ Extensions automatically send their return value to configured channels!
 
 ---
 
+## Markdown Skills (OpenClaw Community)
+
+OpenWhale includes **50+ community-built skills** from the [OpenClaw](https://github.com/VoltAgent/awesome-openclaw-skills) project. These are SKILL.md files that give the AI specialized knowledge and capabilities.
+
+### Location
+Skills are stored in `~/.openwhale/skills/` (or `skills/` in the repo).
+
+### Available Skills (50+)
+| Category | Skills |
+|----------|--------|
+| **Frontend** | `frontend-design`, `ui-ux-master`, `ui-ux-pro-max`, `human-optimized-frontend`, `ui-design-system`, `deliberate-frontend-redesign` |
+| **Backend** | `backend-patterns`, `senior-fullstack`, `nextjs-expert`, `vercel-react-best-practices` |
+| **Integrations** | `slack`, `discord`, `github`, `zoho-email-integration`, `telegram-reaction-prober` |
+| **AI/Video** | `computer-use`, `comfyui-runner`, `comfy-ai`, `remotion-video-toolkit`, `vision-sandbox` |
+| **Platform** | `apple-hig`, `xcodebuildmcp`, `linux-service-triage`, `niri-ipc` |
+| **Productivity** | `resume-builder`, `react-email-skills`, `artifacts-builder`, `giphy` |
+
+### Managing Skills
+From the Dashboard:
+1. Go to **Skills** → **MD Skills** tab
+2. View all 50+ installed skills
+3. Click **Edit** to view or modify any skill
+
+### Credits
+Skills are sourced from [VoltAgent/awesome-openclaw-skills](https://github.com/VoltAgent/awesome-openclaw-skills) — a community collection for AI assistants. Thank you to all contributors! 🙏
+
+---
+
 Skills are integrations with external services. They need API keys to work.
 
 ### GitHub

@@ -1218,6 +1218,86 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         return c.json({ skills: skillList });
     });
 
+    // Get markdown skills from ~/.openwhale/skills/
+    dashboard.get("/api/md-skills", async (c) => {
+        const { readdirSync, readFileSync, existsSync } = await import("fs");
+        const { join } = await import("path");
+        const { homedir } = await import("os");
+
+        const skillsDir = join(homedir(), ".openwhale", "skills");
+        const mdSkills: Array<{ name: string; description: string; path: string }> = [];
+
+        if (!existsSync(skillsDir)) {
+            return c.json({ mdSkills: [] });
+        }
+
+        try {
+            const dirs = readdirSync(skillsDir, { withFileTypes: true });
+            for (const dir of dirs) {
+                if (dir.isDirectory()) {
+                    const skillFile = join(skillsDir, dir.name, "SKILL.md");
+                    if (existsSync(skillFile)) {
+                        try {
+                            const content = readFileSync(skillFile, "utf-8");
+                            // Parse YAML frontmatter
+                            const match = content.match(/^---\n([\s\S]*?)\n---/);
+                            let name = dir.name;
+                            let description = "";
+                            if (match) {
+                                const frontmatter = match[1];
+                                const nameMatch = frontmatter.match(/name:\s*(.+)/);
+                                const descMatch = frontmatter.match(/description:\s*(.+)/);
+                                if (nameMatch) name = nameMatch[1].trim();
+                                if (descMatch) description = descMatch[1].trim();
+                            }
+                            mdSkills.push({ name, description, path: skillFile });
+                        } catch {
+                            // Skip malformed files
+                        }
+                    }
+                }
+            }
+        } catch {
+            // Directory read error
+        }
+
+        return c.json({ mdSkills });
+    });
+
+    // Get skill content for editing
+    dashboard.get("/api/md-skills/content", async (c) => {
+        const { readFileSync, existsSync } = await import("fs");
+        const skillPath = c.req.query("path");
+
+        if (!skillPath || !existsSync(skillPath)) {
+            return c.json({ error: "Skill not found" }, 404);
+        }
+
+        try {
+            const content = readFileSync(skillPath, "utf-8");
+            return c.json({ content });
+        } catch (e) {
+            return c.json({ error: "Failed to read skill" }, 500);
+        }
+    });
+
+    // Save skill content
+    dashboard.post("/api/md-skills/save", async (c) => {
+        const { writeFileSync, existsSync } = await import("fs");
+        const { path, content } = await c.req.json();
+
+        if (!path || !existsSync(path)) {
+            return c.json({ error: "Skill not found" }, 404);
+        }
+
+        try {
+            writeFileSync(path, content, "utf-8");
+            return c.json({ success: true });
+        } catch (e) {
+            return c.json({ error: "Failed to save skill" }, 500);
+        }
+    });
+
     // Save skill config
     dashboard.post("/api/skills/:id/config", async (c) => {
         const id = c.req.param("id");
