@@ -1648,9 +1648,10 @@ function renderSkills() {
       <div style="display: flex; gap: 12px; margin-bottom: 20px; align-items: center; flex-wrap: wrap;">
         <div style="flex: 1; min-width: 200px; position: relative;">
           <input type="text" 
+                 id="md-skills-search"
                  placeholder="Search skills..." 
                  value="${state.mdSkillsSearch}"
-                 oninput="state.mdSkillsSearch = this.value; state.mdSkillsPage = 0; render();"
+                 oninput="handleMdSkillsSearch(this)"
                  style="width: 100%; padding: 10px 12px 10px 36px; border-radius: 8px; border: 1px solid var(--border-subtle); background: var(--bg-elevated); color: var(--text-primary); font-size: 14px;"
           />
           <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-tertiary);">
@@ -3149,6 +3150,22 @@ window.closeMdSkillEditor = function () {
 window.showCreateSkillModal = function () {
   state.showCreateSkillModal = true;
   render();
+};
+
+// Handle search with focus preservation
+window.handleMdSkillsSearch = function (input) {
+  const cursorPos = input.selectionStart;
+  state.mdSkillsSearch = input.value;
+  state.mdSkillsPage = 0;
+  render();
+  // Restore focus and cursor after render
+  setTimeout(() => {
+    const searchInput = document.getElementById('md-skills-search');
+    if (searchInput) {
+      searchInput.focus();
+      searchInput.setSelectionRange(cursorPos, cursorPos);
+    }
+  }, 0);
 };
 
 window.closeCreateSkillModal = function () {
