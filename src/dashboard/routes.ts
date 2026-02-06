@@ -11,6 +11,7 @@ import { providerConfig, skillConfig, channelConfig, setupState as setupStateTab
 import { db as sqliteDb } from "../db/index.js";
 import { desc, sql, eq } from "drizzle-orm";
 import { readFileSync } from "node:fs";
+import fs from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { execSync, exec } from "node:child_process";
@@ -74,6 +75,10 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
                 if (s.id === "weather") process.env.OPENWEATHERMAP_API_KEY = s.apiKey;
                 if (s.id === "notion") process.env.NOTION_API_KEY = s.apiKey;
                 if (s.id === "1password") process.env.OP_SERVICE_ACCOUNT_TOKEN = s.apiKey;
+            }
+            // Handle Twitter enablement (no API key needed, uses bird CLI)
+            if (s.id === "twitter" && s.enabled) {
+                process.env.TWITTER_ENABLED = "true";
             }
         }
 
@@ -1212,6 +1217,14 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 enabled: skillConfigs.get("onepassword")?.enabled ?? !!process.env.OP_CONNECT_TOKEN,
                 hasKey: !!(skillConfigs.get("onepassword")?.apiKey || process.env.OP_CONNECT_TOKEN),
                 description: "Secure password access"
+            },
+            {
+                id: "twitter",
+                name: "Twitter/X",
+                enabled: skillConfigs.get("twitter")?.enabled ?? !!process.env.TWITTER_ENABLED,
+                hasKey: true, // Uses bird CLI with cookie auth, no API key needed
+                description: "Post tweets, read timeline, mentions",
+                noCreds: true // Flag to indicate no credentials needed
             }
         ];
 
@@ -1470,6 +1483,147 @@ echo "Hello from ${name}"
         await saveSkillToDB(db, id, skillConfigs.get(id)!);
 
         return c.json({ ok: true });
+    });
+
+    // Check bird CLI status for Twitter
+    dashboard.get("/api/skills/twitter/check-bird", async (c) => {
+        try {
+            // Check if bird CLI is installed
+            try {
+                await execAsync("which bird");
+            } catch {
+                return c.json({ ok: true, installed: false });
+            }
+
+            // Check if authenticated
+            try {
+                const { stdout } = await execAsync("bird whoami --json");
+                const whoami = JSON.parse(stdout);
+                const username = whoami.username || whoami.screen_name;
+
+                if (username) {
+                    return c.json({
+                        ok: true,
+                        installed: true,
+                        authenticated: true,
+                        username
+                    });
+                } else {
+                    return c.json({
+                        ok: true,
+                        installed: true,
+                        authenticated: false
+                    });
+                }
+            } catch {
+                return c.json({
+                    ok: true,
+                    installed: true,
+                    authenticated: false
+                });
+            }
+        } catch (err) {
+            return c.json({ ok: false, error: String(err) });
+        }
+    });
+
+    // Get bird config (load Twitter cookies)
+    dashboard.get("/api/skills/twitter/bird-config", async (c) => {
+        try {
+            const homedir = process.env.HOME || process.env.USERPROFILE || "";
+            const configPath = `${homedir}/.config/bird/config.json5`;
+
+            try {
+                const content = await fs.readFile(configPath, "utf-8");
+                // Parse JSON5 (supports unquoted keys, comments, trailing commas)
+                // Add quotes around unquoted keys: auth_token: -> "auth_token":
+                const jsonified = content
+                    .replace(/\/\/.*$/gm, "")  // Remove comments
+                    .replace(/(\s*)(\w+)(\s*):/g, '$1"$2"$3:')  // Quote unquoted keys
+                    .replace(/,(\s*[}\]])/g, "$1");  // Remove trailing commas
+                const config = JSON.parse(jsonified);
+
+                // Try to get username if authenticated
+                let username = "";
+                try {
+                    const { stdout } = await execAsync("bird whoami --json 2>/dev/null");
+                    const whoami = JSON.parse(stdout);
+                    username = whoami.username || whoami.screen_name || "";
+                } catch {
+                    // Ignore
+                }
+
+                return c.json({
+                    ok: true,
+                    config: {
+                        auth_token: config.auth_token || "",
+                        ct0: config.ct0 || ""
+                    },
+                    username
+                });
+            } catch (parseErr) {
+                console.error("[bird-config] Parse error:", parseErr);
+                return c.json({ ok: true, config: null });
+            }
+        } catch (err) {
+            return c.json({ ok: false, error: String(err) });
+        }
+    });
+
+    // Save bird config (save Twitter cookies)
+    dashboard.post("/api/skills/twitter/bird-config", async (c) => {
+        try {
+            const { auth_token, ct0 } = await c.req.json();
+
+            if (!auth_token || !ct0) {
+                return c.json({ ok: false, error: "Both auth_token and ct0 are required" });
+            }
+
+            const homedir = process.env.HOME || process.env.USERPROFILE || "";
+            const configDir = `${homedir}/.config/bird`;
+            const configPath = `${configDir}/config.json5`;
+
+            // Ensure directory exists
+            await fs.mkdir(configDir, { recursive: true });
+
+            // Read existing config if any
+            let existingConfig: Record<string, unknown> = {};
+            try {
+                const content = await fs.readFile(configPath, "utf-8");
+                existingConfig = JSON.parse(content.replace(/,(\s*[}\]])/g, "$1").replace(/\/\/.*$/gm, ""));
+            } catch {
+                // No existing config
+            }
+
+            // Merge and write
+            const newConfig = {
+                ...existingConfig,
+                auth_token,
+                ct0
+            };
+
+            await fs.writeFile(configPath, JSON.stringify(newConfig, null, 2));
+
+            // Verify by checking whoami
+            let username = "";
+            try {
+                const { stdout } = await execAsync("bird whoami --json 2>/dev/null");
+                const whoami = JSON.parse(stdout);
+                username = whoami.username || whoami.screen_name || "";
+            } catch {
+                // May not work immediately
+            }
+
+            // Enable Twitter skill
+            const existing = skillConfigs.get("twitter") || { enabled: false };
+            skillConfigs.set("twitter", { ...existing, enabled: true });
+            await saveSkillToDB(db, "twitter", skillConfigs.get("twitter")!);
+            process.env.TWITTER_ENABLED = "true";
+
+            return c.json({ ok: true, username });
+        } catch (err) {
+            return c.json({ ok: false, error: String(err) });
+        }
     });
 
     // ============== GOOGLE OAUTH ==============

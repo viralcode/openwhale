@@ -37,6 +37,8 @@ const ICONS = {
   cloud: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>',
   database: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/></svg>',
   key: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15.5 7.5 2.3 2.3a1 1 0 0 0 1.4 0l2.1-2.1a1 1 0 0 0 0-1.4L19 4"/><path d="m21 2-9.6 9.6"/><circle cx="7.5" cy="15.5" r="5.5"/></svg>',
+  twitter: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4l11.733 16h4.267l-11.733 -16z"/><path d="M4 20l6.768 -6.768m2.46 -2.46l6.772 -6.772"/></svg>',
+
 
   // Tools
   terminal: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" x2="20" y1="19" y2="19"/></svg>',
@@ -808,6 +810,91 @@ async function connectDiscord() {
   }
 }
 
+async function checkBirdCLI() {
+  try {
+    const result = await api('/skills/twitter/check-bird');
+
+    if (result.ok && result.installed) {
+      if (result.authenticated) {
+        await showAlert(`✅ bird CLI is installed and authenticated as @${result.username}!\n\nYou can now enable Twitter/X and start using it.`, '🐦 Twitter/X Ready');
+      } else {
+        await showAlert(`⚠️ bird CLI is installed but not authenticated.\n\nRun this command in terminal:\n\n  bird check\n\nThen authenticate with your Twitter/X cookies.`, '🔑 Authentication Required');
+      }
+    } else if (result.ok && !result.installed) {
+      await showAlert(`❌ bird CLI is not installed.\n\nInstall it with:\n\n  npm install -g @steipete/bird\n\nThen run 'bird check' to authenticate.`, '📦 Installation Required');
+    } else {
+      await showAlert(`Error: ${result.error || 'Unknown error'}`, '❌ Error');
+    }
+  } catch (e) {
+    await showAlert(`Failed to check bird CLI: ${e.message}`, '❌ Error');
+  }
+}
+
+async function loadBirdConfig() {
+  try {
+    const result = await api('/skills/twitter/bird-config');
+
+    if (result.ok && result.config) {
+      const authInput = document.getElementById('skill-twitter-auth-token');
+      const ct0Input = document.getElementById('skill-twitter-ct0');
+
+      if (authInput && result.config.auth_token) {
+        authInput.value = result.config.auth_token;
+      }
+      if (ct0Input && result.config.ct0) {
+        ct0Input.value = result.config.ct0;
+      }
+
+      if (result.config.auth_token && result.config.ct0) {
+        await showAlert(`Loaded existing Twitter cookies!\n\n@${result.username || 'Unknown user'}`, '✅ Config Loaded');
+      } else {
+        await showAlert('No existing Twitter cookies found.\n\nFollow the instructions to get them from your browser.', 'ℹ️ No Config');
+      }
+    } else {
+      await showAlert('No bird config found. Enter your cookies manually.', 'ℹ️ No Config');
+    }
+  } catch (e) {
+    await showAlert(`Failed to load config: ${e.message}`, '❌ Error');
+  }
+}
+
+async function saveTwitterCookies() {
+  const authToken = document.getElementById('skill-twitter-auth-token')?.value?.trim();
+  const ct0 = document.getElementById('skill-twitter-ct0')?.value?.trim();
+
+  if (!authToken || !ct0) {
+    await showAlert('Please enter both auth_token and ct0 values.', '⚠️ Missing Fields');
+    return;
+  }
+
+  // Validate lengths
+  if (authToken.length < 30) {
+    await showAlert('auth_token seems too short. It should be ~40 characters.', '⚠️ Invalid');
+    return;
+  }
+  if (ct0.length < 50) {
+    await showAlert('ct0 seems too short. It should be ~160 characters.', '⚠️ Invalid');
+    return;
+  }
+
+  try {
+    const result = await api('/skills/twitter/bird-config', {
+      method: 'POST',
+      body: JSON.stringify({ auth_token: authToken, ct0 })
+    });
+
+    if (result.ok) {
+      await showAlert(`Twitter cookies saved!\n\n${result.username ? `Authenticated as @${result.username}` : 'Saved to ~/.config/bird/config.json5'}`, '✅ Success');
+      // Enable the Twitter skill
+      await saveSkillConfig('twitter', { enabled: true });
+    } else {
+      await showAlert(`Failed: ${result.error}`, '❌ Error');
+    }
+  } catch (e) {
+    await showAlert(`Failed to save cookies: ${e.message}`, '❌ Error');
+  }
+}
+
 // Provider/Skill Config Functions
 async function saveProviderConfig(id, config) {
   try {
@@ -1573,6 +1660,16 @@ function renderSkills() {
       placeholder: 'op connect token...',
       helpUrl: 'https://developer.1password.com/docs/connect',
       helpText: '1Password Connect lets you access credentials securely. Set up a Connect server and generate an access token.'
+    },
+    {
+      id: 'twitter',
+      name: 'Twitter/X',
+      iconName: 'twitter',
+      desc: 'Post tweets, read timeline, mentions',
+      placeholder: '', // No API key needed
+      helpUrl: 'https://github.com/steipete/bird',
+      helpText: 'Uses bird CLI with cookie auth. Install: npm i -g @steipete/bird, then run "bird check" to authenticate.',
+      noCreds: true // Flag indicating no credentials input needed
     }
   ];
 
@@ -1629,18 +1726,53 @@ function renderSkills() {
                 <div class="skill-help">
                   <p>${s.helpText}</p>
                   <a href="${s.helpUrl}" target="_blank" rel="noopener" class="skill-link">
-                    ${icon('externalLink', 14)} Get API Key
+                    ${icon('externalLink', 14)} ${s.noCreds ? 'View Documentation' : 'Get API Key'}
                   </a>
                 </div>
                 
-                <div class="skill-form">
-                  <input type="password" class="form-input" 
-                         placeholder="${s.placeholder}"
-                         id="skill-${s.id}">
-                  <button class="btn btn-primary" onclick="saveSkill('${s.id}')">
-                    ${hasKey ? 'Update' : 'Connect'}
-                  </button>
-                </div>
+                ${s.noCreds ? `
+                  <div class="skill-help" style="margin-bottom: 16px;">
+                    <details style="cursor: pointer;">
+                      <summary style="font-weight: 500; color: var(--text-primary); margin-bottom: 8px;">
+                        📋 How to get Twitter cookies
+                      </summary>
+                      <ol style="margin: 12px 0; padding-left: 20px; font-size: 13px; line-height: 1.8;">
+                        <li>Open <a href="https://x.com" target="_blank" style="color: var(--accent);">x.com</a> and log in</li>
+                        <li>Open DevTools (F12 or Cmd+Option+I)</li>
+                        <li>Go to <strong>Application</strong> → <strong>Cookies</strong> → <strong>https://x.com</strong></li>
+                        <li>Find <code>auth_token</code> and <code>ct0</code></li>
+                        <li>Copy their values and paste below</li>
+                      </ol>
+                    </details>
+                  </div>
+                  <div class="skill-form" style="flex-direction: column; gap: 8px;">
+                    <input type="password" class="form-input" 
+                           placeholder="auth_token (40 chars)"
+                           id="skill-twitter-auth-token"
+                           style="font-family: monospace; font-size: 12px;">
+                    <input type="password" class="form-input" 
+                           placeholder="ct0 (160 chars)"
+                           id="skill-twitter-ct0"
+                           style="font-family: monospace; font-size: 12px;">
+                    <div style="display: flex; gap: 8px; margin-top: 4px;">
+                      <button class="btn btn-secondary" onclick="loadBirdConfig()" style="flex: 1;">
+                        ${icon('refresh', 14)} Load Existing
+                      </button>
+                      <button class="btn btn-primary" onclick="saveTwitterCookies()" style="flex: 1;">
+                        ${icon('check', 14)} Save Cookies
+                      </button>
+                    </div>
+                  </div>
+                ` : `
+                  <div class="skill-form">
+                    <input type="password" class="form-input" 
+                           placeholder="${s.placeholder}"
+                           id="skill-${s.id}">
+                    <button class="btn btn-primary" onclick="saveSkill('${s.id}')">
+                      ${hasKey ? 'Update' : 'Connect'}
+                    </button>
+                  </div>
+                `}
               </div>
             </div>
           `;
@@ -3617,3 +3749,6 @@ function getProviderIcon(type) {
 
 // Expose functions globally for inline onclick handlers (required for ES modules)
 window.clearChat = clearChat;
+window.loadBirdConfig = loadBirdConfig;
+window.saveTwitterCookies = saveTwitterCookies;
+window.checkBirdCLI = checkBirdCLI;

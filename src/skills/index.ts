@@ -11,6 +11,7 @@ import { weatherSkill } from "./weather.js";
 import { notionSkill } from "./notion.js";
 import { onePasswordSkill } from "./onepassword.js";
 import { appleNotesSkill, appleRemindersSkill } from "./apple.js";
+import { twitterSkill } from "./twitter.js";
 
 // Import Google skills
 import { googleCalendarSkill } from "../integrations/google/calendar.js";
@@ -32,6 +33,7 @@ export async function registerAllSkills(): Promise<void> {
     skillRegistry.register(weatherSkill);
     skillRegistry.register(notionSkill);
     skillRegistry.register(onePasswordSkill);
+    skillRegistry.register(twitterSkill);
 
     // Apple (macOS only)
     if (process.platform === "darwin") {
