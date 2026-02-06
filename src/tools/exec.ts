@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
+import { checkCommand, checkPath, auditCommand, createSandboxConfig } from "./sandbox.js";
 
 const ExecParamsSchema = z.object({
     command: z.string().describe("The command to execute"),
@@ -21,8 +22,8 @@ export const execTool: AgentTool<ExecParams> = {
     async execute(params: ExecParams, context: ToolCallContext): Promise<ToolResult> {
         const { command, cwd, timeout, stdin } = params;
 
-        // Security: Block dangerous commands in non-elevated mode
-        const dangerousPatterns = [
+        // Security: Always block the most dangerous patterns
+        const criticalPatterns = [
             /\brm\s+-rf\s+[\/~]/,
             /\bsudo\b/,
             /\bmkfs\b/,
@@ -30,13 +31,37 @@ export const execTool: AgentTool<ExecParams> = {
             />\s*\/dev\//,
         ];
 
-        if (!context.sandboxed) {
-            for (const pattern of dangerousPatterns) {
-                if (pattern.test(command)) {
+        for (const pattern of criticalPatterns) {
+            if (pattern.test(command)) {
+                return {
+                    success: false,
+                    content: "",
+                    error: "Command blocked: potentially dangerous operation detected",
+                };
+            }
+        }
+
+        // Enhanced sandbox checks when sandboxed
+        if (context.sandboxed) {
+            const sandboxConfig = createSandboxConfig(context.workspaceDir, true);
+            const cmdCheck = checkCommand(command, sandboxConfig);
+            auditCommand(command, cmdCheck);
+            if (!cmdCheck.allowed) {
+                return {
+                    success: false,
+                    content: "",
+                    error: cmdCheck.reason || "Command blocked by sandbox",
+                };
+            }
+
+            // Validate working directory
+            if (cwd) {
+                const pathCheck = checkPath(cwd, sandboxConfig);
+                if (!pathCheck.allowed) {
                     return {
                         success: false,
                         content: "",
-                        error: "Command blocked: potentially dangerous operation detected",
+                        error: pathCheck.reason || "Working directory outside sandbox",
                     };
                 }
             }

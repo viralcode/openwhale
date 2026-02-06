@@ -7,16 +7,23 @@
  * - CLI interface
  * 
  * Features:
- * - Iterative tool execution (up to 10 rounds)
+ * - Iterative tool execution (up to 25 rounds)
  * - Shared message history
  * - Real-time tool call events
+ * - Context compaction for long conversations
+ * - Full tool call transcript recording
+ * - Planning tool integration for multi-step tasks
+ * - Sandbox mode for safe command execution
  */
 
 import { randomUUID } from "crypto";
+import { hostname } from "os";
 import { registry } from "../providers/index.js";
+import type { Message, ToolResult as ProviderToolResult } from "../providers/base.js";
 import { toolRegistry } from "../tools/index.js";
 import { skillRegistry } from "../skills/base.js";
 import type { ToolCallContext } from "../tools/base.js";
+import { checkCommand, auditCommand, createSandboxConfig } from "../tools/sandbox.js";
 import {
     getOrCreateSessionLegacy,
     addMessage,
@@ -26,9 +33,12 @@ import {
     getSessionContext,
     recordUserMessage,
     recordAssistantMessage,
+    recordToolUse,
+    recordToolResult,
     finalizeExchange,
 } from "./session-manager.js";
 import { getMemoryContext } from "../memory/memory-files.js";
+import { compactIfNeeded } from "./compaction.js";
 
 // ============== TYPES ==============
 
@@ -191,7 +201,7 @@ export async function processMessage(
         onToolEnd?: (tool: ToolCallInfo) => void;
     } = {}
 ): Promise<ChatMessage> {
-    const { model = currentModel, maxIterations = 10, onToolStart, onToolEnd } = options;
+    const { model = currentModel, maxIterations = 25, onToolStart, onToolEnd } = options;
 
     // Ensure provider is available for the selected model
     const provider = registry.getProvider(model);
@@ -270,7 +280,7 @@ export async function processMessage(
     console.log(`[SessionService] Tools available: ${tools.length} (${allTools.length} base + 2 WhatsApp + ${skillTools.length} skill tools)`);
 
     // Build message history for context, filtering out empty messages
-    const msgHistory = dashboardMessages
+    const msgHistory: Message[] = dashboardMessages
         .slice(-20)
         .filter((m) => m.content && m.content.trim().length > 0)
         .map((m) => ({
@@ -282,7 +292,13 @@ export async function processMessage(
     const skillToolNames = skillTools.map(t => t.name);
     const baseToolNames = allTools.map(t => t.name);
 
+    const now = new Date();
+    const runtimeInfo = `OS: ${process.platform} ${process.arch} | Host: ${hostname()} | Node: ${process.version} | Time: ${now.toISOString()} | CWD: ${process.cwd()}`;
+
     const systemPrompt = `You are OpenWhale, an AI assistant with FULL tool access. You are authenticated and connected.
+
+## Runtime
+${runtimeInfo}
 
 ## Your Available Tools (${tools.length} total)
 Base Tools: ${baseToolNames.join(", ")}
@@ -293,8 +309,17 @@ Skill Tools: ${skillToolNames.length > 0 ? skillToolNames.join(", ") : "None con
 2. **NEVER ask for credentials, tokens, or API keys** - They are already configured.
 3. **NEVER say "I cannot access your account"** - You CAN. Just use the tool.
 4. When asked about GitHub, emails, calendar, weather, Twitter, etc. - CALL THE TOOL IMMEDIATELY.
+5. You have up to ${maxIterations} tool execution rounds. Use them wisely.
+
+## Multi-Step Tasks
+For complex tasks requiring 3+ tool calls:
+1. **Plan first**: Use the \`plan\` tool to create a step-by-step plan before executing.
+2. **Execute systematically**: Work through the plan step by step, marking steps complete.
+3. **Track progress**: Use \`plan\` with action \`complete_step\` after finishing each step.
+4. **Wrap up early**: If you're approaching the iteration limit, provide a summary of what's done and what remains.
 
 ## Tool Usage
+- Planning → use \`plan\` (create_plan, update_step, complete_step, get_plan, add_step)
 - GitHub repos → use \`github_repos\`
 - GitHub issues → use \`github_issues\`
 - Weather → use \`weather_current\` or \`weather_forecast\`
@@ -318,10 +343,12 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
         ? systemPrompt + "\n\n" + memoryContext
         : systemPrompt;
 
+    const sandboxConfig = createSandboxConfig(process.cwd(), false);
+
     const context: ToolCallContext = {
         sessionId,
         workspaceDir: process.cwd(),
-        sandboxed: false,
+        sandboxed: sandboxConfig.enabled,
     };
 
     try {
@@ -333,12 +360,23 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
         while (iterations < maxIterations) {
             iterations++;
 
+            // Compact history if it's getting too long
+            await compactIfNeeded(msgHistory, model, session.sessionId);
+
+            // Warn the AI if approaching the limit
+            if (iterations === Math.floor(maxIterations * 0.8)) {
+                msgHistory.push({
+                    role: "user",
+                    content: `[System] You have used ${iterations}/${maxIterations} iterations. Please wrap up your current task and provide a final response soon.`,
+                });
+            }
+
             const response = await registry.complete({
                 model,
                 messages: msgHistory,
                 systemPrompt: fullSystemPrompt,
                 tools: tools as any,
-                maxTokens: 4096,
+                maxTokens: 8192,
                 stream: false,
             });
 
@@ -362,7 +400,24 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
                 onToolStart?.(toolInfo);
 
                 try {
-                    console.log(`[SessionService] 🔧 Executing: ${tc.name}`);
+                    console.log(`[SessionService] 🔧 Executing: ${tc.name} (iteration ${iterations}/${maxIterations})`);
+
+                    // Record tool use to transcript
+                    recordToolUse(session.sessionId, tc.name, tc.arguments);
+
+                    // Sandbox check for exec commands
+                    if (tc.name === "exec" && sandboxConfig.enabled) {
+                        const cmd = (tc.arguments as { command?: string }).command || "";
+                        const sandboxCheck = checkCommand(cmd, sandboxConfig);
+                        auditCommand(cmd, sandboxCheck);
+                        if (!sandboxCheck.allowed) {
+                            toolInfo.result = sandboxCheck.reason;
+                            toolInfo.status = "error";
+                            recordToolResult(session.sessionId, tc.name, sandboxCheck.reason || "Blocked by sandbox", false);
+                            onToolEnd?.(toolInfo);
+                            continue;
+                        }
+                    }
 
                     // Handle WhatsApp-specific tools
                     if (tc.name === "whatsapp_send") {
@@ -402,24 +457,37 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
                     toolInfo.status = "error";
                 }
 
+                // Record tool result to transcript
+                recordToolResult(
+                    session.sessionId,
+                    tc.name,
+                    String(toolInfo.result).slice(0, 2000),
+                    toolInfo.status === "completed"
+                );
+
                 // Notify end
                 onToolEnd?.(toolInfo);
             }
 
-            // Add assistant response to history
-            const assistantContent = response.content
-                ? `${response.content}\n\n[Tools executed: ${response.toolCalls.map((t) => t.name).join(", ")}]`
-                : `[Tools executed: ${response.toolCalls.map((t) => t.name).join(", ")}]`;
-            msgHistory.push({ role: "assistant", content: assistantContent });
-
-            // Add tool results
-            const toolResultsStr = allToolCalls
-                .slice(-response.toolCalls.length)
-                .map((t) => `${t.name}: ${String(t.result).slice(0, 2000)}`)
-                .join("\n\n");
+            // Add assistant response with structured tool calls
             msgHistory.push({
-                role: "user",
-                content: `Tool results:\n${toolResultsStr}\n\nContinue or provide final response.`,
+                role: "assistant",
+                content: response.content || "",
+                toolCalls: response.toolCalls,
+            });
+
+            // Add tool results as proper "tool" role messages
+            const toolResultMessages: ProviderToolResult[] = allToolCalls
+                .slice(-response.toolCalls.length)
+                .map((t) => ({
+                    toolCallId: t.id,
+                    content: String(t.result).slice(0, 10000),
+                    isError: t.status === "error",
+                }));
+            msgHistory.push({
+                role: "tool",
+                content: "",
+                toolResults: toolResultMessages,
             });
         }
 

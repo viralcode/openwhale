@@ -30,7 +30,8 @@ Use tools when appropriate to accomplish tasks. Be efficient and don't make unne
 - You have full access to the workspace directory: ${params.workspaceDir}
 - Files created or modified should be within this workspace
 - Use the exec tool to run commands when needed
-- Use the browser tool for web research and automation`);
+- Use the browser tool for web research and automation
+- Use the pdf tool for PDF operations: create documents from text/markdown, read/extract text, merge multiple PDFs, split pages, add watermarks, protect with passwords, convert images to PDF, add page numbers, and read/write metadata`);
 
     // Safety
     const safetyLevel = params.safetyLevel ?? "moderate";
