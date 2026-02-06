@@ -464,6 +464,14 @@ async function loadProviders() {
   try {
     const data = await api('/providers');
     state.providers = data.providers || [];
+
+    // Set currentModel from the enabled provider
+    const enabledProvider = state.providers.find(p => p.enabled && p.hasKey);
+    if (enabledProvider && enabledProvider.models && enabledProvider.models.length > 0) {
+      // Use the first model from the enabled provider as default
+      state.currentModel = enabledProvider.models[0];
+      console.log('[Dashboard] Using model from enabled provider:', state.currentModel);
+    }
   } catch (e) { console.error(e); }
 }
 
@@ -526,7 +534,7 @@ async function sendMessage(content) {
   });
 
   state.isSending = true;
-  render();
+  updateChatMessages(); // Use targeted update instead of full render
   scrollToBottom();
 
   try {
@@ -556,8 +564,56 @@ async function sendMessage(content) {
   }
 
   state.isSending = false;
-  render();
+  updateChatMessages(); // Use targeted update instead of full render
   scrollToBottom();
+}
+
+// Targeted update for chat messages only (avoids full re-render flicker)
+function updateChatMessages() {
+  const messagesInner = document.querySelector('.chat-messages-inner');
+  if (!messagesInner) {
+    // Fall back to full render if element not found
+    render();
+    return;
+  }
+
+  // Build the messages HTML
+  let messagesHtml = '';
+  if (state.messages.length === 0) {
+    messagesHtml = `
+      <div class="empty-state">
+        <div class="empty-state-icon" style="font-size: 64px;">🐋</div>
+        <div class="empty-state-title">How can I help you today?</div>
+        <p>I can help you manage your channels, write code, or just chat.</p>
+      </div>
+    `;
+  } else {
+    messagesHtml = state.messages.map(renderMessage).join('');
+  }
+
+  // Add thinking indicator if sending
+  if (state.isSending) {
+    messagesHtml += `
+      <div class="message assistant thinking-message" id="thinking-indicator">
+        <div class="message-avatar" style="font-size: 18px;">🐋</div>
+        <div class="message-body">
+          <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  messagesInner.innerHTML = messagesHtml;
+
+  // Update send button state
+  const sendBtn = document.getElementById('send-btn');
+  if (sendBtn) {
+    sendBtn.disabled = state.isSending;
+  }
 }
 
 function scrollToBottom() {

@@ -1050,8 +1050,7 @@ select.form-input option {
 
 .thinking-message {
   margin-top: 8px;
-  opacity: 0;
-  animation: fadeIn 0.3s forwards;
+  opacity: 1;
 }
 
 .thinking-message .message-body {

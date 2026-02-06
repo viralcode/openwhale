@@ -51,6 +51,7 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
                 apiKey: p.apiKey ?? undefined,
                 baseUrl: p.baseUrl ?? undefined
             });
+            console.log(`[Dashboard] Loaded provider ${p.type}: enabled=${p.enabled}, hasKey=${!!p.apiKey}`);
             // Set environment variables for AI providers
             if (p.apiKey) {
                 if (p.type === "anthropic") process.env.ANTHROPIC_API_KEY = p.apiKey;

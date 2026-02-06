@@ -41,7 +41,7 @@ async function main() {
     initializeProviders();
 
     // Register all skills - env vars should now be set from loadConfigsFromDB
-    registerAllSkills();
+    await registerAllSkills();
 
     // Initialize channels (Telegram, Discord, Slack, etc.)
     await initializeChannels(db, config);

@@ -18,12 +18,15 @@ import { gmailSkill } from "../integrations/google/gmail.js";
 import { googleDriveSkill } from "../integrations/google/drive.js";
 import { googleTasksSkill } from "../integrations/google/tasks.js";
 
+// Import markdown skill loader
+import { loadAllMarkdownSkills } from "./markdown-loader.js";
+
 import { skillRegistry } from "./base.js";
 
 /**
  * Register all available skills
  */
-export function registerAllSkills(): void {
+export async function registerAllSkills(): Promise<void> {
     // Core skills
     skillRegistry.register(githubSkill);
     skillRegistry.register(weatherSkill);
@@ -41,6 +44,19 @@ export function registerAllSkills(): void {
     skillRegistry.register(gmailSkill);
     skillRegistry.register(googleDriveSkill);
     skillRegistry.register(googleTasksSkill);
+
+    // Load markdown skills (OpenClaw-style SKILL.md files)
+    try {
+        const markdownSkills = await loadAllMarkdownSkills();
+        for (const skill of markdownSkills) {
+            skillRegistry.register(skill);
+        }
+        if (markdownSkills.length > 0) {
+            console.log(`[Skills] Loaded ${markdownSkills.length} markdown skills`);
+        }
+    } catch (err) {
+        console.error("[Skills] Failed to load markdown skills:", err);
+    }
 
     console.log(`[Skills] Registered ${skillRegistry.list().length} skills`);
 }
