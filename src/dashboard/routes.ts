@@ -28,6 +28,7 @@ import { registry } from "../providers/index.js";
 import { createAnthropicProvider } from "../providers/anthropic.js";
 import { createOpenAIProvider, createDeepSeekProvider } from "../providers/openai-compatible.js";
 import { createGoogleProvider } from "../providers/google.js";
+import { getCanvasHTML, injectCanvasScripts, canvasPush, canvasReset, canvasEval } from "../canvas/index.js";
 
 const execAsync = promisify(exec);
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -474,6 +475,35 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
     dashboard.get("/assets/main.js", (c) => {
         const js = readFileSync(join(__dirname, "main.js"), "utf-8");
         return c.text(js, 200, { "Content-Type": "application/javascript" });
+    });
+
+    // ============== CANVAS / A2UI ==============
+
+    dashboard.get("/__openwhale__/canvas", (c) => {
+        const html = injectCanvasScripts(getCanvasHTML());
+        return c.html(html);
+    });
+
+    dashboard.get("/__openwhale__/a2ui", (c) => {
+        const html = injectCanvasScripts(getCanvasHTML());
+        return c.html(html);
+    });
+
+    dashboard.post("/__openwhale__/canvas/push", async (c) => {
+        const { html } = await c.req.json();
+        canvasPush(html);
+        return c.json({ ok: true });
+    });
+
+    dashboard.post("/__openwhale__/canvas/reset", (c) => {
+        canvasReset();
+        return c.json({ ok: true });
+    });
+
+    dashboard.post("/__openwhale__/canvas/eval", async (c) => {
+        const { code } = await c.req.json();
+        canvasEval(code);
+        return c.json({ ok: true });
     });
 
     // ============== SETUP WIZARD ==============

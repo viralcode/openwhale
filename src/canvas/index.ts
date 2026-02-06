@@ -77,21 +77,30 @@ export function injectCanvasScripts(html: string): string {
     globalThis.OpenWhale.postMessage = postToAgent;
     globalThis.OpenWhale.sendUserAction = sendUserAction;
 
-    // Live reload via WebSocket
-    try {
-        const proto = location.protocol === "https:" ? "wss" : "ws";
-        const ws = new WebSocket(proto + "://" + location.host + "${CANVAS_WS_PATH}");
-        ws.onmessage = (ev) => {
-            const data = JSON.parse(ev.data);
-            if (data.type === "reload") location.reload();
-            if (data.type === "eval" && data.code) {
-                try { eval(data.code); } catch (e) { console.error("Canvas eval error:", e); }
+    // Polling-based live reload (until WebSocket is wired)
+    let lastContent = document.documentElement.outerHTML;
+    async function pollForUpdates() {
+        try {
+            const res = await fetch(window.location.href, { cache: 'no-store' });
+            const newContent = await res.text();
+            if (newContent !== lastContent && !newContent.includes('404')) {
+                lastContent = newContent;
+                // Check if content actually changed meaningfully
+                const parser = new DOMParser();
+                const newDoc = parser.parseFromString(newContent, 'text/html');
+                const newBody = newDoc.body.innerHTML;
+                if (newBody !== document.body.innerHTML) {
+                    document.body.innerHTML = newBody;
+                    console.log('[Canvas] Content updated via polling');
+                }
             }
-            if (data.type === "push" && data.html) {
-                document.body.innerHTML = data.html;
-            }
-        };
-    } catch {}
+        } catch (e) {
+            console.log('[Canvas] Poll failed:', e);
+        }
+        setTimeout(pollForUpdates, 2000); // Poll every 2 seconds
+    }
+    setTimeout(pollForUpdates, 2000);
+    console.log('[Canvas] Live polling started');
 })();
 </script>
 `.trim();
