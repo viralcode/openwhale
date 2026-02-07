@@ -140,9 +140,7 @@ Connect to your favorite services — the AI handles the API calls.
 | **Apple Notes/Reminders** | Native macOS integration |
 | **Twitter/X** | Post, search, timeline, mentions, follow |
 
-<p align="center">
-  <img src="images/api-skills.png" alt="API Skills" width="800" />
-</p>
+
 
 ---
 
