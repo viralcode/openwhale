@@ -1112,6 +1112,12 @@ function formatMarkdown(text) {
     return tableHtml;
   });
   html = html.replace(/\n/g, '<br>');
+  // Collapse 3+ consecutive <br> into max 2 (paragraph gap)
+  html = html.replace(/(<br>){3,}/gi, '<br><br>');
+  // Remove <br> immediately after block elements
+  html = html.replace(/(<\/(h[1-4]|pre|li|hr|div|table)>)(\s*<br>)+/gi, '$1');
+  // Remove <br> immediately before block elements
+  html = html.replace(/(<br>)+(\s*<(h[1-4]|pre|li|hr|div|table))/gi, '$2');
   return html;
 }
 
