@@ -1567,14 +1567,14 @@ Be proactive - if the user asks you to research something, actually GO TO websit
 
 async function startAgenticChat() {
     console.log(c("bold", `🤖 Starting AGENTIC chat with ${currentModel}...\n`));
-    console.log(c("dim", "Claude now has access to tools: exec, file, web_fetch, whatsapp_send, and more!"));
+    console.log(c("dim", "AI now has access to tools: exec, file, web_fetch, whatsapp_send, and more!"));
     console.log(c("dim", "Try: 'send a hello message to my whatsapp' or 'list files in /tmp'\n"));
     console.log(c("dim", "Type 'exit' to quit, '/model <name>' to change models, '/clear' to reset\n"));
 
-    // Get the Anthropic provider (it supports tools)
-    const provider = registry.getProvider(currentModel) as AnthropicProvider;
+    // Verify a provider is available for the current model
+    const provider = registry.getProvider(currentModel);
     if (!provider) {
-        console.log(c("red", "Anthropic provider not available. Set ANTHROPIC_API_KEY."));
+        console.log(c("red", `No provider available for model: ${currentModel}. Check your API keys.`));
         return;
     }
 
@@ -1697,111 +1697,44 @@ Be helpful and proactive. USE YOUR TOOLS to accomplish tasks!`;
             try {
                 // Agentic loop - keep going until no more tool calls
                 let iterations = 0;
-                const maxIterations = 10;
+                const maxIterations = 25; // Match shared-ai-processor
+
+                // Build tools list dynamically from registry (like shared-ai-processor)
+                const allTools = toolRegistry.getAll();
+                const tools = allTools.map((tool) => ({
+                    name: tool.name,
+                    description: tool.description,
+                    parameters: toolRegistry.zodToJsonSchema(tool.parameters),
+                }));
+
+                // Add skill tools (GitHub, Gmail, Calendar, etc.)
+                const skillTools = skillRegistry.getAllTools();
+                for (const skillTool of skillTools) {
+                    tools.push({
+                        name: skillTool.name,
+                        description: skillTool.description,
+                        parameters: skillTool.parameters || { type: "object", properties: {}, required: [] },
+                    });
+                }
+
+                console.log(c("dim", `   Tools: ${tools.length} (${allTools.length} base + ${skillTools.length} skills)\n`));
 
                 while (iterations < maxIterations) {
                     iterations++;
 
-                    // Make the API call with tools
-                    const response = await provider.complete({
+                    // Make the API call using registry.complete() - same as shared-ai-processor
+                    const response = await registry.complete({
                         model: currentModel,
-                        messages: conversationHistory,
+                        messages: conversationHistory as any,
                         systemPrompt,
-                        maxTokens: 4096,
-                        tools: [
-                            {
-                                name: "exec",
-                                description: "Execute a shell command",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        command: { type: "string", description: "The shell command to execute" },
-                                        timeout: { type: "number", description: "Timeout in ms (default 30000)" },
-                                    },
-                                    required: ["command"],
-                                },
-                            },
-                            {
-                                name: "file",
-                                description: "Read or write files",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        action: { type: "string", enum: ["read", "write", "list"], description: "Action to perform" },
-                                        path: { type: "string", description: "File or directory path" },
-                                        content: { type: "string", description: "Content to write (for write action)" },
-                                    },
-                                    required: ["action", "path"],
-                                },
-                            },
-                            {
-                                name: "web_fetch",
-                                description: "Fetch a URL",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        url: { type: "string", description: "URL to fetch" },
-                                        method: { type: "string", enum: ["GET", "POST"], description: "HTTP method" },
-                                    },
-                                    required: ["url"],
-                                },
-                            },
-                            {
-                                name: "whatsapp_send",
-                                description: "Send a WhatsApp message",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        to: { type: "string", description: "Phone number with country code (e.g., +14378762880)" },
-                                        message: { type: "string", description: "Message to send" },
-                                    },
-                                    required: ["message"],
-                                },
-                            },
-                            {
-                                name: "memory",
-                                description: "Store or recall information",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        action: { type: "string", enum: ["remember", "recall", "list"], description: "Action" },
-                                        key: { type: "string", description: "Memory key" },
-                                        content: { type: "string", description: "Content to remember" },
-                                    },
-                                    required: ["action"],
-                                },
-                            },
-                            {
-                                name: "code_exec",
-                                description: "Execute dynamically generated code. Write and run JavaScript/TypeScript/Python code on-the-fly when no existing tool meets your needs. This gives UNLIMITED capabilities - you can process data, make API calls, parse files, calculate anything, create visualizations, and more!",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        code: { type: "string", description: "The JavaScript/TypeScript/Python code to execute" },
-                                        language: { type: "string", enum: ["javascript", "typescript", "python"], description: "Programming language (default: javascript)" },
-                                        description: { type: "string", description: "Brief description of what this code does" },
-                                    },
-                                    required: ["code"],
-                                },
-                            },
-                            {
-                                name: "screenshot",
-                                description: "Capture a screenshot of the user's screen. Use this to SEE what's displayed on their computer. After capturing, the image will be sent to you for vision analysis. You can describe what you see, find UI elements, read text from the screen, etc.",
-                                parameters: {
-                                    type: "object",
-                                    properties: {
-                                        region: { type: "string", enum: ["fullscreen", "window", "selection"], description: "What to capture (default: fullscreen)" },
-                                        delay: { type: "number", description: "Delay in seconds before capture" },
-                                    },
-                                    required: [],
-                                },
-                            },
-                        ],
+                        tools: tools as any,
+                        maxTokens: 8192,
+                        stream: false,
                     });
 
                     // Print assistant's text response
                     if (response.content) {
-                        console.log(c("cyan", "\nClaude: ") + formatMarkdown(response.content));
+                        console.log(c("cyan", "\nAI: ") + formatMarkdown(response.content));
                     }
 
                     // Check for tool calls
