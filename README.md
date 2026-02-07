@@ -14,6 +14,7 @@
 
 <p align="center">
   <strong>🚧 Active Development</strong> — This project is being actively built. Expect frequent updates!<br/>
+  <strong>🐢 Long-Running Tasks</strong> — Handles complex, multi-step tasks that run for hours<br/>
   <strong>🌐 OpenWhale Website</strong> — Coming soon<br/>
   <strong>☁️ OpenWhale Hosting</strong> — Managed hosting coming soon
 </p>
@@ -33,7 +34,7 @@ OpenWhale is a **self-extensible AI assistant** that doesn't just chat — it ta
 Think of it as **Claude, GPT-4, or DeepSeek with arms and legs**.
 
 <p align="center">
-  <img src="images/dashboardhome.png" alt="OpenWhale Dashboard" width="800" />
+  <img src="images/mainpage.png" alt="OpenWhale Dashboard" width="800" />
 </p>
 
 ---
@@ -57,6 +58,11 @@ Switch between any major AI model on the fly. One assistant, unlimited model cho
 <p align="center">
   <img src="images/aiproviders.png" alt="AI Providers" width="600" />
 </p>
+
+---
+
+### 🐢 Long-Horizon Reasoning
+Capable of handling long-running, complex tasks with multi-step reasoning. It plans, executes, and verifies its own work, autonomously overcoming errors and obstacles.
 
 ---
 
