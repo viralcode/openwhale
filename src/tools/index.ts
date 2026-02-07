@@ -18,6 +18,19 @@ import { planningTool } from "./planning-tool.js";
 import { pdfTool } from "./pdf.js";
 import { imessageTool } from "./imessage.js";
 import { skillCreatorTool } from "./skill-creator.js";
+// New tools
+import { qrCodeTool } from "./qr-code.js";
+import { spreadsheetTool } from "./spreadsheet.js";
+import { calendarEventTool } from "./calendar-event.js";
+import { clipboardTool } from "./clipboard.js";
+import { shortcutsTool } from "./apple-shortcuts.js";
+import { systemInfoTool } from "./system-info.js";
+import { zipTool } from "./zip.js";
+import { emailSendTool } from "./email-send.js";
+import { gitTool } from "./git.js";
+import { dockerTool } from "./docker.js";
+import { sshTool } from "./ssh.js";
+import { dbQueryTool } from "./db-query.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -44,6 +57,20 @@ for (const tool of cameraTools) {
     toolRegistry.register(tool as any);
 }
 
+// Register new tools
+toolRegistry.register(qrCodeTool);
+toolRegistry.register(spreadsheetTool);
+toolRegistry.register(calendarEventTool);
+toolRegistry.register(clipboardTool);
+toolRegistry.register(shortcutsTool);
+toolRegistry.register(systemInfoTool);
+toolRegistry.register(zipTool);
+toolRegistry.register(emailSendTool);
+toolRegistry.register(gitTool);
+toolRegistry.register(dockerTool);
+toolRegistry.register(sshTool);
+toolRegistry.register(dbQueryTool);
+
 export { toolRegistry } from "./base.js";
 export type { AgentTool, ToolCallContext, ToolResult, ToolRegistry } from "./base.js";
 export { execTool } from "./exec.js";
@@ -64,3 +91,16 @@ export { pdfTool } from "./pdf.js";
 export { planningTool } from "./planning-tool.js";
 export { imessageTool } from "./imessage.js";
 export { skillCreatorTool } from "./skill-creator.js";
+export { qrCodeTool } from "./qr-code.js";
+export { spreadsheetTool } from "./spreadsheet.js";
+export { calendarEventTool } from "./calendar-event.js";
+export { clipboardTool } from "./clipboard.js";
+export { shortcutsTool } from "./apple-shortcuts.js";
+export { systemInfoTool } from "./system-info.js";
+export { zipTool } from "./zip.js";
+export { emailSendTool } from "./email-send.js";
+export { gitTool } from "./git.js";
+export { dockerTool } from "./docker.js";
+export { sshTool } from "./ssh.js";
+export { dbQueryTool } from "./db-query.js";
+

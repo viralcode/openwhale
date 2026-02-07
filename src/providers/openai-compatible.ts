@@ -1,6 +1,24 @@
 import OpenAI from "openai";
 import type { AIProvider, CompletionRequest, CompletionResponse, StreamEvent, Message, Tool } from "./base.js";
 
+/** Safely parse tool call arguments - LLMs sometimes return malformed JSON */
+function safeParseArgs(raw: string): Record<string, unknown> {
+    try {
+        return JSON.parse(raw);
+    } catch {
+        // Try to fix common issues: trailing commas, single quotes
+        try {
+            const fixed = raw
+                .replace(/,\s*([}\]])/g, '$1')  // trailing commas
+                .replace(/'/g, '"');             // single quotes
+            return JSON.parse(fixed);
+        } catch {
+            console.warn('[Provider] Failed to parse tool arguments, using raw string:', raw.slice(0, 200));
+            return { input: raw };
+        }
+    }
+}
+
 export class OpenAICompatibleProvider implements AIProvider {
     name: string;
     type = "openai-compatible";
@@ -118,7 +136,7 @@ export class OpenAICompatibleProvider implements AIProvider {
         const toolCalls = choice.message.tool_calls?.map(tc => ({
             id: tc.id,
             name: tc.function.name,
-            arguments: JSON.parse(tc.function.arguments),
+            arguments: safeParseArgs(tc.function.arguments),
         }));
 
         return {
@@ -162,7 +180,7 @@ export class OpenAICompatibleProvider implements AIProvider {
                                 toolCall: {
                                     id: currentToolCall.id,
                                     name: currentToolCall.name,
-                                    arguments: JSON.parse(currentToolCall.args || "{}"),
+                                    arguments: safeParseArgs(currentToolCall.args || "{}"),
                                 },
                             };
                         }
@@ -187,7 +205,7 @@ export class OpenAICompatibleProvider implements AIProvider {
                         toolCall: {
                             id: currentToolCall.id,
                             name: currentToolCall.name,
-                            arguments: JSON.parse(currentToolCall.args || "{}"),
+                            arguments: safeParseArgs(currentToolCall.args || "{}"),
                         },
                     };
                 }

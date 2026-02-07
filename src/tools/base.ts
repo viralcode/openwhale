@@ -111,19 +111,61 @@ export class ToolRegistry {
     }
 
     private zodFieldToJson(field: z.ZodType): Record<string, unknown> {
-        if (field instanceof z.ZodString) return { type: "string" };
-        if (field instanceof z.ZodNumber) return { type: "number" };
-        if (field instanceof z.ZodBoolean) return { type: "boolean" };
-        if (field instanceof z.ZodArray) {
-            return { type: "array", items: this.zodFieldToJson(field.element) };
-        }
+        // Unwrap wrappers first
         if (field instanceof z.ZodOptional) {
             return this.zodFieldToJson(field.unwrap());
         }
-        if (field instanceof z.ZodEnum) {
-            return { type: "string", enum: field.options };
+        if (field instanceof z.ZodDefault) {
+            const inner = this.zodFieldToJson(field.removeDefault());
+            const def = field._def.defaultValue();
+            if (def !== undefined) inner.default = def;
+            return inner;
         }
-        return { type: "string" };
+        if (field instanceof z.ZodNullable) {
+            return this.zodFieldToJson(field.unwrap());
+        }
+
+        // Get description if present
+        const desc = field.description;
+        const base: Record<string, unknown> = {};
+        if (desc) base.description = desc;
+
+        // Primitives
+        if (field instanceof z.ZodString) return { ...base, type: "string" };
+        if (field instanceof z.ZodNumber) return { ...base, type: "number" };
+        if (field instanceof z.ZodBoolean) return { ...base, type: "boolean" };
+
+        // Enum
+        if (field instanceof z.ZodEnum) {
+            return { ...base, type: "string", enum: field.options };
+        }
+
+        // Array
+        if (field instanceof z.ZodArray) {
+            return { ...base, type: "array", items: this.zodFieldToJson(field.element) };
+        }
+
+        // Record (e.g. z.record(z.string()))
+        if (field instanceof z.ZodRecord) {
+            return { ...base, type: "object", additionalProperties: this.zodFieldToJson(field.element) };
+        }
+
+        // Nested object
+        if (field instanceof z.ZodObject) {
+            const shape = field.shape;
+            const properties: Record<string, unknown> = {};
+            const required: string[] = [];
+            for (const [key, value] of Object.entries(shape)) {
+                const zodField = value as z.ZodType;
+                properties[key] = this.zodFieldToJson(zodField);
+                if (!zodField.isOptional()) {
+                    required.push(key);
+                }
+            }
+            return { ...base, type: "object", properties, ...(required.length ? { required } : {}) };
+        }
+
+        return { ...base, type: "string" };
     }
 }
 
