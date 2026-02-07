@@ -2,6 +2,7 @@ import { z } from "zod";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { PDFDocument, StandardFonts, rgb, degrees, PageSizes } from "pdf-lib";
+import { chromium } from "playwright";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
 
 // ─── Page size lookup ───────────────────────────────────────────────────────
@@ -21,6 +22,7 @@ const PdfActionSchema = z.discriminatedUnion("action", [
         action: z.literal("create"),
         outputPath: z.string().describe("Absolute path for the output PDF"),
         content: z.string().describe("Text or markdown-like content to render"),
+        htmlContent: z.string().optional().describe("Raw HTML to render as PDF — if provided, content is ignored and this HTML is used directly"),
         title: z.string().optional().describe("PDF document title"),
         author: z.string().optional().describe("PDF author name"),
         fontSize: z.number().optional().default(12).describe("Base font size (default 12)"),
@@ -140,43 +142,308 @@ function parsePageRange(range: string, maxPages: number): number[] {
     return Array.from(pages).sort((a, b) => a - b);
 }
 
-// ─── Helper: wrap text into lines that fit a width ──────────────────────────
-function wrapText(text: string, maxWidth: number, font: any, fontSize: number): string[] {
-    const lines: string[] = [];
-    const paragraphs = text.split("\n");
 
-    for (const paragraph of paragraphs) {
-        if (paragraph.trim() === "") {
-            lines.push("");
+
+// ─── Helper: convert markdown content to HTML ───────────────────────────────
+function contentToHtml(content: string): string {
+    let html = content;
+
+    // Protect code blocks first
+    const codeBlocks: string[] = [];
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
+        const idx = codeBlocks.length;
+        codeBlocks.push(`<pre><code class="lang-${lang || 'text'}">${escapeHtmlChars(code.trimEnd())}</code></pre>`);
+        return `\x00CODEBLOCK${idx}\x00`;
+    });
+
+    // Split into lines for block-level processing
+    const lines = html.split('\n');
+    const result: string[] = [];
+    let inList: 'ul' | 'ol' | null = null;
+    let inTable = false;
+    let tableRows: string[] = [];
+
+    const flushTable = () => {
+        if (!inTable || tableRows.length < 2) { inTable = false; tableRows = []; return; }
+        const sepIdx = tableRows.findIndex(r => /^\|[\s\-:|]+\|$/.test(r.trim()));
+        if (sepIdx < 0) {
+            // Not a valid table, output raw
+            result.push(...tableRows);
+            inTable = false; tableRows = [];
+            return;
+        }
+        const parseRow = (row: string) => row.replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+        const headers = tableRows.slice(0, sepIdx);
+        const body = tableRows.slice(sepIdx + 1);
+        let t = '<table>';
+        if (headers.length > 0) {
+            t += '<thead>';
+            for (const h of headers) t += '<tr>' + parseRow(h).map(c => `<th>${inlineFormat(c)}</th>`).join('') + '</tr>';
+            t += '</thead>';
+        }
+        if (body.length > 0) {
+            t += '<tbody>';
+            for (const b of body) t += '<tr>' + parseRow(b).map(c => `<td>${inlineFormat(c)}</td>`).join('') + '</tr>';
+            t += '</tbody>';
+        }
+        t += '</table>';
+        result.push(t);
+        inTable = false; tableRows = [];
+    };
+
+    const flushList = () => {
+        if (inList) { result.push(`</${inList}>`); inList = null; }
+    };
+
+    for (const line of lines) {
+        const trimmed = line.trim();
+
+        // Table rows
+        if (/^\|.+\|$/.test(trimmed)) {
+            flushList();
+            inTable = true;
+            tableRows.push(trimmed);
+            continue;
+        } else if (inTable) {
+            flushTable();
+        }
+
+        // Empty lines
+        if (trimmed === '') {
+            flushList();
+            result.push('<br>');
             continue;
         }
 
-        const words = paragraph.split(/\s+/);
-        let currentLine = "";
-
-        for (const word of words) {
-            const testLine = currentLine ? `${currentLine} ${word}` : word;
-            const width = font.widthOfTextAtSize(testLine, fontSize);
-
-            if (width > maxWidth && currentLine) {
-                lines.push(currentLine);
-                currentLine = word;
-            } else {
-                currentLine = testLine;
-            }
+        // Headings
+        const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)$/);
+        if (headingMatch) {
+            flushList();
+            const level = headingMatch[1].length;
+            result.push(`<h${level}>${inlineFormat(headingMatch[2])}</h${level}>`);
+            continue;
         }
 
-        if (currentLine) lines.push(currentLine);
+        // Horizontal rules
+        if (/^(-{3,}|_{3,}|\*{3,})$/.test(trimmed)) {
+            flushList();
+            result.push('<hr>');
+            continue;
+        }
+
+        // Unordered list
+        const ulMatch = trimmed.match(/^[-*+]\s+(.+)$/);
+        if (ulMatch) {
+            if (inList !== 'ul') { flushList(); result.push('<ul>'); inList = 'ul'; }
+            result.push(`<li>${inlineFormat(ulMatch[1])}</li>`);
+            continue;
+        }
+
+        // Ordered list
+        const olMatch = trimmed.match(/^\d+\.\s+(.+)$/);
+        if (olMatch) {
+            if (inList !== 'ol') { flushList(); result.push('<ol>'); inList = 'ol'; }
+            result.push(`<li>${inlineFormat(olMatch[1])}</li>`);
+            continue;
+        }
+
+        // Regular paragraph
+        flushList();
+        result.push(`<p>${inlineFormat(trimmed)}</p>`);
     }
 
-    return lines;
+    flushList();
+    if (inTable) flushTable();
+
+    // Restore code blocks
+    let output = result.join('\n');
+    output = output.replace(/\x00CODEBLOCK(\d+)\x00/g, (_m, idx) => codeBlocks[Number(idx)]);
+
+    // Collapse multiple <br>
+    output = output.replace(/(<br>\s*){3,}/g, '<br><br>');
+
+    return output;
+}
+
+function escapeHtmlChars(str: string): string {
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function inlineFormat(text: string): string {
+    return text
+        .replace(/`([^`]+)`/g, '<code>$1</code>')
+        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+        .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+        .replace(/_([^_]+)_/g, '<em>$1</em>');
+}
+
+// ─── Build a complete styled HTML document ──────────────────────────────────
+function buildStyledDocument(body: string, title?: string): string {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>${title || 'Document'}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #1a1a2e;
+    background: #ffffff;
+  }
+
+  h1 {
+    font-size: 22pt;
+    font-weight: 700;
+    color: #0f0f23;
+    margin: 24px 0 12px 0;
+    padding-bottom: 8px;
+    border-bottom: 2px solid #3b5bdb;
+  }
+
+  h2 {
+    font-size: 16pt;
+    font-weight: 600;
+    color: #1a1a3e;
+    margin: 20px 0 8px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  h3 {
+    font-size: 13pt;
+    font-weight: 600;
+    color: #2d2d5e;
+    margin: 16px 0 6px 0;
+  }
+
+  h4 {
+    font-size: 11pt;
+    font-weight: 600;
+    color: #3d3d6e;
+    margin: 12px 0 4px 0;
+  }
+
+  p {
+    margin: 4px 0;
+    line-height: 1.65;
+  }
+
+  strong { font-weight: 600; }
+
+  code {
+    background: #f1f3f5;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-family: 'JetBrains Mono', 'Fira Code', 'SF Mono', Consolas, monospace;
+    color: #c92a2a;
+  }
+
+  pre {
+    background: #1e1e2e;
+    color: #cdd6f4;
+    padding: 16px 20px;
+    border-radius: 8px;
+    overflow-x: auto;
+    margin: 12px 0;
+    font-size: 9.5pt;
+    line-height: 1.5;
+  }
+
+  pre code {
+    background: none;
+    color: inherit;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 16px 0;
+    font-size: 10pt;
+    page-break-inside: auto;
+  }
+
+  thead {
+    background: linear-gradient(135deg, #364fc7, #4263eb);
+    color: #ffffff;
+  }
+
+  th {
+    padding: 10px 14px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 9pt;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+  }
+
+  td {
+    padding: 8px 14px;
+    border-bottom: 1px solid #e9ecef;
+    vertical-align: top;
+  }
+
+  tbody tr:nth-child(even) { background: #f8f9fa; }
+  tbody tr:hover { background: #e8f4fd; }
+
+  tr { page-break-inside: avoid; }
+
+  ul, ol {
+    margin: 6px 0 6px 24px;
+    line-height: 1.7;
+  }
+
+  li {
+    margin: 3px 0;
+    padding-left: 4px;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid #dee2e6;
+    margin: 20px 0;
+  }
+
+  br { line-height: 0.6; }
+
+  /* Print tweaks */
+  @media print {
+    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    h1, h2, h3 { page-break-after: avoid; }
+    table, figure, pre { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+${body}
+</body>
+</html>`;
+}
+
+// ─── Helper: get page count of a PDF file ───────────────────────────────────
+async function getPageCount(filePath: string): Promise<number> {
+    try {
+        const buffer = await fs.readFile(filePath);
+        const pdfDoc = await PDFDocument.load(buffer);
+        return pdfDoc.getPageCount();
+    } catch {
+        return 1;
+    }
 }
 
 // ─── Main tool implementation ───────────────────────────────────────────────
 export const pdfTool: AgentTool<PdfAction> = {
     name: "pdf",
     description: `Advanced PDF toolkit. Actions:
-• create — Generate PDFs from text with headers, footers, styling, and page size options
+• create — Generate beautifully styled PDFs from markdown/text content (auto-converted to HTML with professional styling). Optionally pass htmlContent for full control over layout. Supports tables, headings, lists, code blocks with gorgeous formatting.
 • read — Extract text from PDFs (all pages or specific range)
 • metadata — Read or write PDF metadata (title, author, subject, keywords)
 • merge — Combine multiple PDFs into one
@@ -210,121 +477,48 @@ export const pdfTool: AgentTool<PdfAction> = {
                     const outPath = validatePath(params.outputPath);
                     await ensureDir(outPath);
 
-                    const pdfDoc = await PDFDocument.create();
-                    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-                    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-                    const [pageW, pageH] = PAGE_SIZE_MAP[params.pageSize ?? "a4"];
-
-                    // Set metadata
-                    if (params.title) pdfDoc.setTitle(params.title);
-                    if (params.author) pdfDoc.setAuthor(params.author);
-                    pdfDoc.setCreator("OpenWhale PDF Tool");
-                    pdfDoc.setProducer("OpenWhale");
-                    pdfDoc.setCreationDate(new Date());
-
-                    const margin = 50;
-                    const usableWidth = pageW - margin * 2;
-                    const headerHeight = params.header ? 30 : 0;
-                    const footerHeight = params.footer ? 30 : 0;
-
-                    // Parse content: detect markdown-like headings
-                    const contentLines = params.content.split("\n");
-                    const renderItems: Array<{ text: string; isHeading: boolean; headingLevel: number }> = [];
-
-                    for (const line of contentLines) {
-                        const headingMatch = line.match(/^(#{1,3})\s+(.+)$/);
-                        if (headingMatch) {
-                            renderItems.push({
-                                text: headingMatch[2],
-                                isHeading: true,
-                                headingLevel: headingMatch[1].length,
-                            });
-                        } else {
-                            // Wrap long lines
-                            const wrapped = wrapText(line || " ", usableWidth, font, params.fontSize);
-                            for (const w of wrapped) {
-                                renderItems.push({ text: w, isHeading: false, headingLevel: 0 });
-                            }
-                        }
+                    // Build the HTML — either from raw htmlContent or by converting markdown content
+                    let htmlBody: string;
+                    if (params.htmlContent) {
+                        htmlBody = params.htmlContent;
+                    } else {
+                        htmlBody = contentToHtml(params.content);
                     }
 
-                    let page = pdfDoc.addPage([pageW, pageH]);
-                    let yPos = pageH - margin - headerHeight;
-                    let pageNumber = 1;
+                    // Wrap in a full HTML document with embedded CSS
+                    const fullHtml = buildStyledDocument(htmlBody, params.title);
 
-                    const drawHeaderFooter = () => {
-                        if (params.header) {
-                            page.drawText(params.header, {
-                                x: margin,
-                                y: pageH - margin + 5,
-                                size: 9,
-                                font: boldFont,
-                                color: rgb(0.3, 0.3, 0.3),
-                            });
-                            page.drawLine({
-                                start: { x: margin, y: pageH - margin },
-                                end: { x: pageW - margin, y: pageH - margin },
-                                thickness: 0.5,
-                                color: rgb(0.7, 0.7, 0.7),
-                            });
-                        }
-                        if (params.footer) {
-                            const footerText = params.footer.replace("{page}", String(pageNumber));
-                            page.drawLine({
-                                start: { x: margin, y: margin + footerHeight - 5 },
-                                end: { x: pageW - margin, y: margin + footerHeight - 5 },
-                                thickness: 0.5,
-                                color: rgb(0.7, 0.7, 0.7),
-                            });
-                            page.drawText(footerText, {
-                                x: margin,
-                                y: margin + 5,
-                                size: 9,
-                                font,
-                                color: rgb(0.3, 0.3, 0.3),
-                            });
-                        }
-                    };
+                    // Use Playwright to generate PDF from HTML
+                    const browser = await chromium.launch({ headless: true });
+                    try {
+                        const page = await browser.newPage();
+                        await page.setContent(fullHtml, { waitUntil: "networkidle" });
 
-                    drawHeaderFooter();
-
-                    for (const item of renderItems) {
-                        const itemFont = item.isHeading ? boldFont : font;
-                        const itemSize = item.isHeading
-                            ? params.fontSize + (4 - item.headingLevel) * 4
-                            : params.fontSize;
-                        const itemLineHeight = itemSize * 1.4;
-                        const extraSpacing = item.isHeading ? itemSize * 0.6 : 0;
-
-                        if (yPos - itemLineHeight - extraSpacing < margin + footerHeight) {
-                            // New page
-                            pageNumber++;
-                            page = pdfDoc.addPage([pageW, pageH]);
-                            yPos = pageH - margin - headerHeight;
-                            drawHeaderFooter();
-                        }
-
-                        if (item.isHeading) yPos -= extraSpacing;
-
-                        page.drawText(item.text, {
-                            x: margin,
-                            y: yPos,
-                            size: itemSize,
-                            font: itemFont,
-                            color: item.isHeading ? rgb(0.1, 0.1, 0.3) : rgb(0, 0, 0),
+                        await page.pdf({
+                            path: outPath,
+                            format: params.pageSize?.toUpperCase() as any ?? "A4",
+                            margin: { top: "60px", bottom: "60px", left: "50px", right: "50px" },
+                            printBackground: true,
+                            displayHeaderFooter: !!(params.header || params.footer),
+                            headerTemplate: params.header
+                                ? `<div style="font-size:9px;color:#666;width:100%;text-align:center;padding:0 40px;">${params.header}</div>`
+                                : "<span></span>",
+                            footerTemplate: params.footer
+                                ? `<div style="font-size:9px;color:#666;width:100%;text-align:center;padding:0 40px;">${params.footer}</div>`
+                                : "<span></span>",
                         });
 
-                        yPos -= itemLineHeight;
+                        const stat = await fs.stat(outPath);
+                        const pageCount = await getPageCount(outPath);
+
+                        return {
+                            success: true,
+                            content: `Created PDF: ${params.outputPath} (${pageCount} page${pageCount > 1 ? "s" : ""}, ${(stat.size / 1024).toFixed(1)} KB)`,
+                            metadata: { path: params.outputPath, pages: pageCount, bytes: stat.size },
+                        };
+                    } finally {
+                        await browser.close();
                     }
-
-                    const pdfBytes = await pdfDoc.save();
-                    await fs.writeFile(outPath, pdfBytes);
-
-                    return {
-                        success: true,
-                        content: `Created PDF: ${params.outputPath} (${pageNumber} page${pageNumber > 1 ? "s" : ""}, ${(pdfBytes.length / 1024).toFixed(1)} KB)`,
-                        metadata: { path: params.outputPath, pages: pageNumber, bytes: pdfBytes.length },
-                    };
                 }
 
                 // ── READ ─────────────────────────────────────────────────
