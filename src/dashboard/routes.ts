@@ -52,7 +52,8 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
             providerConfigs.set(p.type, {
                 enabled: p.enabled ?? false,
                 apiKey: p.apiKey ?? undefined,
-                baseUrl: p.baseUrl ?? undefined
+                baseUrl: p.baseUrl ?? undefined,
+                selectedModel: p.defaultModel ?? undefined
             });
             console.log(`[Dashboard] Loaded provider ${p.type}: enabled=${p.enabled}, hasKey=${!!p.apiKey}`);
             // Set environment variables for AI providers
@@ -180,11 +181,17 @@ async function saveProviderToDB(db: DrizzleDB, type: string, cfg: { enabled: boo
                 name: type.charAt(0).toUpperCase() + type.slice(1),
                 enabled: cfg.enabled,
                 apiKey: cfg.apiKey,
-                baseUrl: cfg.baseUrl
+                baseUrl: cfg.baseUrl,
+                defaultModel: (cfg as any).selectedModel
             })
             .onConflictDoUpdate({
                 target: providerConfig.id,
-                set: { enabled: cfg.enabled, apiKey: cfg.apiKey, baseUrl: cfg.baseUrl }
+                set: {
+                    enabled: cfg.enabled,
+                    apiKey: cfg.apiKey,
+                    baseUrl: cfg.baseUrl,
+                    defaultModel: (cfg as any).selectedModel
+                }
             });
         console.log(`[Dashboard] ✓ Provider ${type} saved to database`);
     } catch (e) {
@@ -681,11 +688,17 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             for (const [type, config] of Object.entries(data.providers)) {
                 const cfg = config as { apiKey?: string; enabled?: boolean };
                 if (cfg.apiKey) {
-                    providerConfigs.set(type, { enabled: cfg.enabled ?? true, apiKey: cfg.apiKey });
+                    providerConfigs.set(type, {
+                        enabled: cfg.enabled ?? true,
+                        apiKey: cfg.apiKey,
+                        selectedModel: (config as any).selectedModel
+                    });
                     // Also set environment variable for immediate use
                     if (type === "anthropic") process.env.ANTHROPIC_API_KEY = cfg.apiKey;
                     if (type === "openai") process.env.OPENAI_API_KEY = cfg.apiKey;
                     if (type === "google") process.env.GOOGLE_API_KEY = cfg.apiKey;
+                    if (type === "deepseek") process.env.DEEPSEEK_API_KEY = cfg.apiKey;
+
                     // Persist to database
                     await saveProviderToDB(db, type, providerConfigs.get(type)!);
                 }

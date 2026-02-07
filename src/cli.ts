@@ -275,7 +275,7 @@ function initProviders() {
         }
 
         // Read provider configs
-        const providerStmt = sqliteDb.prepare("SELECT type, enabled, api_key FROM provider_config WHERE enabled = 1").all() as { type: string, enabled: number, api_key: string | null }[];
+        const providerStmt = sqliteDb.prepare("SELECT type, enabled, api_key, default_model FROM provider_config WHERE enabled = 1").all() as { type: string, enabled: number, api_key: string | null, default_model: string | null }[];
         for (const p of providerStmt) {
             if (p.api_key) {
                 if (p.type === "anthropic") process.env.ANTHROPIC_API_KEY = p.api_key;
@@ -285,6 +285,13 @@ function initProviders() {
                 if (p.type === "groq") process.env.GROQ_API_KEY = p.api_key;
                 if (p.type === "together") process.env.TOGETHER_API_KEY = p.api_key;
                 if (p.type === "qwen") process.env.QWEN_API_KEY = p.api_key;
+
+                // If this provider is enabled and has a default model set, use it
+                // Logic: prioritize provider-specific selection if it matches current provider context
+                // For now, if we found a deepseek config with a model, use it
+                if (p.type === "deepseek" && p.default_model) {
+                    currentModel = p.default_model;
+                }
             }
         }
     } catch (e) {
@@ -601,6 +608,8 @@ async function handleBrowserCommand(subcommand?: string) {
             }
 
             // Download location
+            // Database setup handled by src/db/index.ts
+            // Database is already initialized globally as sqliteDb
             const downloadDir = join(homedir(), ".openwhale", "downloads");
             if (!existsSync(downloadDir)) {
                 mkdirSync(downloadDir, { recursive: true });

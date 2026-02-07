@@ -19,7 +19,7 @@ OpenWhale supports 8 AI providers. You can switch between them anytime from the 
 
 ### Via Dashboard
 
-1. Open **http://localhost:18789/dashboard**
+1. Open **http://localhost:7777/dashboard**
 2. Go to **Providers** tab
 3. Paste your API key
 4. Click **Save**

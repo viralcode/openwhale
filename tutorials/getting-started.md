@@ -42,7 +42,7 @@ GOOGLE_API_KEY=your-key-here
 npm run dev
 ```
 
-Then open **http://localhost:18789/dashboard**
+Then open **http://localhost:7777/dashboard**
 
 Default login:
 - Username: `admin`
@@ -92,8 +92,8 @@ Try these in the chat:
 
 ### Port already in use
 ```bash
-# Kill the process using port 18789
-lsof -i :18789 | grep LISTEN | awk '{print $2}' | xargs kill -9
+# Kill the process using port 7777
+lsof -i :7777 | grep LISTEN | awk '{print $2}' | xargs kill -9
 ```
 
 ### SQLite errors

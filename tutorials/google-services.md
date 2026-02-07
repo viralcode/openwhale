@@ -19,12 +19,12 @@ All Google services use the same credentials. You only need to set this up once.
 5. Go to **APIs & Services → Credentials**
 6. Click **Create Credentials → OAuth client ID**
 7. Choose **Web application** type
-8. Add authorized redirect URI: `http://localhost:18789/auth/google/callback`
+8. Add authorized redirect URI: `http://localhost:7777/auth/google/callback`
 9. Click **Create** and download the JSON
 
 ### Step 2: Configure in Dashboard
 
-1. Open **http://localhost:18789/dashboard**
+1. Open **http://localhost:7777/dashboard**
 2. Go to **Skills** tab
 3. Find any Google skill (Calendar, Gmail, etc.)
 4. Click **Configure**

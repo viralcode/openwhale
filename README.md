@@ -251,13 +251,17 @@ pnpm install
 # Allow native modules to build (important!)
 pnpm approve-builds
 
-# Set up your environment
-cp .env.example .env
-# Add your API keys to .env
-
-# Start the server
+# Start the server (Dashboard + CLI API)
 pnpm run dev
 ```
+
+### Configuration
+
+1. Open **http://localhost:7777/dashboard**
+2. Go to **Settings** or **Providers**
+3. Configure your API keys and preferences
+
+> 💾 **Settings are saved automatically** to `data/openwhale.db`. You don't need to edit `.env` files anymore!
 
 ### Running Commands
 
@@ -286,7 +290,7 @@ npm run cli providers               # List AI providers
 docker-compose up -d
 ```
 
-That's it. Hit `http://localhost:18789/health` to make sure it's alive.
+That's it. Hit `http://localhost:7777/health` to make sure it's alive.
 
 ---
 
@@ -884,7 +888,7 @@ OpenWhale exposes an OpenAI-compatible API, so you can plug it into existing too
 
 ```bash
 # Chat completion
-curl -X POST http://localhost:18789/api/agent/chat/completions \
+curl -X POST http://localhost:7777/api/agent/chat/completions \
   -H "Authorization: Bearer your-token" \
   -H "Content-Type: application/json" \
   -d '{"messages": [{"role": "user", "content": "Hello!"}]}'

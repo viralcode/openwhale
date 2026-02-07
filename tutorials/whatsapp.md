@@ -10,7 +10,7 @@ OpenWhale uses **Baileys** (an unofficial WhatsApp Web API) to connect. Your mes
 
 ### Via Dashboard
 
-1. Go to **http://localhost:18789/dashboard**
+1. Go to **http://localhost:7777/dashboard**
 2. Click **Channels** in sidebar
 3. Find the **WhatsApp** card
 4. Click **Connect**
