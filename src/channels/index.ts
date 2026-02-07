@@ -44,7 +44,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     const telegram = createTelegramAdapter();
     if (telegram) {
         if (aiProvider) {
-            telegram.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
+            telegram.setAIProvider(aiProvider, getCurrentModel());
         }
         channelRegistry.register(telegram);
         try {
@@ -59,7 +59,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     const discord = createDiscordAdapter();
     if (discord) {
         if (aiProvider) {
-            discord.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
+            discord.setAIProvider(aiProvider, getCurrentModel());
         }
         channelRegistry.register(discord);
         try {
@@ -85,7 +85,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     const twitter = createTwitterAdapter();
     if (twitter) {
         if (aiProvider) {
-            twitter.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
+            twitter.setAIProvider(aiProvider, getCurrentModel());
         }
         channelRegistry.register(twitter);
         try {
@@ -100,7 +100,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     const imessage = createIMessageAdapter();
     if (imessage) {
         if (aiProvider) {
-            imessage.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
+            imessage.setAIProvider(aiProvider, getCurrentModel());
         }
         channelRegistry.register(imessage);
         try {
