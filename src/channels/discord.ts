@@ -237,6 +237,9 @@ export class DiscordAdapter implements ChannelAdapter {
                     sendImage: async (imageBuffer, caption) => {
                         return await this.sendImage(channelId, imageBuffer, caption);
                     },
+                    sendDocument: async (buffer, fileName, mimetype, caption) => {
+                        return await this.sendFile(channelId, buffer, fileName, mimetype, caption);
+                    },
                     isGroup: isGuild,
                 });
             } else {
@@ -319,6 +322,38 @@ export class DiscordAdapter implements ChannelAdapter {
 
     onMessage(handler: MessageHandler): void {
         this.handlers.push(handler);
+    }
+
+    // Send file/document as attachment
+    async sendFile(channelId: string, buffer: Buffer, fileName: string, mimetype: string, caption?: string): Promise<SendResult> {
+        try {
+            const formData = new FormData();
+            formData.append("files[0]", new Blob([buffer], { type: mimetype }), fileName);
+            if (caption) {
+                formData.append("payload_json", JSON.stringify({ content: caption }));
+            }
+
+            const response = await fetch(`${DISCORD_API}/channels/${channelId}/messages`, {
+                method: "POST",
+                headers: {
+                    Authorization: `Bot ${this.token}`,
+                },
+                body: formData,
+            });
+
+            if (!response.ok) {
+                const error = await response.text();
+                return { success: false, error };
+            }
+
+            const data = await response.json() as { id: string };
+            console.log(`[Discord] File sent to ${channelId}: ${fileName}`);
+            return { success: true, messageId: data.id };
+        } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            console.error(`[Discord] Failed to send file: ${error}`);
+            return { success: false, error };
+        }
     }
 }
 

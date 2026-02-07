@@ -117,6 +117,36 @@ export class TelegramAdapter implements ChannelAdapter {
         }
     }
 
+    // Send document/file
+    async sendDocument(chatId: string, buffer: Buffer, fileName: string, mimetype: string, caption?: string): Promise<SendResult> {
+        try {
+            const formData = new FormData();
+            formData.append("chat_id", chatId);
+            formData.append("document", new Blob([buffer], { type: mimetype }), fileName);
+            if (caption) {
+                formData.append("caption", caption);
+            }
+
+            const response = await fetch(`https://api.telegram.org/bot${this.token}/sendDocument`, {
+                method: "POST",
+                body: formData,
+            });
+
+            const data = await response.json() as { ok: boolean; result?: { message_id: number }; description?: string };
+
+            if (data.ok) {
+                console.log(`[Telegram] Document sent to ${chatId}: ${fileName}`);
+                return { success: true, messageId: String(data.result?.message_id) };
+            } else {
+                return { success: false, error: data.description };
+            }
+        } catch (err) {
+            const error = err instanceof Error ? err.message : String(err);
+            console.error(`[Telegram] Failed to send document: ${error}`);
+            return { success: false, error };
+        }
+    }
+
     onMessage(handler: MessageHandler): void {
         this.handlers.push(handler);
     }
@@ -207,6 +237,9 @@ export class TelegramAdapter implements ChannelAdapter {
                                     },
                                     sendImage: async (imageBuffer, caption) => {
                                         return await this.sendPhoto(chatId, imageBuffer, caption);
+                                    },
+                                    sendDocument: async (buffer, fileName, mimetype, caption) => {
+                                        return await this.sendDocument(chatId, buffer, fileName, mimetype, caption);
                                     },
                                     isGroup,
                                 });

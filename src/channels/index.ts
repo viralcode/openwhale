@@ -1,5 +1,25 @@
 // Export all channels
+import { readFile, stat } from "node:fs/promises";
+import { basename, extname } from "node:path";
 export { channelRegistry, type MessageChannel, type IncomingMessage, type OutgoingMessage, type ChannelAdapter } from "./base.js";
+
+// Mime types for file auto-delivery
+const MIME_TYPES: Record<string, string> = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".mp4": "video/mp4",
+    ".mp3": "audio/mpeg",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".zip": "application/zip",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+};
 export { TelegramAdapter, createTelegramAdapter } from "./telegram.js";
 export { DiscordAdapter, createDiscordAdapter } from "./discord.js";
 export { SlackAdapter, createSlackAdapter } from "./slack.js";
@@ -362,6 +382,20 @@ Current time: ${new Date().toLocaleString()}`;
                                     break;
                                 }
 
+                                // Push real-time status update to WhatsApp
+                                const toolNames = response.toolCalls.map((t: any) => t.name).filter((n: string) => n !== "whatsapp_send_image");
+                                if (toolNames.length > 0) {
+                                    const statusEmoji = iterations === 1 ? "⚡" : "🔄";
+                                    const statusMsg = iterations === 1
+                                        ? `${statusEmoji} _Working on it..._ 🔧 ${toolNames.join(", ")}`
+                                        : `${statusEmoji} _Still working (step ${iterations})..._ 🔧 ${toolNames.join(", ")}`;
+                                    try {
+                                        await sendWhatsAppMessage(fromRaw, statusMsg);
+                                    } catch {
+                                        // Don't fail if status message fails
+                                    }
+                                }
+
                                 // Execute tool calls
                                 const toolResults: Array<{ name: string; result: string }> = [];
 
@@ -420,6 +454,30 @@ Current time: ${new Date().toLocaleString()}`;
                                                 const resultStr = (result.content || result.error || "").slice(0, 2000);
                                                 toolResults.push({ name: toolCall.name, result: resultStr });
                                                 console.log(`[WhatsApp]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+
+                                                // Auto-send created files as documents
+                                                if (result.metadata?.path) {
+                                                    const filePath = String(result.metadata.path);
+                                                    const ext = extname(filePath).toLowerCase();
+                                                    const mime = MIME_TYPES[ext];
+                                                    if (mime) {
+                                                        try {
+                                                            const fileStat = await stat(filePath);
+                                                            if (fileStat.size < 50 * 1024 * 1024) {
+                                                                const fileBuffer = await readFile(filePath);
+                                                                const fileName = basename(filePath);
+                                                                console.log(`[WhatsApp]   📎 Auto-sending file: ${fileName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
+                                                                await sendWhatsAppMessage(fromRaw, {
+                                                                    document: fileBuffer,
+                                                                    mimetype: mime,
+                                                                    fileName: fileName,
+                                                                } as any);
+                                                            }
+                                                        } catch (fileErr) {
+                                                            console.log(`[WhatsApp]   ⚠️ File auto-send failed: ${fileErr instanceof Error ? fileErr.message : String(fileErr)}`);
+                                                        }
+                                                    }
+                                                }
                                             }
                                         } else {
                                             // Try skill tool

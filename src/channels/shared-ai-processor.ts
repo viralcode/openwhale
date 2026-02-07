@@ -3,10 +3,34 @@
  * Provides consistent AI processing across WhatsApp, Telegram, Discord
  */
 
+import { readFile, stat } from "node:fs/promises";
+import { basename, extname } from "node:path";
 import { toolRegistry } from "../tools/index.js";
 import { skillRegistry } from "../skills/index.js";
 import { getSessionContext, handleSlashCommand, recordUserMessage, recordAssistantMessage } from "../sessions/session-manager.js";
 import { getMemoryContext } from "../memory/memory-files.js";
+
+// Mime types for common file extensions
+const MIME_TYPES: Record<string, string> = {
+    ".pdf": "application/pdf",
+    ".png": "image/png",
+    ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
+    ".gif": "image/gif",
+    ".webp": "image/webp",
+    ".mp4": "video/mp4",
+    ".mp3": "audio/mpeg",
+    ".wav": "audio/wav",
+    ".txt": "text/plain",
+    ".csv": "text/csv",
+    ".json": "application/json",
+    ".html": "text/html",
+    ".zip": "application/zip",
+    ".doc": "application/msword",
+    ".docx": "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    ".xls": "application/vnd.ms-excel",
+    ".xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+};
 
 // Types
 interface AIProvider {
@@ -31,6 +55,7 @@ interface ProcessMessageOptions {
     model: string;
     sendText: (text: string) => Promise<{ success: boolean; error?: string }>;
     sendImage: (imageBuffer: Buffer, caption: string) => Promise<{ success: boolean; error?: string }>;
+    sendDocument?: (buffer: Buffer, fileName: string, mimetype: string, caption?: string) => Promise<{ success: boolean; error?: string }>;
     isGroup?: boolean;
 }
 
@@ -45,7 +70,7 @@ interface ProcessResult {
  * Process a message with AI - shared across all channels
  */
 export async function processMessageWithAI(options: ProcessMessageOptions): Promise<ProcessResult> {
-    const { channel, from, content, aiProvider, model, sendText, sendImage, isGroup = false } = options;
+    const { channel, from, content, aiProvider, model, sendText, sendImage, sendDocument, isGroup = false } = options;
     const channelUpper = channel.charAt(0).toUpperCase() + channel.slice(1);
 
     console.log(`[${channelUpper}] 📱 Processing message from ${from}: "${content.slice(0, 50)}..."`);
@@ -184,6 +209,9 @@ Current time: ${new Date().toLocaleString()}`;
     let iterations = 0;
     const maxIterations = 10;
 
+    // Track whether we've sent a status update to avoid spamming
+    let statusSent = false;
+
     while (iterations < maxIterations) {
         iterations++;
 
@@ -202,6 +230,21 @@ Current time: ${new Date().toLocaleString()}`;
         if (!response.toolCalls || response.toolCalls.length === 0) {
             reply = response.content || "Done!";
             break;
+        }
+
+        // Push real-time status update to the user
+        const toolNames = response.toolCalls.map(t => t.name).filter(n => !n.includes("_send_image"));
+        if (toolNames.length > 0) {
+            const statusEmoji = iterations === 1 ? "⚡" : "🔄";
+            const statusMsg = iterations === 1
+                ? `${statusEmoji} _Working on it..._ 🔧 ${toolNames.join(", ")}`
+                : `${statusEmoji} _Still working (step ${iterations})..._ 🔧 ${toolNames.join(", ")}`;
+            try {
+                await sendText(statusMsg);
+                statusSent = true;
+            } catch {
+                // Don't fail if status message fails
+            }
         }
 
         // Execute tool calls
@@ -256,6 +299,27 @@ Current time: ${new Date().toLocaleString()}`;
                         const resultStr = (result.content || result.error || "").slice(0, 2000);
                         toolResults.push({ name: toolCall.name, result: resultStr });
                         console.log(`[${channelUpper}]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
+
+                        // Auto-send created files to the channel
+                        if (sendDocument && result.metadata?.path) {
+                            const filePath = String(result.metadata.path);
+                            const ext = extname(filePath).toLowerCase();
+                            const mime = MIME_TYPES[ext];
+                            if (mime) {
+                                try {
+                                    const fileStat = await stat(filePath);
+                                    // Only send files under 50MB
+                                    if (fileStat.size < 50 * 1024 * 1024) {
+                                        const fileBuffer = await readFile(filePath);
+                                        const fileName = basename(filePath);
+                                        console.log(`[${channelUpper}]   📎 Auto-sending file: ${fileName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
+                                        await sendDocument(fileBuffer, fileName, mime, `📎 ${fileName}`);
+                                    }
+                                } catch (fileErr) {
+                                    console.log(`[${channelUpper}]   ⚠️ Could not auto-send file: ${fileErr instanceof Error ? fileErr.message : String(fileErr)}`);
+                                }
+                            }
+                        }
                     }
                 } else {
                     // Try skill tool
