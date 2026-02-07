@@ -8,7 +8,9 @@
 import "dotenv/config";
 import readline from "node:readline";
 import { createAnthropicProvider, AnthropicProvider } from "./providers/anthropic.js";
-import { createOpenAIProvider, createOllamaProvider } from "./providers/openai-compatible.js";
+import { createOpenAIProvider, createOllamaProvider, createDeepSeekProvider, createGroqProvider, createTogetherProvider, createQwenProvider } from "./providers/openai-compatible.js";
+import { createGoogleProvider } from "./providers/google.js";
+import { db as sqliteDb } from "./db/index.js";
 import { registry } from "./providers/base.js";
 import { toolRegistry } from "./tools/index.js";
 import { skillRegistry, registerAllSkills } from "./skills/index.js";
@@ -77,8 +79,8 @@ ${c("cyan", "    /_/                                            ")}
 ${c("dim", "                    v0.1.0 (Agentic)                ")}
 `;
 
-// State
-let currentModel = "claude-sonnet-4-20250514";
+// State - will be loaded from database
+let currentModel = "deepseek-chat"; // Default fallback
 type ChatMessage = {
     role: "user" | "assistant" | "system" | "tool";
     content: string;
@@ -262,6 +264,40 @@ async function main() {
 }
 
 function initProviders() {
+    // Read model and provider settings from database (same as dashboard)
+    try {
+        const configs = sqliteDb.prepare("SELECT key, value FROM config").all() as { key: string, value: string }[];
+        for (const conf of configs) {
+            if (conf.key === "model") {
+                currentModel = conf.value;
+                console.log(c("cyan", `📊 Default model from settings: ${currentModel}`));
+            }
+        }
+
+        // Read provider configs
+        const providerStmt = sqliteDb.prepare("SELECT type, enabled, api_key FROM provider_config WHERE enabled = 1").all() as { type: string, enabled: number, api_key: string | null }[];
+        for (const p of providerStmt) {
+            if (p.api_key) {
+                if (p.type === "anthropic") process.env.ANTHROPIC_API_KEY = p.api_key;
+                if (p.type === "openai") process.env.OPENAI_API_KEY = p.api_key;
+                if (p.type === "google") process.env.GOOGLE_API_KEY = p.api_key;
+                if (p.type === "deepseek") process.env.DEEPSEEK_API_KEY = p.api_key;
+                if (p.type === "groq") process.env.GROQ_API_KEY = p.api_key;
+                if (p.type === "together") process.env.TOGETHER_API_KEY = p.api_key;
+                if (p.type === "qwen") process.env.QWEN_API_KEY = p.api_key;
+            }
+        }
+    } catch (e) {
+        console.log(c("dim", "Using default model (database not accessible)"));
+    }
+
+    // Initialize all providers that have API keys
+    const deepseek = createDeepSeekProvider();
+    if (deepseek) {
+        registry.register("deepseek", deepseek);
+        console.log(c("green", "✓") + " DeepSeek provider ready");
+    }
+
     const anthropic = createAnthropicProvider();
     if (anthropic) {
         registry.register("anthropic", anthropic);
@@ -272,6 +308,30 @@ function initProviders() {
     if (openai) {
         registry.register("openai", openai);
         console.log(c("green", "✓") + " OpenAI provider ready");
+    }
+
+    const google = createGoogleProvider();
+    if (google) {
+        registry.register("google", google);
+        console.log(c("green", "✓") + " Google provider ready");
+    }
+
+    const groq = createGroqProvider();
+    if (groq) {
+        registry.register("groq", groq);
+        console.log(c("green", "✓") + " Groq provider ready");
+    }
+
+    const together = createTogetherProvider();
+    if (together) {
+        registry.register("together", together);
+        console.log(c("green", "✓") + " Together provider ready");
+    }
+
+    const qwen = createQwenProvider();
+    if (qwen) {
+        registry.register("qwen", qwen);
+        console.log(c("green", "✓") + " Qwen provider ready");
     }
 
     const ollama = createOllamaProvider();
@@ -292,6 +352,7 @@ function initProviders() {
 
     console.log();
 }
+
 
 /**
  * Handle WhatsApp subcommands (login, status, logout)
