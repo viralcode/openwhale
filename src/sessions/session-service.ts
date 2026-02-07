@@ -167,6 +167,10 @@ export function getProvider(): unknown {
     return registry.getProvider(currentModel);
 }
 
+export function getCurrentModel(): string {
+    return currentModel;
+}
+
 // ============== MESSAGE HISTORY ==============
 
 export function getChatHistory(limit = 100): ChatMessage[] {
@@ -516,6 +520,327 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
             id: randomUUID(),
             role: "assistant",
             content: `Error: ${error instanceof Error ? error.message : String(error)}`,
+            createdAt: new Date().toISOString(),
+        };
+        dashboardMessages.push(errorMsg);
+        persistMessage(errorMsg);
+        return errorMsg;
+    }
+}
+
+/**
+ * Process a chat message with streaming events for real-time UI updates
+ * Emits SSE events: thinking, content, tool_start, tool_end, done, error
+ */
+export async function processMessageStream(
+    sessionId: string,
+    content: string,
+    options: {
+        model?: string;
+        maxIterations?: number;
+        emit: (event: string, data: unknown) => void;
+    }
+): Promise<ChatMessage> {
+    const { model = currentModel, maxIterations = 25, emit } = options;
+
+    const provider = registry.getProvider(model);
+    if (!provider) {
+        emit("error", { message: `No provider available for model: ${model}` });
+        throw new Error(`No provider available for model: ${model}`);
+    }
+
+    // Create user message
+    const userMsg: ChatMessage = {
+        id: randomUUID(),
+        role: "user",
+        content,
+        createdAt: new Date().toISOString(),
+    };
+    dashboardMessages.push(userMsg);
+    persistMessage(userMsg);
+
+    const sessionCtx = getSessionContext("dashboard", "dm", sessionId);
+    const { session } = sessionCtx;
+    recordUserMessage(session.sessionId, content);
+    getOrCreateSessionLegacy(sessionId, "dashboard");
+    addMessage(sessionId, "user", content);
+
+    // Build tools list (same as processMessage)
+    const allTools = toolRegistry.getAll();
+    const tools: Array<{ name: string; description: string; parameters: unknown }> = allTools.map((tool) => ({
+        name: tool.name,
+        description: tool.description,
+        parameters: toolRegistry.zodToJsonSchema(tool.parameters),
+    }));
+
+    tools.push({
+        name: "whatsapp_send",
+        description: "Send a text message via WhatsApp",
+        parameters: {
+            type: "object",
+            properties: {
+                to: { type: "string", description: "Phone number with country code" },
+                message: { type: "string", description: "Message text to send" },
+            },
+            required: ["to", "message"],
+        },
+    });
+    tools.push({
+        name: "whatsapp_send_image",
+        description: "Send an image via WhatsApp",
+        parameters: {
+            type: "object",
+            properties: {
+                to: { type: "string", description: "Phone number to send to" },
+                use_last_screenshot: { type: "boolean", description: "Send the last captured screenshot" },
+                caption: { type: "string", description: "Optional caption" },
+            },
+            required: ["to", "use_last_screenshot"],
+        },
+    });
+
+    const skillTools = skillRegistry.getAllTools();
+    for (const skillTool of skillTools) {
+        tools.push({
+            name: skillTool.name,
+            description: skillTool.description,
+            parameters: skillTool.parameters || { type: "object", properties: {}, required: [] },
+        });
+    }
+
+    // Build message history
+    const msgHistory: Message[] = dashboardMessages
+        .slice(-20)
+        .filter((m) => m.content && m.content.trim().length > 0)
+        .map((m) => ({
+            role: m.role as "user" | "assistant",
+            content: m.content,
+        }));
+
+    const now = new Date();
+    const runtimeInfo = `OS: ${process.platform} ${process.arch} | Host: ${hostname()} | Node: ${process.version} | Time: ${now.toISOString()} | CWD: ${process.cwd()}`;
+    const baseToolNames = allTools.map(t => t.name);
+    const skillToolNames = skillTools.map(t => t.name);
+
+    const systemPrompt = `You are OpenWhale, an AI assistant with FULL tool access. You are authenticated and connected.
+
+## Runtime
+${runtimeInfo}
+
+## Your Available Tools (${tools.length} total)
+Base Tools: ${baseToolNames.join(", ")}
+Skill Tools: ${skillToolNames.length > 0 ? skillToolNames.join(", ") : "None configured"}
+
+## CRITICAL RULES - FOLLOW THESE EXACTLY
+1. **NEVER say "I don't have access"** - You DO have access. Use your tools.
+2. **NEVER ask for credentials, tokens, or API keys** - They are already configured.
+3. **NEVER say "I cannot access your account"** - You CAN. Just use the tool.
+4. When asked about GitHub, emails, calendar, weather, Twitter, etc. - CALL THE TOOL IMMEDIATELY.
+5. You have up to ${maxIterations} tool execution rounds. Use them wisely.
+
+## Multi-Step Tasks
+For complex tasks requiring 3+ tool calls:
+1. **Plan first**: Use the \`plan\` tool to create a step-by-step plan before executing.
+2. **Execute systematically**: Work through the plan step by step, marking steps complete.
+3. **Track progress**: Use \`plan\` with action \`complete_step\` after finishing each step.
+4. **Wrap up early**: If you're approaching the iteration limit, provide a summary of what's done and what remains.
+
+## Tool Usage
+- Planning → use \`plan\` (create_plan, update_step, complete_step, get_plan, add_step)
+- GitHub repos → use \`github_repos\`
+- GitHub issues → use \`github_issues\`
+- Weather → use \`weather_current\` or \`weather_forecast\`
+- Gmail → use \`gmail_read\`, \`gmail_send\`
+- Calendar → use \`calendar_events\`
+- Drive → use \`drive_list\`
+- Twitter timeline → use \`twitter_timeline\`
+- Twitter mentions → use \`twitter_mentions\`
+- Post tweet → use \`twitter_post\`
+- Reply to tweet → use \`twitter_reply\`
+- Search Twitter → use \`twitter_search\`
+- Twitter user info → use \`twitter_user\`
+
+## Your Identity
+You are a fully authenticated AI assistant. All integrations are configured and ready.
+Do NOT apologize for previous errors or claim you lack access. Just execute the task.`;
+
+    const memoryContext = getMemoryContext();
+    const fullSystemPrompt = memoryContext
+        ? systemPrompt + "\n\n" + memoryContext
+        : systemPrompt;
+
+    const sandboxConfig = createSandboxConfig(process.cwd(), false);
+    const context: ToolCallContext = {
+        sessionId,
+        workspaceDir: process.cwd(),
+        sandboxed: sandboxConfig.enabled,
+    };
+
+    try {
+        let iterations = 0;
+        const allToolCalls: ToolCallInfo[] = [];
+        let finalContent = "";
+
+        while (iterations < maxIterations) {
+            iterations++;
+
+            emit("thinking", { iteration: iterations, maxIterations });
+
+            await compactIfNeeded(msgHistory, model, session.sessionId);
+
+            if (iterations === Math.floor(maxIterations * 0.8)) {
+                msgHistory.push({
+                    role: "user",
+                    content: `[System] You have used ${iterations}/${maxIterations} iterations. Please wrap up your current task and provide a final response soon.`,
+                });
+            }
+
+            const response = await registry.complete({
+                model,
+                messages: msgHistory,
+                systemPrompt: fullSystemPrompt,
+                tools: tools as any,
+                maxTokens: 8192,
+                stream: false,
+            });
+
+            // No tool calls = done
+            if (!response.toolCalls || response.toolCalls.length === 0) {
+                finalContent = response.content || "Done!";
+                emit("content", { text: finalContent });
+                break;
+            }
+
+            // Emit assistant's thinking text (before tools)
+            if (response.content) {
+                emit("content", { text: response.content });
+            }
+
+            // Process tool calls with streaming events
+            for (const tc of response.toolCalls) {
+                const toolInfo: ToolCallInfo = {
+                    id: tc.id || randomUUID(),
+                    name: tc.name,
+                    arguments: tc.arguments,
+                    status: "running",
+                };
+                allToolCalls.push(toolInfo);
+
+                emit("tool_start", {
+                    id: toolInfo.id,
+                    name: tc.name,
+                    arguments: tc.arguments,
+                });
+
+                try {
+                    console.log(`[SessionService] 🔧 Executing: ${tc.name} (iteration ${iterations}/${maxIterations})`);
+                    recordToolUse(session.sessionId, tc.name, tc.arguments);
+
+                    if (tc.name === "exec" && sandboxConfig.enabled) {
+                        const cmd = (tc.arguments as { command?: string }).command || "";
+                        const sandboxCheck = checkCommand(cmd, sandboxConfig);
+                        auditCommand(cmd, sandboxCheck);
+                        if (!sandboxCheck.allowed) {
+                            toolInfo.result = sandboxCheck.reason;
+                            toolInfo.status = "error";
+                            recordToolResult(session.sessionId, tc.name, sandboxCheck.reason || "Blocked", false);
+                            emit("tool_end", { id: toolInfo.id, name: tc.name, result: toolInfo.result, status: "error" });
+                            continue;
+                        }
+                    }
+
+                    if (tc.name === "whatsapp_send") {
+                        const { sendWhatsAppMessage } = await import("../channels/whatsapp-baileys.js");
+                        const args = tc.arguments as { to: string; message: string };
+                        await sendWhatsAppMessage(args.to, args.message);
+                        toolInfo.result = `Message sent to ${args.to}`;
+                        toolInfo.status = "completed";
+                    } else if (tc.name === "whatsapp_send_image") {
+                        toolInfo.result = "WhatsApp image sending is available via WhatsApp channel directly";
+                        toolInfo.status = "completed";
+                    } else {
+                        const tool = toolRegistry.get(tc.name);
+                        if (tool) {
+                            const result = await toolRegistry.execute(tc.name, tc.arguments, context);
+                            toolInfo.result = result.content || result.error;
+                            toolInfo.metadata = result.metadata;
+                            toolInfo.status = result.success ? "completed" : "error";
+                        } else {
+                            const skillTool = skillTools.find(st => st.name === tc.name);
+                            if (skillTool) {
+                                const result = await skillTool.execute(tc.arguments, context);
+                                toolInfo.result = result.content || result.error;
+                                toolInfo.metadata = result.metadata;
+                                toolInfo.status = result.success ? "completed" : "error";
+                            } else {
+                                toolInfo.result = `Unknown tool: ${tc.name}`;
+                                toolInfo.status = "error";
+                            }
+                        }
+                    }
+                } catch (err) {
+                    toolInfo.result = err instanceof Error ? err.message : String(err);
+                    toolInfo.status = "error";
+                }
+
+                recordToolResult(session.sessionId, tc.name, String(toolInfo.result).slice(0, 2000), toolInfo.status === "completed");
+
+                emit("tool_end", {
+                    id: toolInfo.id,
+                    name: tc.name,
+                    result: toolInfo.result,
+                    metadata: toolInfo.metadata,
+                    status: toolInfo.status,
+                });
+            }
+
+            // Add to history for next iteration
+            msgHistory.push({
+                role: "assistant",
+                content: response.content || "",
+                toolCalls: response.toolCalls,
+            });
+
+            const toolResultMessages: ProviderToolResult[] = allToolCalls
+                .slice(-response.toolCalls.length)
+                .map((t) => ({
+                    toolCallId: t.id,
+                    content: String(t.result).slice(0, 10000),
+                    isError: t.status === "error",
+                }));
+            msgHistory.push({
+                role: "tool",
+                content: "",
+                toolResults: toolResultMessages,
+            });
+        }
+
+        // Create final message
+        const assistantMsg: ChatMessage = {
+            id: randomUUID(),
+            role: "assistant",
+            content: finalContent,
+            toolCalls: allToolCalls.length > 0 ? allToolCalls : undefined,
+            model,
+            createdAt: new Date().toISOString(),
+        };
+        dashboardMessages.push(assistantMsg);
+        persistMessage(assistantMsg);
+
+        recordAssistantMessage(session.sessionId, finalContent);
+        finalizeExchange(session.sessionKey);
+        addMessage(sessionId, "assistant", finalContent);
+
+        emit("done", { message: assistantMsg });
+        return assistantMsg;
+    } catch (error) {
+        const errorContent = `Error: ${error instanceof Error ? error.message : String(error)}`;
+        emit("error", { message: errorContent });
+
+        const errorMsg: ChatMessage = {
+            id: randomUUID(),
+            role: "assistant",
+            content: errorContent,
             createdAt: new Date().toISOString(),
         };
         dashboardMessages.push(errorMsg);

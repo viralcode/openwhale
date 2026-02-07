@@ -59,6 +59,7 @@ const ICONS = {
   loader: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>',
   plus: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
   chevronRight: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
+  chevronDown: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   externalLink: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
 
   // Misc
@@ -563,26 +564,56 @@ async function sendMessage(content) {
   });
 
   state.isSending = true;
-  updateChatMessages(); // Use targeted update instead of full render
+  // Track streaming state for progressive rendering
+  state.streamingSteps = [];
+  state.streamingContent = '';
+  state.streamingDone = false;
+  updateChatMessages();
   scrollToBottom();
 
   try {
-    const response = await api('/chat', {
+    const response = await fetch(`${API_BASE}/chat/stream`, {
       method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         message: content.trim(),
         model: state.currentModel
       })
     });
 
-    state.messages.push({
-      id: response.id || Date.now().toString(),
-      role: 'assistant',
-      content: response.content,
-      toolCalls: response.toolCalls,
-      model: response.model,
-      createdAt: new Date().toISOString()
-    });
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          const { event, data } = JSON.parse(line.slice(6));
+          handleStreamEvent(event, data);
+        } catch { /* skip malformed lines */ }
+      }
+    }
+
+    // Process any remaining buffer
+    if (buffer.startsWith('data: ')) {
+      try {
+        const { event, data } = JSON.parse(buffer.slice(6));
+        handleStreamEvent(event, data);
+      } catch { }
+    }
+
   } catch (e) {
     state.messages.push({
       id: Date.now().toString(),
@@ -593,8 +624,220 @@ async function sendMessage(content) {
   }
 
   state.isSending = false;
-  updateChatMessages(); // Use targeted update instead of full render
+  state.streamingSteps = [];
+  state.streamingContent = '';
+  state.streamingDone = false;
+  updateChatMessages();
   scrollToBottom();
+}
+
+function handleStreamEvent(event, data) {
+  switch (event) {
+    case 'thinking':
+      // Update or add thinking step
+      const existingThinking = state.streamingSteps.find(s => s.type === 'thinking');
+      if (existingThinking) {
+        existingThinking.iteration = data.iteration;
+      } else {
+        state.streamingSteps.push({ type: 'thinking', iteration: data.iteration, maxIterations: data.maxIterations });
+      }
+      break;
+
+    case 'content':
+      state.streamingContent = data.text;
+      // Mark thinking as done
+      const thinkingStep = state.streamingSteps.find(s => s.type === 'thinking');
+      if (thinkingStep) thinkingStep.done = true;
+      break;
+
+    case 'tool_start':
+      state.streamingSteps.push({
+        type: 'tool',
+        id: data.id,
+        name: data.name,
+        arguments: data.arguments,
+        status: 'running',
+      });
+      break;
+
+    case 'tool_end':
+      const step = state.streamingSteps.find(s => s.id === data.id);
+      if (step) {
+        step.status = data.status;
+        step.result = data.result;
+        step.metadata = data.metadata;
+      }
+      break;
+
+    case 'done':
+      state.streamingDone = true;
+      if (data.message) {
+        // Replace any existing assistant message from content events
+        state.messages.push({
+          id: data.message.id || Date.now().toString(),
+          role: 'assistant',
+          content: data.message.content,
+          toolCalls: data.message.toolCalls,
+          model: data.message.model,
+          createdAt: data.message.createdAt || new Date().toISOString()
+        });
+      }
+      break;
+
+    case 'error':
+      state.streamingSteps.push({
+        type: 'error',
+        message: data.message,
+      });
+      break;
+  }
+
+  updateStreamingUI();
+  scrollToBottom();
+}
+
+function updateStreamingUI() {
+  const messagesInner = document.querySelector('.chat-messages-inner');
+  if (!messagesInner) return;
+
+  // Find or create streaming container
+  let streamEl = document.getElementById('streaming-container');
+  if (!streamEl) {
+    // Re-render messages first, then append streaming container
+    let messagesHtml = state.messages.map(renderMessage).join('');
+    messagesHtml += '<div id="streaming-container" class="message assistant stream-message"></div>';
+    messagesInner.innerHTML = messagesHtml;
+    streamEl = document.getElementById('streaming-container');
+  }
+
+  if (!streamEl) return;
+
+  // Build streaming steps HTML
+  let html = '<div class="message-avatar" style="font-size: 18px;">🐋</div><div class="message-body">';
+
+  // Render steps
+  for (let si = 0; si < state.streamingSteps.length; si++) {
+    const step = state.streamingSteps[si];
+    if (step.type === 'thinking' && !step.done) {
+      html += `
+        <div class="stream-step thinking">
+          <div class="stream-step-header">
+            <span class="stream-step-icon spinning">${icon('loader', 14)}</span>
+            <span class="stream-step-label">Thinking${step.iteration > 1 ? ` (round ${step.iteration})` : ''}...</span>
+          </div>
+        </div>`;
+    } else if (step.type === 'tool') {
+      const statusIcon = step.status === 'running'
+        ? `<span class="stream-step-icon spinning">${icon('loader', 14)}</span>`
+        : step.status === 'completed'
+          ? `<span class="stream-step-icon done">${icon('check', 14)}</span>`
+          : `<span class="stream-step-icon error">${icon('x', 14)}</span>`;
+
+      const toolLabel = getToolLabel(step.name, step.arguments);
+      const isExpanded = step.expanded ? ' expanded' : '';
+
+      html += `
+        <div class="stream-step ${step.status}${isExpanded}" data-step-index="${si}">
+          <div class="stream-step-header" onclick="toggleStreamStep(${si})">
+            ${statusIcon}
+            <span class="stream-step-label">${escapeHtml(toolLabel)}</span>
+            ${step.status !== 'running' ? `<span class="stream-step-chevron">${icon('chevronDown', 12)}</span>` : ''}
+          </div>
+          ${step.result ? `
+            <div class="stream-step-body">
+              <div class="stream-step-result">${typeof step.result === 'string' ? escapeHtml(step.result).substring(0, 500) : JSON.stringify(step.result, null, 2).substring(0, 500)}</div>
+              ${renderFileChip(step.metadata)}
+            </div>
+          ` : ''}
+        </div>`;
+    } else if (step.type === 'error') {
+      html += `
+        <div class="stream-step error">
+          <div class="stream-step-header">
+            <span class="stream-step-icon error">${icon('x', 14)}</span>
+            <span class="stream-step-label">${escapeHtml(step.message)}</span>
+          </div>
+        </div>`;
+    }
+  }
+
+  // Show streaming content (final answer) with markdown
+  if (state.streamingContent) {
+    html += `<div class="message-content">${formatMarkdown(state.streamingContent)}</div>`;
+  }
+
+  html += '</div>';
+  streamEl.innerHTML = html;
+}
+
+// Global function for toggling step expansion (called from onclick)
+window.toggleStreamStep = function (stepIndex) {
+  const step = state.streamingSteps[stepIndex];
+  if (step) {
+    step.expanded = !step.expanded;
+    // Update DOM directly without full re-render
+    const stepEl = document.querySelector(`[data-step-index="${stepIndex}"]`);
+    if (stepEl) {
+      stepEl.classList.toggle('expanded');
+    }
+  }
+};
+
+function getToolLabel(name, args) {
+  // Generate human-readable labels for tool calls
+  const labels = {
+    file: () => {
+      const action = args?.action || 'file';
+      if (action === 'write') return `Writing file: ${(args?.path || '').split('/').pop()}`;
+      if (action === 'read') return `Reading file: ${(args?.path || '').split('/').pop()}`;
+      if (action === 'list') return `Listing directory: ${(args?.path || '').split('/').pop()}`;
+      if (action === 'mkdir') return `Creating directory: ${(args?.path || '').split('/').pop()}`;
+      if (action === 'delete') return `Deleting: ${(args?.path || '').split('/').pop()}`;
+      return `File: ${action}`;
+    },
+    exec: () => `Running: ${(args?.command || '').substring(0, 60)}`,
+    web_fetch: () => `Fetching: ${(args?.url || '').substring(0, 50)}`,
+    browser: () => `Browser: ${args?.action || 'navigate'}`,
+    pdf: () => {
+      const action = args?.action || 'pdf';
+      return `PDF: ${action}${args?.outputPath ? ' → ' + args.outputPath.split('/').pop() : ''}`;
+    },
+    plan: () => `Plan: ${args?.action || 'create'}`,
+    image: () => `Generating image`,
+    screenshot: () => `Taking screenshot`,
+    memory: () => `Memory: ${args?.action || 'recall'}`,
+    code_exec: () => `Executing code`,
+    tts: () => `Text to speech`,
+  };
+
+  if (labels[name]) return labels[name]();
+  return `${name}${args?.action ? `: ${args.action}` : ''}`;
+}
+
+function renderFileChip(metadata) {
+  if (!metadata?.path) return '';
+  const filePath = metadata.path;
+  const fileName = filePath.split('/').pop() || filePath;
+  const ext = fileName.includes('.') ? fileName.split('.').pop().toLowerCase() : '';
+  const fileIcon = ext === 'pdf' ? icon('fileText', 16) : icon('file', 16);
+  const downloadUrl = `${API_BASE}/files/download?path=${encodeURIComponent(filePath)}`;
+  return `
+    <div class="tool-file-chip">
+      <span class="file-icon">${fileIcon}</span>
+      <span class="file-name" title="${escapeHtml(filePath)}">${escapeHtml(fileName)}</span>
+      <a href="${downloadUrl}" class="file-download-btn" target="_blank" download="${escapeHtml(fileName)}">
+        ${icon('download', 12)} Download
+      </a>
+    </div>`;
+}
+
+function formatMarkdown(text) {
+  let html = escapeHtml(text);
+  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+  html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  html = html.replace(/\n/g, '<br>');
+  return html;
 }
 
 // Targeted update for chat messages only (avoids full re-render flicker)

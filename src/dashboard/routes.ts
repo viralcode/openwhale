@@ -20,6 +20,7 @@ import { randomUUID, createHash } from "node:crypto";
 import {
     setModel,
     processMessage as processSessionMessage,
+    processMessageStream as processSessionMessageStream,
     processCommand as processSessionCommand,
     getChatHistory,
     clearChatHistory,
@@ -833,6 +834,88 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 createdAt: new Date().toISOString()
             });
         }
+    });
+
+    // Stream chat message via SSE for real-time step updates
+    dashboard.post("/api/chat/stream", async (c) => {
+        const { message, model: requestModel } = await c.req.json();
+
+        // Resolve model (same logic as /api/chat)
+        let effectiveModel = requestModel;
+        if (!effectiveModel) {
+            for (const [type, config] of providerConfigs.entries()) {
+                if (config.enabled && config.apiKey) {
+                    const defaultModels: Record<string, string> = {
+                        anthropic: "claude-sonnet-4-20250514",
+                        openai: "gpt-4o",
+                        google: "gemini-2.0-flash",
+                        deepseek: "deepseek-chat",
+                        ollama: "llama3.2",
+                    };
+                    effectiveModel = config.selectedModel || defaultModels[type] || "deepseek-chat";
+                    break;
+                }
+            }
+            if (!effectiveModel) {
+                effectiveModel = configStore.get("defaultModel") || "claude-sonnet-4-20250514";
+            }
+        }
+
+        // Check for commands first
+        const commandResult = processSessionCommand("dashboard", message);
+        if (commandResult) {
+            const encoder = new TextEncoder();
+            const stream = new ReadableStream({
+                start(controller) {
+                    const msg = { id: randomUUID(), role: "assistant", content: commandResult, createdAt: new Date().toISOString() };
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "content", data: { text: commandResult } })}\n\n`));
+                    controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "done", data: { message: msg } })}\n\n`));
+                    controller.close();
+                },
+            });
+            return new Response(stream, {
+                headers: {
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    "Connection": "keep-alive",
+                },
+            });
+        }
+
+        setModel(effectiveModel);
+
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+            start(controller) {
+                const emit = (event: string, data: unknown) => {
+                    try {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event, data })}\n\n`));
+                    } catch {
+                        // Stream may be closed
+                    }
+                };
+
+                processSessionMessageStream("dashboard", message, {
+                    model: effectiveModel,
+                    emit,
+                }).then(() => {
+                    try { controller.close(); } catch { }
+                }).catch((err) => {
+                    try {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "error", data: { message: err.message } })}\n\n`));
+                        controller.close();
+                    } catch { }
+                });
+            },
+        });
+
+        return new Response(stream, {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        });
     });
 
     // ============== CHANNELS ==============

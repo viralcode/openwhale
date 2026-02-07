@@ -14,6 +14,8 @@ import { createDiscordAdapter } from "./discord.js";
 import { createSlackAdapter } from "./slack.js";
 import { webAdapter } from "./web.js";
 import { createTwitterAdapter } from "./twitter.js";
+import { registry } from "../providers/index.js";
+import { getProvider, getCurrentModel } from "../sessions/session-service.js";
 // import { createWhatsAppAdapter } from "./whatsapp.js"; // Now using whatsapp-baileys.ts
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,22 +24,25 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     channelRegistry.register(webAdapter);
     await webAdapter.connect();
 
-    // Get AI provider for channels
-    let aiProvider: any = null;
-    let currentModel = "claude-sonnet-4-20250514";
-
-    try {
-        const { createAnthropicProvider } = await import("../providers/anthropic.js");
-        aiProvider = createAnthropicProvider();
-    } catch (err) {
-        console.log("[Channels] No AI provider available for Telegram/Discord");
+    // Get AI provider for channels - use the same registry as the dashboard
+    // This respects whichever provider the user has enabled (DeepSeek, Anthropic, etc.)
+    let aiProvider: any = getProvider();
+    if (!aiProvider) {
+        // Fallback: try first available from registry
+        const providers = registry.listProviders();
+        if (providers.length > 0) {
+            aiProvider = registry.getProvider(providers[0].name);
+        }
+        if (!aiProvider) {
+            console.log("[Channels] No AI provider available for Telegram/Discord");
+        }
     }
 
     // Register Telegram if configured
     const telegram = createTelegramAdapter();
     if (telegram) {
         if (aiProvider) {
-            telegram.setAIProvider(aiProvider, currentModel);
+            telegram.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
         }
         channelRegistry.register(telegram);
         try {
@@ -52,7 +57,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     const discord = createDiscordAdapter();
     if (discord) {
         if (aiProvider) {
-            discord.setAIProvider(aiProvider, currentModel);
+            discord.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
         }
         channelRegistry.register(discord);
         try {
@@ -78,7 +83,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
     const twitter = createTwitterAdapter();
     if (twitter) {
         if (aiProvider) {
-            twitter.setAIProvider(aiProvider, currentModel);
+            twitter.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
         }
         channelRegistry.register(twitter);
         try {
@@ -97,7 +102,6 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         const { join } = await import("path");
         const { homedir } = await import("os");
         const { markMessageProcessed } = await import("../db/message-dedupe.js");
-        const { createAnthropicProvider } = await import("../providers/anthropic.js");
         const { toolRegistry } = await import("../tools/index.js");
         const { skillRegistry } = await import("../skills/base.js");
         const { getSessionContext, handleSlashCommand, recordUserMessage, recordAssistantMessage, finalizeExchange } = await import("../sessions/session-manager.js");
@@ -116,10 +120,6 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
             // Get owner number for filtering
             const ownerNumber = (process.env.WHATSAPP_OWNER_NUMBER || "").replace(/[^0-9]/g, "");
             console.log(`[WhatsApp] Owner number configured: ${ownerNumber || "(not set)"}`);
-
-            // Initialize AI provider
-            const aiProvider = createAnthropicProvider();
-            const currentModel = "claude-sonnet-4-20250514";
 
             await initWhatsApp({
                 printQR: false,
@@ -186,8 +186,10 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                     // Mark as processed BEFORE handling to prevent race conditions
                     markMessageProcessed(messageId, "inbound", fromRaw);
 
-                    // Process with AI if provider is available
-                    if (aiProvider) {
+                    // Process with AI using the active provider from registry
+                    const waProvider = getProvider() as any;
+                    const waModel = getCurrentModel();
+                    if (waProvider) {
                         console.log("[WhatsApp]   ↳ Processing with AI...");
                         try {
                             // Build tools list
@@ -325,8 +327,8 @@ Current time: ${new Date().toLocaleString()}`;
                             while (iterations < maxIterations) {
                                 iterations++;
 
-                                const response = await aiProvider.complete({
-                                    model: currentModel,
+                                const response = await waProvider.complete({
+                                    model: waModel,
                                     messages,
                                     systemPrompt: systemPromptWithMemory,
                                     tools,

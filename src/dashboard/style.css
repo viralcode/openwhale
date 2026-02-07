@@ -1107,6 +1107,137 @@ select.form-input option {
   box-shadow: 0 2px 8px rgba(99, 102, 241, 0.3);
 }
 
+/* ===== STREAMING STEP UI ===== */
+.stream-message {
+  display: flex;
+  gap: 12px;
+  align-self: flex-start;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-bottom-left-radius: 4px;
+  max-width: 85%;
+  padding: 16px 20px;
+  border-radius: var(--radius-lg);
+  animation: messageIn 0.3s ease;
+}
+
+.stream-message .message-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.stream-step {
+  margin-bottom: 4px;
+  border-radius: 8px;
+  overflow: hidden;
+  transition: all 0.2s ease;
+}
+
+.stream-step-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 8px;
+  transition: background 0.15s ease;
+  user-select: none;
+}
+
+.stream-step-header:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.stream-step-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.stream-step-icon.spinning {
+  color: var(--accent-blue);
+  animation: spin 1s linear infinite;
+}
+
+.stream-step-icon.done {
+  color: var(--accent-green);
+}
+
+.stream-step-icon.error {
+  color: var(--accent-red);
+}
+
+.stream-step-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stream-step.completed .stream-step-label {
+  color: var(--text-muted);
+}
+
+.stream-step-chevron {
+  color: var(--text-dim);
+  transition: transform 0.2s ease;
+  display: flex;
+  align-items: center;
+}
+
+.stream-step.expanded .stream-step-chevron {
+  transform: rotate(180deg);
+}
+
+.stream-step-body {
+  display: none;
+  padding: 4px 12px 12px 42px;
+}
+
+.stream-step.expanded .stream-step-body {
+  display: block;
+  animation: fadeIn 0.2s ease;
+}
+
+.stream-step-result {
+  background: rgba(0, 0, 0, 0.25);
+  padding: 10px 12px;
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  overflow-x: auto;
+  max-height: 200px;
+  overflow-y: auto;
+  line-height: 1.5;
+}
+
+/* Thinking step pulse */
+.stream-step.thinking .stream-step-label {
+  color: var(--accent-blue);
+  animation: pulse 2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
 /* ===== TYPING INDICATOR ===== */
 .typing-indicator {
   display: flex;
