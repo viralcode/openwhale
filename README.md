@@ -47,13 +47,13 @@ Switch between any major AI model on the fly. One assistant, unlimited model cho
 
 | Provider | Top Models |
 |----------|------------|
-| **Anthropic** | Claude Sonnet 5, Opus 4.5, Sonnet 4.5 |
+| **Anthropic** |  Opus 4.5, Sonnet 4.5 |
 | **OpenAI** | GPT-5.2, GPT-5, GPT-4o, o4-mini |
 | **Google Gemini** | Gemini 3 Pro, Gemini 2.5 Pro |
 | **Qwen** | Qwen3-Max, QwQ-Plus, Qwen3-Coder |
 | **DeepSeek** | DeepSeek Chat, DeepSeek Coder, DeepSeek Reasoner |
-| **Groq** | Llama 3.3 70B, Mixtral 8x7B |
-| **Together AI** | Any open-source model |
+| **** | Llama 3.3 70B, Mixtral 8x7B |
+| **** | Any open-source model |
 | **Ollama** | Local models (Llama, Mistral, Phi) — no API key! |
 
 <p align="center">
