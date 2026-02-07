@@ -124,7 +124,7 @@ The AI can actually DO things, not just talk about them.
 
 ---
 
-### 🔌 12 API Skills (External Integrations)
+### 🔌 10 API Skills (External Integrations)
 Connect to your favorite services — the AI handles the API calls.
 
 | Skill | What it Does |
@@ -136,8 +136,6 @@ Connect to your favorite services — the AI handles the API calls.
 | **Google Drive** | Upload, download, list files |
 | **Google Tasks** | Manage your to-do lists |
 | **Weather** | Current conditions and forecasts |
-| **Spotify** | Control playback, search music, manage playlists |
-| **Trello** | Manage boards, lists, and cards |
 | **1Password** | Securely fetch passwords and secrets |
 | **Apple Notes/Reminders** | Native macOS integration |
 | **Twitter/X** | Post, search, timeline, mentions, follow |
