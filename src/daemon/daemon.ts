@@ -16,9 +16,9 @@ import { join } from "node:path";
 import { EventEmitter } from "node:events";
 import { logAuditEvent } from "../security/audit.js";
 import { initWhatsApp, sendWhatsAppMessage, isWhatsAppConnected } from "../channels/whatsapp-baileys.js";
-import { createAnthropicProvider, AnthropicProvider } from "../providers/anthropic.js";
-import { toolRegistry } from "../tools/index.js";
-import type { ToolCallContext } from "../tools/base.js";
+import { processMessageWithAI } from "../channels/shared-ai-processor.js";
+import { registry } from "../providers/index.js";
+import { getCurrentModel } from "../sessions/session-service.js";
 import { isMessageProcessed, markMessageProcessed } from "../db/message-dedupe.js";
 import { isCommand, processCommand } from "./chat-commands.js";
 
@@ -50,8 +50,7 @@ export type DaemonStatus = {
     };
 };
 
-// Store last screenshot in memory for easy WhatsApp sending
-let lastScreenshotBase64: string | null = null;
+
 
 export type DaemonMessage = {
     type: "command" | "query" | "subscribe" | "ping" | "chat";
@@ -86,8 +85,6 @@ export class OpenWhaleDaemon extends EventEmitter {
     private startTime: Date | null = null;
     private messagesProcessed = 0;
     private shutdownHandlers: Array<() => Promise<void>> = [];
-    private aiProvider: AnthropicProvider | null = null;
-    private currentModel = "claude-sonnet-4-20250514";
 
     constructor(config: Partial<DaemonConfig> = {}) {
         super();
@@ -114,11 +111,11 @@ export class OpenWhaleDaemon extends EventEmitter {
             unlinkSync(this.config.socketPath);
         }
 
-        // Initialize AI provider
+        // AI provider is handled by the unified registry
         if (this.config.enableAI) {
-            this.aiProvider = createAnthropicProvider();
-            if (this.aiProvider) {
-                console.log("[DAEMON] ✓ AI provider initialized");
+            const provider = registry.getProvider(getCurrentModel());
+            if (provider) {
+                console.log("[DAEMON] ✓ AI provider available via registry");
             }
         }
 
@@ -244,10 +241,26 @@ export class OpenWhaleDaemon extends EventEmitter {
                     }
                 }
 
-                // Auto-reply with AI if enabled
-                if (this.config.enableAI && this.aiProvider) {
+                // Auto-reply with AI using unified shared processor
+                if (this.config.enableAI) {
                     console.log("[DAEMON]   ↳ Processing with AI...");
-                    await this.handleWhatsAppMessage(fromRaw, msg.content);
+                    await processMessageWithAI({
+                        channel: "whatsapp",
+                        from: fromRaw,
+                        content: msg.content,
+                        sendText: async (text) => {
+                            await sendWhatsAppMessage(fromRaw, text);
+                            return { success: true };
+                        },
+                        sendImage: async (imageBuffer, caption) => {
+                            const result = await sendWhatsAppMessage(fromRaw, {
+                                image: imageBuffer,
+                                caption: caption || "Image from OpenWhale",
+                            });
+                            return result;
+                        },
+                        isGroup,
+                    });
                 }
             },
             onConnected: () => {
@@ -256,179 +269,7 @@ export class OpenWhaleDaemon extends EventEmitter {
         });
     }
 
-    /**
-     * Handle WhatsApp message with AI and tools
-     */
-    private async handleWhatsAppMessage(from: string, content: string): Promise<void> {
-        if (!this.aiProvider) return;
 
-        const context: ToolCallContext = {
-            sessionId: `daemon-whatsapp-${from}-${Date.now()}`,
-            workspaceDir: process.cwd(),
-            sandboxed: false,
-        };
-
-        // Build tools list
-        const allTools = toolRegistry.getAll();
-        const tools = allTools.map((tool) => ({
-            name: tool.name,
-            description: tool.description,
-            parameters: toolRegistry.zodToJsonSchema(tool.parameters),
-        }));
-
-        // Add WhatsApp-specific tools
-        tools.push({
-            name: "whatsapp_send",
-            description: "Send a text message via WhatsApp",
-            parameters: {
-                type: "object",
-                properties: {
-                    to: { type: "string", description: "Phone number" },
-                    message: { type: "string", description: "Message text" },
-                },
-                required: ["to", "message"],
-            },
-        });
-
-        tools.push({
-            name: "whatsapp_send_image",
-            description: "Send an image via WhatsApp. After taking a screenshot, call this with use_last_screenshot: true to send it.",
-            parameters: {
-                type: "object",
-                properties: {
-                    to: { type: "string", description: "Phone number to send to" },
-                    use_last_screenshot: { type: "boolean", description: "Set to true to send the last captured screenshot" },
-                    caption: { type: "string", description: "Optional caption for the image" },
-                },
-                required: ["to", "use_last_screenshot"],
-            },
-        });
-
-        const systemPrompt = `You are OpenWhale Daemon, an always-on AI assistant responding via WhatsApp.
-You have FULL access to all tools: exec, file, browser, screenshot, code_exec, memory, and more.
-The user's number is: ${from}. Keep responses concise for mobile.
-
-IMPORTANT: To send a screenshot to the user:
-1. First use the 'screenshot' tool to capture the screen
-2. Then immediately use 'whatsapp_send_image' with: to="${from}", use_last_screenshot=true, caption="Your description"
-
-Be helpful and proactive. Execute tools when asked.`;
-
-        try {
-            const messages: Array<{ role: "user" | "assistant"; content: string }> = [
-                { role: "user", content },
-            ];
-
-            let reply = "";
-            let iterations = 0;
-            const maxIterations = 10;
-
-            while (iterations < maxIterations) {
-                iterations++;
-
-                const response = await this.aiProvider.complete({
-                    model: this.currentModel,
-                    messages,
-                    systemPrompt,
-                    tools,
-                    maxTokens: 2000,
-                    stream: false,
-                });
-
-                if (!response.toolCalls || response.toolCalls.length === 0) {
-                    reply = response.content || "Done!";
-                    break;
-                }
-
-                // Process tool calls
-                const toolResults: Array<{ name: string; result: string }> = [];
-
-                for (const toolCall of response.toolCalls) {
-                    console.log(`[DAEMON]   🔧 Tool: ${toolCall.name}`);
-
-                    try {
-                        const result = await this.executeTool(toolCall.name, toolCall.arguments, context);
-                        toolResults.push({ name: toolCall.name, result: result.slice(0, 5000) });
-                    } catch (err) {
-                        const errMsg = err instanceof Error ? err.message : String(err);
-                        toolResults.push({ name: toolCall.name, result: `Error: ${errMsg}` });
-                    }
-                }
-
-                const assistantContent = response.content
-                    ? `${response.content}\n\n[Tools executed]`
-                    : "[Tools executed]";
-                messages.push({ role: "assistant", content: assistantContent });
-
-                const toolResultsStr = toolResults
-                    .map(t => `${t.name}: ${t.result}`)
-                    .join("\n\n");
-                messages.push({ role: "user", content: `Results:\n${toolResultsStr}\n\nContinue or provide final response.` });
-            }
-
-            // Truncate for WhatsApp
-            if (reply.length > 4000) {
-                reply = reply.slice(0, 3950) + "\n\n... (truncated)";
-            }
-
-            console.log(`[DAEMON]   📤 Replying: "${reply.slice(0, 50)}..."`);
-            await sendWhatsAppMessage(from, reply);
-
-        } catch (error: any) {
-            console.error(`[DAEMON] WhatsApp error: ${error.message}`);
-            await sendWhatsAppMessage(from, `Error: ${error.message.slice(0, 100)}`);
-        }
-    }
-
-    /**
-     * Execute a tool
-     */
-    private async executeTool(name: string, args: unknown, context: ToolCallContext): Promise<string> {
-        // Special case: whatsapp_send (text)
-        if (name === "whatsapp_send") {
-            const { to, message } = args as { to: string; message: string };
-            await sendWhatsAppMessage(to, message);
-            return `Text message sent to ${to}`;
-        }
-
-        // Special case: whatsapp_send_image
-        if (name === "whatsapp_send_image") {
-            const { to, use_last_screenshot, caption } = args as { to: string; use_last_screenshot?: boolean; caption?: string };
-
-            if (use_last_screenshot && lastScreenshotBase64) {
-                // Convert base64 to buffer
-                const imageBuffer = Buffer.from(lastScreenshotBase64, "base64");
-                console.log(`[DAEMON] Sending last screenshot (${imageBuffer.length} bytes) to ${to}`);
-
-                // Send image via WhatsApp
-                const result = await sendWhatsAppMessage(to, {
-                    image: imageBuffer,
-                    caption: caption || "Screenshot from OpenWhale",
-                });
-
-                if (result.success) {
-                    return `Screenshot image sent to ${to}`;
-                } else {
-                    throw new Error(result.error || "Failed to send image");
-                }
-            } else {
-                throw new Error("No screenshot available. Please capture a screenshot first.");
-            }
-        }
-
-        const result = await toolRegistry.execute(name, args, context);
-        if (result.success) {
-            // Special case: screenshot tool - store in memory for whatsapp_send_image
-            if (name === "screenshot" && result.metadata?.base64) {
-                lastScreenshotBase64 = result.metadata.base64 as string;
-                console.log(`[DAEMON] Screenshot captured and stored (${lastScreenshotBase64.length} chars)`);
-                return `${result.content}\n\nScreenshot is ready to send. Use whatsapp_send_image with use_last_screenshot: true`;
-            }
-            return result.content;
-        } else {
-            throw new Error(result.error || "Tool execution failed");
-        }
-    }
 
     /**
      * Handle IPC client connection
@@ -516,13 +357,19 @@ Be helpful and proactive. Execute tools when asked.`;
 
     private async handleChatMessage(message: DaemonMessage): Promise<DaemonResponse> {
         const content = message.payload?.content as string;
-        if (!content || !this.aiProvider) {
-            return { id: message.id, success: false, error: "No content or AI not available" };
+        if (!content) {
+            return { id: message.id, success: false, error: "No content provided" };
+        }
+
+        const model = getCurrentModel();
+        const provider = registry.getProvider(model);
+        if (!provider) {
+            return { id: message.id, success: false, error: "No AI provider available" };
         }
 
         // Simple completion without tools for IPC chat
-        const response = await this.aiProvider.complete({
-            model: this.currentModel,
+        const response = await registry.complete({
+            model,
             messages: [{ role: "user", content }],
             maxTokens: 1000,
             stream: false,
@@ -544,7 +391,7 @@ Be helpful and proactive. Execute tools when asked.`;
             features: {
                 dashboard: this.config.enableDashboard,
                 whatsapp: this.config.enableWhatsApp,
-                ai: this.config.enableAI && this.aiProvider !== null,
+                ai: this.config.enableAI && registry.getProvider(getCurrentModel()) !== null,
             },
         };
     }

@@ -376,6 +376,12 @@ Current time: ${now.toLocaleString()}`;
                         // New plan created — send it
                         const planPreview = result.length > 1500 ? result.slice(0, 1500) + "\n..." : result;
                         await sendText(`📋 Working on it...\n\n${planPreview}`);
+                    } else if (args.action === "complete_step" && result.includes("✅")) {
+                        // Step completed — extract the step line and notify
+                        const stepMatch = result.match(/✅\s*\d+\.\s*.+/);
+                        if (stepMatch) {
+                            await sendText(stepMatch[0]);
+                        }
                     } else if (result.includes("🎉 All steps completed")) {
                         // Plan fully complete — notify
                         await sendText("✅ All steps complete! Preparing final response...");
