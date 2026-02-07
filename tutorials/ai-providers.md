@@ -6,14 +6,14 @@ OpenWhale supports 8 AI providers. You can switch between them anytime from the 
 
 | Provider | Models | Best For |
 |----------|--------|----------|
-| **Anthropic** | Claude 3.5 Sonnet, Claude 4 | Long-form reasoning, tool use |
-| **OpenAI** | GPT-4o, GPT-4 Turbo | General tasks, function calling |
-| **Google** | Gemini 2.5 Flash | Speed, multimodal |
-| **DeepSeek** | DeepSeek V3, R1 | Cost-effective reasoning |
-| **Ollama** | Llama, Mistral, Qwen | Local/private inference |
-| **Groq** | Llama 3.3 70B | Ultra-fast inference |
-| **Together** | Many open models | Open-source variety |
-| **Qwen** | Qwen 2.5 | Chinese language, coding |
+| **Anthropic** | Claude Sonnet 5, Opus 4.5, Sonnet 4.5, Haiku 4.5 | Long-form reasoning, tool use |
+| **OpenAI** | GPT-5.2, GPT-5, GPT-4o, o4-mini, o1-preview | General tasks, function calling |
+| **Google** | Gemini 3 Pro, Gemini 2.5 Pro/Flash | Speed, multimodal |
+| **Qwen** | Qwen3-Max, QwQ-Plus, Qwen3-Coder, Qwen3-VL | Chinese language, coding, vision |
+| **DeepSeek** | DeepSeek Chat, Coder, Reasoner | Cost-effective reasoning |
+| **Groq** | Llama 3.3 70B, Mixtral 8x7B | Ultra-fast inference |
+| **Together** | Any open-source model | Open-source variety |
+| **Ollama** | Llama, Mistral, Phi (local) | Local/private inference |
 
 ## Configuration
 

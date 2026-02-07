@@ -124,7 +124,7 @@ The AI can actually DO things, not just talk about them.
 
 ---
 
-### 🔌 9 API Skills (External Integrations)
+### 🔌 12 API Skills (External Integrations)
 Connect to your favorite services — the AI handles the API calls.
 
 | Skill | What it Does |
