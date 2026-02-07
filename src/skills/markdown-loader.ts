@@ -70,8 +70,10 @@ function sanitizeToolName(name: string): string {
  * Parse YAML frontmatter from a SKILL.md file
  */
 function parseFrontmatter(content: string): { frontmatter: SkillFrontmatter; body: string } {
+    // Normalize line endings (Windows \r\n → Unix \n)
+    const normalized = content.replace(/\r\n/g, "\n");
     const frontmatterRegex = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/;
-    const match = content.match(frontmatterRegex);
+    const match = normalized.match(frontmatterRegex);
 
     if (!match) {
         throw new Error("Invalid SKILL.md: missing frontmatter");
@@ -100,16 +102,37 @@ function parseSimpleYaml(yaml: string): Record<string, unknown> {
     const result: Record<string, unknown> = {};
     const lines = yaml.split("\n");
 
-    for (const line of lines) {
+    let i = 0;
+    while (i < lines.length) {
+        const line = lines[i];
         const trimmed = line.trim();
-        if (!trimmed || trimmed.startsWith("#")) continue;
+        if (!trimmed || trimmed.startsWith("#")) { i++; continue; }
 
         // Find the first colon that separates key from value
         const colonIdx = trimmed.indexOf(":");
-        if (colonIdx <= 0) continue;
+        if (colonIdx <= 0) { i++; continue; }
 
         const key = trimmed.slice(0, colonIdx).trim();
         let value: unknown = trimmed.slice(colonIdx + 1).trim();
+
+        // Handle YAML multiline scalars (> folded, | literal)
+        if (value === ">" || value === "|") {
+            const multilineLines: string[] = [];
+            i++;
+            while (i < lines.length) {
+                const nextLine = lines[i];
+                // If the line is indented, it's part of the multiline value
+                if (nextLine.match(/^\s+\S/) || nextLine.trim() === "") {
+                    multilineLines.push(nextLine.trim());
+                    i++;
+                } else {
+                    break;
+                }
+            }
+            value = multilineLines.join(" ").trim();
+            if (value) result[key] = value;
+            continue;
+        }
 
         // Handle inline JSON (e.g., metadata: { "openclaw": {...} })
         if (typeof value === "string" && value.startsWith("{")) {
@@ -135,6 +158,7 @@ function parseSimpleYaml(yaml: string): Record<string, unknown> {
         if (value !== "") {
             result[key] = value;
         }
+        i++;
     }
 
     return result;
@@ -381,4 +405,31 @@ export function getMarkdownSkillsPrompt(skills: ParsedMarkdownSkill[]): string {
     });
 
     return `# Available Skills\n\n${sections.join("\n\n---\n\n")}`;
+}
+
+// Track which skills were loaded from markdown so we can unregister them on reload
+let loadedMarkdownSkillNames: string[] = [];
+
+/**
+ * Reload all markdown skills — unregisters existing ones, re-reads from disk,
+ * and re-registers. This enables hot-loading new skills without a server restart.
+ */
+export async function reloadMarkdownSkills(): Promise<Skill[]> {
+    const { skillRegistry } = await import("./base.js");
+
+    // Unregister previously loaded markdown skills
+    for (const name of loadedMarkdownSkillNames) {
+        skillRegistry.unregister(name);
+    }
+    loadedMarkdownSkillNames = [];
+
+    // Reload from disk
+    const skills = await loadAllMarkdownSkills();
+    for (const skill of skills) {
+        skillRegistry.register(skill);
+        loadedMarkdownSkillNames.push(skill.metadata.name);
+    }
+
+    console.log(`[MarkdownSkill] Hot-reloaded ${skills.length} markdown skills`);
+    return skills;
 }

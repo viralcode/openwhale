@@ -146,6 +146,24 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
             // Table might not exist yet, that's ok
         }
 
+        // Sync the session-service's currentModel with the enabled provider
+        // so channels (WhatsApp, Telegram, etc.) use the correct provider
+        const defaultModels: Record<string, string> = {
+            anthropic: "claude-sonnet-4-20250514",
+            openai: "gpt-4o",
+            google: "gemini-2.0-flash",
+            deepseek: "deepseek-chat",
+            ollama: "llama3.2",
+        };
+        for (const [type, config] of providerConfigs.entries()) {
+            if (config.enabled && config.apiKey) {
+                const model = (config as any).selectedModel || defaultModels[type] || "deepseek-chat";
+                setModel(model);
+                console.log(`[Dashboard] Set active model to ${model} (provider: ${type})`);
+                break;
+            }
+        }
+
         console.log("[Dashboard] Loaded configs from database");
     } catch (e) {
         console.error("[Dashboard] Failed to load configs from DB:", e);

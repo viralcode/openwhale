@@ -2401,7 +2401,10 @@ function renderTools() {
     camera_snap: 'camera',
     camera_record: 'video',
     screen_record: 'monitor',
-    pdf: 'fileText'
+    pdf: 'fileText',
+    skill_creator: 'sparkles',
+    imessage: 'messageSquare',
+    planning: 'brain'
   };
 
   const categoryColors = {
