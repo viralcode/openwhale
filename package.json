@@ -51,6 +51,7 @@
     "pdf-parse": "^2.4.5",
     "pino": "^10.3.0",
     "playwright": "^1.48.0",
+    "pptxgenjs": "^4.0.1",
     "qrcode": "^1.5.4",
     "qrcode-terminal": "^0.12.0",
     "sqlite-vec": "^0.1.7-alpha.2",

@@ -152,23 +152,27 @@ export class IMessageAdapter implements ChannelAdapter {
                 // Get recent chats
                 const chats = await this.client.listChats(10);
 
-                for (const chat of chats) {
-                    // Get recent messages from each chat
-                    const messages = await this.client.getMessages(chat.id, 5);
+                if (Array.isArray(chats)) {
+                    for (const chat of chats) {
+                        // Get recent messages from each chat
+                        const messages = await this.client.getMessages(chat.id, 5);
 
-                    for (const msg of messages) {
-                        // Skip messages we've already seen
-                        if (this.seenMessageIds.has(msg.id)) continue;
-                        this.seenMessageIds.add(msg.id);
+                        if (Array.isArray(messages)) {
+                            for (const msg of messages) {
+                                // Skip messages we've already seen
+                                if (this.seenMessageIds.has(msg.id)) continue;
+                                this.seenMessageIds.add(msg.id);
 
-                        // Skip our own messages
-                        if (msg.isFromMe) continue;
+                                // Skip our own messages
+                                if (msg.isFromMe) continue;
 
-                        // Skip old messages (only process messages from the last 30 seconds)
-                        const age = Date.now() - msg.timestamp;
-                        if (age > 30_000) continue;
+                                // Skip old messages (only process messages from the last 30 seconds)
+                                const age = Date.now() - msg.timestamp;
+                                if (age > 30_000) continue;
 
-                        this.handleIncomingMessage(msg);
+                                this.handleIncomingMessage(msg);
+                            }
+                        }
                     }
                 }
 

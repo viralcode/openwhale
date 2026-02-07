@@ -31,6 +31,7 @@ import { gitTool } from "./git.js";
 import { dockerTool } from "./docker.js";
 import { sshTool } from "./ssh.js";
 import { dbQueryTool } from "./db-query.js";
+import { slidesTool } from "./slides.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -70,6 +71,7 @@ toolRegistry.register(gitTool);
 toolRegistry.register(dockerTool);
 toolRegistry.register(sshTool);
 toolRegistry.register(dbQueryTool);
+toolRegistry.register(slidesTool);
 
 export { toolRegistry } from "./base.js";
 export type { AgentTool, ToolCallContext, ToolResult, ToolRegistry } from "./base.js";
@@ -103,4 +105,5 @@ export { gitTool } from "./git.js";
 export { dockerTool } from "./docker.js";
 export { sshTool } from "./ssh.js";
 export { dbQueryTool } from "./db-query.js";
+export { slidesTool } from "./slides.js";
 

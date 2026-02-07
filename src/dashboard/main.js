@@ -95,6 +95,7 @@ const ICONS = {
   container: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>',
   server: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>',
   databaseZap: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 12 22"/><path d="M21 5v6"/><path d="M3 12A9 3 0 0 0 14.59 14.87"/><path d="M21 15l-2.5 5H19l-2.5-5"/></svg>',
+  presentation: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>',
 };
 
 // Icon helper function
@@ -141,7 +142,11 @@ let state = {
   editingSkillContent: null,
   editingSkillTree: [],
   editingSkillLoading: false,
-  showCreateSkillModal: false
+  showCreateSkillModal: false,
+  // Tools page
+  toolsSearch: '',
+  toolsPage: 0,
+  toolsCategory: 'all'
 };
 
 // ============================================
@@ -1030,6 +1035,9 @@ function getToolLabel(name, args) {
     pdf: () => {
       const action = args?.action || 'pdf';
       return `PDF: ${action}${args?.outputPath ? ' → ' + args.outputPath.split('/').pop() : ''}`;
+    },
+    slides: () => {
+      return `Slides: ${args?.action || 'create'}${args?.outputPath ? ' → ' + args.outputPath.split('/').pop() : ''}`;
     },
     plan: () => `Plan: ${args?.action || 'create'}`,
     image: () => `Generating image`,
@@ -2633,7 +2641,8 @@ function renderTools() {
     git: 'gitCommit',
     docker: 'container',
     ssh: 'server',
-    db_query: 'databaseZap'
+    db_query: 'databaseZap',
+    slides: 'presentation'
   };
 
   const categoryColors = {
@@ -2645,49 +2654,154 @@ function renderTools() {
     device: 'green'
   };
 
+  // ── Filter by search & category ──
+  const query = (state.toolsSearch || '').toLowerCase();
+  const cat = state.toolsCategory || 'all';
+  const filtered = state.tools.filter(t => {
+    const matchSearch = !query
+      || t.name.toLowerCase().includes(query)
+      || (t.description || '').toLowerCase().includes(query)
+      || (t.category || '').toLowerCase().includes(query);
+    const matchCat = cat === 'all' || t.category === cat;
+    return matchSearch && matchCat;
+  });
+
+  // ── Pagination ──
+  const perPage = 12;
+  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
+  const page = Math.min(state.toolsPage || 0, totalPages - 1);
+  const paged = filtered.slice(page * perPage, (page + 1) * perPage);
+
+  // ── Category pills ──
+  const categories = ['all', ...new Set(state.tools.map(t => t.category).filter(Boolean))];
+  const catPills = categories.map(c => {
+    const isActive = c === cat;
+    const label = c === 'all' ? 'All' : c.charAt(0).toUpperCase() + c.slice(1);
+    const count = c === 'all' ? state.tools.length : state.tools.filter(t => t.category === c).length;
+    return `<button onclick="setToolsCategory('${c}')" style="
+      padding: 6px 14px; border-radius: 20px; border: 1px solid ${isActive ? 'var(--accent)' : 'var(--border)'};
+      background: ${isActive ? 'var(--accent)' : 'transparent'}; color: ${isActive ? '#fff' : 'var(--text-secondary)'};
+      font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.2s;
+      display: inline-flex; align-items: center; gap: 6px;
+    ">${label} <span style="background: ${isActive ? 'rgba(255,255,255,0.2)' : 'var(--bg-tertiary)'}; padding: 1px 7px; border-radius: 10px; font-size: 11px;">${count}</span></button>`;
+  }).join('');
+
+  // ── Page buttons ──
+  let pageButtons = '';
+  if (totalPages > 1) {
+    const prevDisabled = page === 0;
+    const nextDisabled = page >= totalPages - 1;
+    let pages = [];
+    for (let i = 0; i < totalPages; i++) {
+      if (i === 0 || i === totalPages - 1 || Math.abs(i - page) <= 1) {
+        pages.push(i);
+      } else if (pages[pages.length - 1] !== -1) {
+        pages.push(-1); // ellipsis
+      }
+    }
+    pageButtons = `
+      <div style="display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 24px;">
+        <button onclick="setToolsPage(${page - 1})" ${prevDisabled ? 'disabled' : ''} style="
+          padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: transparent;
+          color: ${prevDisabled ? 'var(--text-muted)' : 'var(--text)'}; cursor: ${prevDisabled ? 'default' : 'pointer'};
+          font-size: 13px; opacity: ${prevDisabled ? '0.4' : '1'}; transition: all 0.2s;
+        ">${icon('chevronLeft', 14)} Prev</button>
+        ${pages.map(i => i === -1
+      ? '<span style="color: var(--text-muted); padding: 0 4px;">…</span>'
+      : `<button onclick="setToolsPage(${i})" style="
+              width: 32px; height: 32px; border-radius: 8px; border: 1px solid ${i === page ? 'var(--accent)' : 'var(--border)'};
+              background: ${i === page ? 'var(--accent)' : 'transparent'}; color: ${i === page ? '#fff' : 'var(--text-secondary)'};
+              cursor: pointer; font-size: 13px; font-weight: ${i === page ? '600' : '400'}; transition: all 0.2s;
+            ">${i + 1}</button>`
+    ).join('')}
+        <button onclick="setToolsPage(${page + 1})" ${nextDisabled ? 'disabled' : ''} style="
+          padding: 6px 12px; border-radius: 8px; border: 1px solid var(--border); background: transparent;
+          color: ${nextDisabled ? 'var(--text-muted)' : 'var(--text)'}; cursor: ${nextDisabled ? 'default' : 'pointer'};
+          font-size: 13px; opacity: ${nextDisabled ? '0.4' : '1'}; transition: all 0.2s;
+        ">Next ${icon('chevronRight', 14)}</button>
+      </div>
+      <div style="text-align: center; margin-top: 8px; font-size: 12px; color: var(--text-muted);">
+        Showing ${page * perPage + 1}–${Math.min((page + 1) * perPage, filtered.length)} of ${filtered.length} tool${filtered.length !== 1 ? 's' : ''}
+      </div>
+    `;
+  }
+
   return `
-    <div class="page-header">
+    <div class="page-header" style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 16px;">
       <div>
         <h1 class="page-title">Tools</h1>
         <p class="page-subtitle">${state.tools.length} tools available for AI operations</p>
       </div>
+      <div style="position: relative; width: 280px;">
+        <input
+          type="text"
+          id="tools-search-input"
+          placeholder="Search tools..."
+          value="${state.toolsSearch || ''}"
+          oninput="setToolsSearch(this.value)"
+          style="
+            width: 100%; padding: 10px 14px 10px 38px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--bg-secondary);
+            color: var(--text); font-size: 14px; outline: none;
+            transition: border-color 0.2s;
+          "
+          onfocus="this.style.borderColor='var(--accent)'"
+          onblur="this.style.borderColor='var(--border)'"
+        />
+        <span style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); pointer-events: none;">
+          ${icon('search', 16)}
+        </span>
+      </div>
     </div>
 
-    <div class="bento-grid">
-      ${state.tools.map(t => `
-        <div class="bento-item bento-sm" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
-          <div style="display: flex; align-items: flex-start; justify-content: space-between;">
-            <div style="display: flex; align-items: center; gap: 12px;">
-              <span class="stat-icon ${categoryColors[t.category] || 'blue'}" style="width: 40px; height: 40px;">
-                ${icon(toolIcons[t.name] || 'tool', 18)}
-              </span>
-              <div>
-                <div style="font-weight: 600; font-size: 15px;">${t.name}</div>
-                <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">
-                  ${t.category}
+    <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 20px;">
+      ${catPills}
+    </div>
+
+    ${filtered.length === 0 ? `
+      <div style="text-align: center; padding: 60px 20px; color: var(--text-muted);">
+        <span style="font-size: 48px; display: block; margin-bottom: 12px;">🔍</span>
+        <div style="font-size: 16px; font-weight: 500;">No tools found</div>
+        <div style="font-size: 13px; margin-top: 4px;">Try a different search term or category</div>
+      </div>
+    ` : `
+      <div class="bento-grid">
+        ${paged.map(t => `
+          <div class="bento-item bento-sm" style="padding: 20px; display: flex; flex-direction: column; gap: 12px;">
+            <div style="display: flex; align-items: flex-start; justify-content: space-between;">
+              <div style="display: flex; align-items: center; gap: 12px;">
+                <span class="stat-icon ${categoryColors[t.category] || 'blue'}" style="width: 40px; height: 40px;">
+                  ${icon(toolIcons[t.name] || 'tool', 18)}
+                </span>
+                <div>
+                  <div style="font-weight: 600; font-size: 15px;">${t.name}</div>
+                  <div style="font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; margin-top: 2px;">
+                    ${t.category}
+                  </div>
                 </div>
               </div>
+              <span style="display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 8px; border-radius: 12px; background: ${t.disabled ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)'}; color: ${t.disabled ? 'var(--error)' : 'var(--success)'};">
+                ${t.disabled ? icon('x', 10) : icon('check', 10)}
+                ${t.disabled ? 'Off' : 'On'}
+              </span>
             </div>
-            <span style="display: flex; align-items: center; gap: 4px; font-size: 11px; padding: 4px 8px; border-radius: 12px; background: ${t.disabled ? 'rgba(239, 68, 68, 0.15)' : 'rgba(34, 197, 94, 0.15)'}; color: ${t.disabled ? 'var(--error)' : 'var(--success)'};">
-              ${t.disabled ? icon('x', 10) : icon('check', 10)}
-              ${t.disabled ? 'Off' : 'On'}
-            </span>
+            <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; flex: 1;">
+              ${t.description}
+            </div>
+            <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border);">
+              <span style="font-size: 11px; color: var(--text-muted);">
+                ${t.requiresApproval ? '🔐 Approval required' : '⚡ Auto-execute'}
+              </span>
+              <label class="toggle" style="transform: scale(0.8);">
+                <input type="checkbox" ${!t.disabled ? 'checked' : ''} onchange="toggleTool('${t.name}', this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <div style="font-size: 13px; color: var(--text-secondary); line-height: 1.5; flex: 1;">
-            ${t.description}
-          </div>
-          <div style="display: flex; align-items: center; justify-content: space-between; padding-top: 8px; border-top: 1px solid var(--border);">
-            <span style="font-size: 11px; color: var(--text-muted);">
-              ${t.requiresApproval ? '🔐 Approval required' : '⚡ Auto-execute'}
-            </span>
-            <label class="toggle" style="transform: scale(0.8);">
-              <input type="checkbox" ${!t.disabled ? 'checked' : ''} onchange="toggleTool('${t.name}', this.checked)">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
-        </div>
-      `).join('')}
-    </div>
+        `).join('')}
+      </div>
+      ${pageButtons}
+    `}
   `;
 }
 
@@ -3741,6 +3855,31 @@ window.toggleTool = function (name, enabled) {
     tool.disabled = !enabled;
     render();
   }
+};
+
+window.setToolsSearch = function (query) {
+  state.toolsSearch = query;
+  state.toolsPage = 0;
+  render();
+  // Re-focus and restore cursor position
+  requestAnimationFrame(() => {
+    const input = document.getElementById('tools-search-input');
+    if (input) { input.focus(); input.setSelectionRange(query.length, query.length); }
+  });
+};
+
+window.setToolsPage = function (page) {
+  state.toolsPage = Math.max(0, page);
+  render();
+  // Scroll to top of tools area
+  const main = document.querySelector('.main-content');
+  if (main) main.scrollTop = 0;
+};
+
+window.setToolsCategory = function (cat) {
+  state.toolsCategory = cat;
+  state.toolsPage = 0;
+  render();
 };
 
 window.toggleProvider = async function (type, enabled) {
