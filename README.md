@@ -108,7 +108,7 @@ The AI can actually DO things, not just talk about them.
 | **docker** | Container management and orchestration |
 | **ssh** | Remote server connections and commands |
 | **db_query** | SQL database queries (SQLite, PostgreSQL, MySQL) |
-| **email_send** | Send emails via SMTP |
+| **email_send** | Send emails via Gmail API |
 | **zip** | Compress and extract archives |
 | **qr_code** | Generate QR codes |
 | **system_info** | System diagnostics and monitoring |
