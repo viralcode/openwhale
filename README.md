@@ -29,7 +29,7 @@
 
 ## What is OpenWhale?
 
-OpenWhale is a **self-extensible AI assistant** that doesn't just chat — it takes action. Connect it to multiple AI models, let it talk on your behalf through WhatsApp/Telegram/Discord/Twitter, browse the web with real browser automation, execute code, manage your calendar, send emails, and basically do whatever you need it to do.
+OpenWhale is a **self-extensible AI assistant** that doesn't just chat — it takes action. Connect it to multiple AI models, let it talk on your behalf through WhatsApp/Telegram/Discord/Twitter/iMessage, browse the web with real browser automation, execute code, manage your calendar, send emails, and basically do whatever you need it to do.
 
 Think of it as **Claude, GPT-4, or DeepSeek with arms and legs**.
 
@@ -66,7 +66,7 @@ Capable of handling long-running, complex tasks with multi-step reasoning. It pl
 
 ---
 
-### 💬 4 Messaging Channels
+### 💬 5 Messaging Channels
 Your AI responds across all platforms — unified inbox, one brain.
 
 | Channel | How it Works |
@@ -75,10 +75,11 @@ Your AI responds across all platforms — unified inbox, one brain.
 | **Telegram** | Create a bot with @BotFather |
 | **Discord** | Add bot to your server |
 | **Twitter/X** | Auto-reply to mentions via bird CLI (cookie auth, no API!) |
+| **iMessage** | macOS native — read and send iMessages via `imsg` CLI |
 
 ---
 
-### 🛠️ 15 Built-in Tools
+### 🛠️ 16 Built-in Tools
 The AI can actually DO things, not just talk about them.
 
 | Tool | Capability |
@@ -97,6 +98,7 @@ The AI can actually DO things, not just talk about them.
 | **nodes** | Structured data and knowledge graphs |
 | **camera** | Take photos/video from connected cameras |
 | **location** | Get current geolocation |
+| **imessage** | Read and send iMessages on macOS |
 | **extend** | Create self-extensions for automated workflows |
 
 <p align="center">
@@ -207,6 +209,7 @@ Production-ready security out of the box.
 | **Run shell commands** | ✅ Full access | ❌ No | ❌ No | ❌ No |
 | **Browser automation** | ✅ Playwright + BrowserOS | ❌ Limited | ✅ Limited | ❌ No |
 | **WhatsApp/Telegram/Discord** | ✅ All channels | ❌ No | ❌ No | ❌ Maybe one |
+| **iMessage (macOS)** | ✅ Native | ❌ No | ❌ No | ❌ No |
 | **Twitter integration** | ✅ Full API | ❌ No | ❌ No | ❌ No |
 | **Self-extensible** | ✅ Creates own tools | ❌ No | ❌ No | ❌ No |
 | **Runs locally** | ✅ Your machine | ❌ Cloud only | ❌ Cloud only | ❌ Usually cloud |
@@ -325,7 +328,7 @@ OpenWhale comes with a web dashboard for managing everything without touching th
 ### What you can do from the dashboard:
 
 - **Chat** — Talk to the AI with full tool support
-- **Connect channels** — Link WhatsApp, Telegram, Discord by scanning QR codes or adding tokens
+- **Connect channels** — Link WhatsApp, Telegram, Discord, iMessage by scanning QR codes or adding tokens
 - **Manage providers** — Add API keys for Claude, GPT-4, Gemini, etc.
 - **Configure skills** — Enable GitHub, Notion, Weather, Google services
 - **View message history** — See all conversations across channels
@@ -438,6 +441,41 @@ brew install steipete/tap/bird
 
 > ⚠️ **Note:** Twitter/X may rate-limit or flag automated posting. Use with caution on accounts you care about.
 
+### iMessage (macOS only)
+
+OpenWhale can read and send iMessages natively on macOS using the `imsg` CLI.
+
+**Prerequisites:**
+- macOS (iMessage is not available on other platforms)
+- Messages.app signed in with your Apple ID
+- Full Disk Access granted to your terminal (System Settings → Privacy & Security → Full Disk Access)
+- Automation permission for Messages.app
+
+**Install imsg CLI:**
+```bash
+brew install steipete/tap/imsg
+```
+
+**Via Dashboard:**
+1. Go to `http://localhost:18789/dashboard`
+2. Navigate to **Channels**
+3. Find the **iMessage** card
+4. Click **⬇️ Install imsg CLI** (if not already installed)
+5. Click **📱 Connect iMessage**
+6. Done! The AI can now read and send iMessages
+
+**What the AI can do with iMessage:**
+- **List chats** — See your recent iMessage conversations
+- **Read messages** — Read message history from any chat
+- **Send messages** — Send iMessages to any phone number or email
+
+**Example prompts:**
+- *"Show me my recent iMessage conversations"*
+- *"Read my latest messages from Mom"*
+- *"Send an iMessage to +1234567890 saying I'll be there in 10 minutes"*
+
+> ⚠️ **Note:** iMessage requires macOS. On other platforms, the iMessage card will show as unavailable. The connection persists across server restarts.
+
 ---
 
 ## Tools
@@ -460,6 +498,7 @@ These are the built-in capabilities the AI can use. You don't need to configure 
 | **nodes** | Work with structured data and knowledge graphs |
 | **camera** | Take photos or record video from connected cameras |
 | **location** | Get current geolocation data |
+| **imessage** | Read and send iMessages on macOS via `imsg` CLI |
 | **extend** | Create self-extensions for automated workflows |
 
 ---
