@@ -907,6 +907,7 @@ function showChannels() {
         { name: "Slack", type: "Bot", key: "SLACK_BOT_TOKEN", status: !!process.env.SLACK_BOT_TOKEN },
         { name: "WhatsApp", type: "Baileys", key: "WHATSAPP_OWNER_NUMBER", status: !!process.env.WHATSAPP_OWNER_NUMBER },
         { name: "Twitter/X", type: "bird CLI", key: "TWITTER_ENABLED", status: process.env.TWITTER_ENABLED === "true" },
+        { name: "iMessage", type: "imsg CLI", key: null, status: process.platform === "darwin" },
     ];
 
     for (const ch of channels) {

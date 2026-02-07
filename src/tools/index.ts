@@ -16,6 +16,7 @@ import { cameraTools } from "./camera.js";
 import { extendTool } from "./extend.js";
 import { planningTool } from "./planning-tool.js";
 import { pdfTool } from "./pdf.js";
+import { imessageTool } from "./imessage.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -33,6 +34,7 @@ toolRegistry.register(screenshotTool);
 toolRegistry.register(extendTool);
 toolRegistry.register(pdfTool);
 toolRegistry.register(planningTool);
+toolRegistry.register(imessageTool as any);
 
 // Register camera tools
 for (const tool of cameraTools) {
@@ -58,3 +60,4 @@ export { cameraTools } from "./camera.js";
 export { extendTool } from "./extend.js";
 export { pdfTool } from "./pdf.js";
 export { planningTool } from "./planning-tool.js";
+export { imessageTool } from "./imessage.js";

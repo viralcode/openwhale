@@ -716,9 +716,12 @@ function updateStreamingUI() {
   // Build streaming steps HTML
   let html = '<div class="message-avatar" style="font-size: 18px;">🐋</div><div class="message-body">';
 
-  // Render steps
-  for (let si = 0; si < state.streamingSteps.length; si++) {
-    const step = state.streamingSteps[si];
+  // Render steps — group tool steps together
+  const toolSteps = state.streamingSteps.filter(s => s.type === 'tool');
+  const nonToolSteps = state.streamingSteps.filter(s => s.type !== 'tool');
+
+  // Render non-tool steps (thinking, error)
+  for (const step of nonToolSteps) {
     if (step.type === 'thinking' && !step.done) {
       html += `
         <div class="stream-step thinking">
@@ -726,30 +729,6 @@ function updateStreamingUI() {
             <span class="stream-step-icon spinning">${icon('loader', 14)}</span>
             <span class="stream-step-label">Thinking${step.iteration > 1 ? ` (round ${step.iteration})` : ''}...</span>
           </div>
-        </div>`;
-    } else if (step.type === 'tool') {
-      const statusIcon = step.status === 'running'
-        ? `<span class="stream-step-icon spinning">${icon('loader', 14)}</span>`
-        : step.status === 'completed'
-          ? `<span class="stream-step-icon done">${icon('check', 14)}</span>`
-          : `<span class="stream-step-icon error">${icon('x', 14)}</span>`;
-
-      const toolLabel = getToolLabel(step.name, step.arguments);
-      const isExpanded = step.expanded ? ' expanded' : '';
-
-      html += `
-        <div class="stream-step ${step.status}${isExpanded}" data-step-index="${si}">
-          <div class="stream-step-header" onclick="toggleStreamStep(${si})">
-            ${statusIcon}
-            <span class="stream-step-label">${escapeHtml(toolLabel)}</span>
-            ${step.status !== 'running' ? `<span class="stream-step-chevron">${icon('chevronDown', 12)}</span>` : ''}
-          </div>
-          ${step.result ? `
-            <div class="stream-step-body">
-              <div class="stream-step-result">${typeof step.result === 'string' ? escapeHtml(step.result).substring(0, 500) : JSON.stringify(step.result, null, 2).substring(0, 500)}</div>
-              ${renderFileChip(step.metadata)}
-            </div>
-          ` : ''}
         </div>`;
     } else if (step.type === 'error') {
       html += `
@@ -759,6 +738,62 @@ function updateStreamingUI() {
             <span class="stream-step-label">${escapeHtml(step.message)}</span>
           </div>
         </div>`;
+    }
+  }
+
+  // Render tool steps as compact grouped chips
+  if (toolSteps.length > 0) {
+    const toolChipsHtml = toolSteps.map((step, idx) => {
+      const si = state.streamingSteps.indexOf(step);
+      const statusIcon = step.status === 'running'
+        ? `<span class="tc-status-icon running spinning">${icon('loader', 12)}</span>`
+        : step.status === 'completed'
+          ? `<span class="tc-status-icon done">${icon('check', 12)}</span>`
+          : `<span class="tc-status-icon error">${icon('x', 12)}</span>`;
+
+      const toolLabel = getToolLabel(step.name, step.arguments);
+      const isExpanded = step.expanded ? ' expanded' : '';
+
+      return `
+        <div class="tool-call-chip stream-chip${isExpanded}" data-step-index="${si}">
+          <div class="tool-call-chip-header" onclick="toggleStreamStep(${si})">
+            ${statusIcon}
+            <span class="tool-call-chip-name">${escapeHtml(toolLabel)}</span>
+            ${step.status !== 'running' ? `<span class="tool-call-chip-chevron">${icon('chevronDown', 10)}</span>` : ''}
+          </div>
+          ${step.result ? `
+            <div class="tool-call-chip-body${step.expanded ? ' show' : ''}">
+              <div class="tool-call-result">${typeof step.result === 'string' ? escapeHtml(step.result).substring(0, 500) : JSON.stringify(step.result, null, 2).substring(0, 500)}</div>
+              ${renderFileChip(step.metadata)}
+            </div>
+          ` : ''}
+        </div>`;
+    }).join('');
+
+    if (toolSteps.length > 1) {
+      const completed = toolSteps.filter(s => s.status === 'completed').length;
+      const running = toolSteps.filter(s => s.status === 'running').length;
+      const errored = toolSteps.filter(s => s.status === 'error').length;
+      const parts = [];
+      if (running) parts.push(`${running} running`);
+      if (completed) parts.push(`${completed} done`);
+      if (errored) parts.push(`${errored} failed`);
+
+      html += `
+        <div class="tool-call-group">
+          <details class="tool-call-group-details" open>
+            <summary class="tool-call-group-summary">
+              ${icon('wrench', 12)}
+              <span>${toolSteps.length} tool calls</span>
+              <span class="tool-call-group-meta">${parts.join(', ')}</span>
+            </summary>
+            <div class="tool-call-group-list">
+              ${toolChipsHtml}
+            </div>
+          </details>
+        </div>`;
+    } else {
+      html += `<div class="tool-call-group-single">${toolChipsHtml}</div>`;
     }
   }
 
@@ -834,7 +869,20 @@ function renderFileChip(metadata) {
 
 function formatMarkdown(text) {
   let html = escapeHtml(text);
+  // Code blocks first (protect from other replacements)
   html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // Headings (must come before line-break replacement)
+  html = html.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Horizontal rules
+  html = html.replace(/^---$/gm, '<hr>');
+  // Unordered lists
+  html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+  // Ordered lists
+  html = html.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Inline formatting
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   html = html.replace(/\n/g, '<br>');
@@ -1566,13 +1614,24 @@ function renderMessage(msg) {
   let content = escapeHtml(msg.content);
   // Simple markdown rendering
   content = content.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
+  // Headings
+  content = content.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
+  content = content.replace(/^### (.+)$/gm, '<h3>$1</h3>');
+  content = content.replace(/^## (.+)$/gm, '<h2>$1</h2>');
+  content = content.replace(/^# (.+)$/gm, '<h1>$1</h1>');
+  // Horizontal rules
+  content = content.replace(/^---$/gm, '<hr>');
+  // Lists
+  content = content.replace(/^- (.+)$/gm, '<li>$1</li>');
+  content = content.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
+  // Inline
   content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
   content = content.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
   content = content.replace(/\n/g, '<br>');
 
   let toolCallsHtml = '';
   if (msg.toolCalls && msg.toolCalls.length > 0) {
-    toolCallsHtml = msg.toolCalls.map((tc, i) => {
+    const toolChips = msg.toolCalls.map((tc, i) => {
       // Check for image in result metadata (supports multiple formats)
       let imageSrc = null;
       const resultMeta = typeof tc.result === 'object' ? tc.result?.metadata : null;
@@ -1612,29 +1671,63 @@ function renderMessage(msg) {
         `;
       }
 
+      const statusIcon = tc.status === 'completed'
+        ? `<span class="tc-status-icon done">${icon('check', 12)}</span>`
+        : tc.status === 'error'
+          ? `<span class="tc-status-icon error">${icon('x', 12)}</span>`
+          : `<span class="tc-status-icon running">${icon('loader', 12)}</span>`;
+
+      const toolLabel = getToolLabel(tc.name, tc.arguments);
+
       return `
-      <div class="tool-call">
-        <div class="tool-call-header" onclick="toggleToolCall('${msg.id}', ${i})">
-          <span class="tool-call-icon">${icon('wrench', 14)}</span>
-          <span class="tool-call-name">${tc.name}</span>
-          <span class="tool-call-status ${tc.status}">${tc.status}</span>
+      <div class="tool-call-chip" onclick="toggleToolCall('${msg.id}', ${i})">
+        <div class="tool-call-chip-header">
+          ${statusIcon}
+          <span class="tool-call-chip-name">${escapeHtml(toolLabel)}</span>
+          <span class="tool-call-chip-chevron">${icon('chevronDown', 10)}</span>
         </div>
-        <div class="tool-call-body" id="tool-${msg.id}-${i}">
-          <div style="color: var(--text-muted); margin-bottom: 4px;">Arguments:</div>
+        <div class="tool-call-chip-body" id="tool-${msg.id}-${i}">
           <div class="tool-call-args">${JSON.stringify(tc.arguments, null, 2)}</div>
           ${tc.result ? `
-            <div style="color: var(--text-muted); margin: 12px 0 4px;">Result:</div>
             ${imageSrc ? `
               <div class="tool-call-result-image">
-                <img src="${imageSrc}" alt="Tool Result" style="max-width: 100%; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 8px;">
+                <img src="${imageSrc}" alt="Tool Result" style="max-width: 100%; border-radius: 6px; margin-top: 6px;">
               </div>
             ` : ''}
-            <div class="tool-call-result">${typeof tc.result === 'string' ? escapeHtml(tc.result) : JSON.stringify(tc.result, null, 2)}</div>
+            <div class="tool-call-result">${typeof tc.result === 'string' ? escapeHtml(tc.result).substring(0, 500) : JSON.stringify(tc.result, null, 2).substring(0, 500)}</div>
             ${fileChipHtml}
           ` : ''}
         </div>
       </div>
     `}).join('');
+
+    // Group tool calls if more than one
+    if (msg.toolCalls.length > 1) {
+      const completed = msg.toolCalls.filter(tc => tc.status === 'completed').length;
+      const errored = msg.toolCalls.filter(tc => tc.status === 'error').length;
+      const total = msg.toolCalls.length;
+      const summaryParts = [];
+      if (completed) summaryParts.push(`${completed} completed`);
+      if (errored) summaryParts.push(`${errored} failed`);
+      const summaryText = summaryParts.join(', ') || `${total} tools`;
+
+      toolCallsHtml = `
+        <div class="tool-call-group">
+          <details class="tool-call-group-details">
+            <summary class="tool-call-group-summary">
+              ${icon('wrench', 12)}
+              <span>${total} tool calls</span>
+              <span class="tool-call-group-meta">${summaryText}</span>
+            </summary>
+            <div class="tool-call-group-list">
+              ${toolChips}
+            </div>
+          </details>
+        </div>
+      `;
+    } else {
+      toolCallsHtml = `<div class="tool-call-group-single">${toolChips}</div>`;
+    }
   }
 
   // Icons
@@ -1800,6 +1893,25 @@ function renderChannels() {
             <button class="btn btn-primary" onclick="connectDiscord()" style="margin-top: 16px; width: 100%">
               🎮 Connect Discord Bot
             </button>
+          ` : ''}
+          
+          ${ch.type === 'imessage' ? `
+            ${!ch.available ? `
+              <div style="margin-top: 16px; padding: 12px; background: var(--surface-2); border-radius: 8px; text-align: center;">
+                <div style="font-size: 24px; margin-bottom: 8px;">🚫</div>
+                <div style="color: var(--text-muted); font-size: 13px;">iMessage is only available on macOS</div>
+              </div>
+            ` : !ch.connected ? `
+              <div style="margin-top: 16px; display: flex; flex-direction: column; gap: 8px;">
+                <button class="btn btn-secondary" onclick="installImsg()" style="width: 100%" id="btn-install-imsg">
+                  ⬇️ Install imsg CLI
+                </button>
+                <button class="btn btn-primary" onclick="connectIMessage()" style="width: 100%" id="btn-connect-imsg">
+                  📱 Connect iMessage
+                </button>
+              </div>
+              <div id="imessage-status" style="margin-top: 8px; font-size: 12px; color: var(--text-muted); text-align: center;"></div>
+            ` : ''}
           ` : ''}
           
           <div class="channel-stats">
@@ -3380,7 +3492,12 @@ window.connectChannelInSetup = async function (type) {
 
 window.toggleToolCall = function (msgId, index) {
   const el = document.getElementById(`tool-${msgId}-${index}`);
-  if (el) el.classList.toggle('expanded');
+  if (el) {
+    el.classList.toggle('expanded');
+    // Also toggle parent chip's expanded class for chevron rotation
+    const chip = el.closest('.tool-call-chip');
+    if (chip) chip.classList.toggle('expanded');
+  }
 };
 
 window.toggleTool = function (name, enabled) {
@@ -3871,7 +3988,8 @@ window.viewChannelMessages = async function (type) {
     whatsapp: 'WhatsApp',
     telegram: 'Telegram',
     discord: 'Discord',
-    web: 'Web'
+    web: 'Web',
+    imessage: 'iMessage'
   };
 
   overlay.innerHTML = `
@@ -3994,7 +4112,8 @@ function getChannelIcon(type) {
     discord: 'messageSquare',
     slack: 'messageSquare',
     web: 'globe',
-    websocket: 'globe'
+    websocket: 'globe',
+    imessage: 'smartphone'
   };
   return icon(iconMap[type] || 'radio');
 }
@@ -4017,3 +4136,57 @@ window.clearChat = clearChat;
 window.loadBirdConfig = loadBirdConfig;
 window.saveTwitterCookies = saveTwitterCookies;
 window.checkBirdCLI = checkBirdCLI;
+
+// iMessage handlers
+window.installImsg = async function () {
+  const btn = document.getElementById('btn-install-imsg');
+  const statusEl = document.getElementById('imessage-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Installing...'; }
+  if (statusEl) statusEl.textContent = 'Installing imsg CLI... this may take a minute.';
+
+  try {
+    const res = await api('/channels/imessage/install', { method: 'POST' });
+    if (res.ok) {
+      if (statusEl) { statusEl.textContent = '✅ ' + (res.message || 'imsg installed!'); statusEl.style.color = 'var(--success)'; }
+      if (btn) { btn.textContent = '✅ Installed'; }
+      if (res.alreadyInstalled) {
+        await showAlert('imsg CLI is already installed!', '✅ Ready');
+      } else {
+        await showAlert('imsg CLI installed successfully! You can now connect iMessage.', '✅ Installed');
+      }
+    } else {
+      if (statusEl) { statusEl.textContent = '❌ ' + (res.error || 'Install failed'); statusEl.style.color = 'var(--error)'; }
+      if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install imsg CLI'; }
+      await showAlert(res.error || 'Installation failed', '❌ Error');
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '❌ ' + e.message; statusEl.style.color = 'var(--error)'; }
+    if (btn) { btn.disabled = false; btn.textContent = '⬇️ Install imsg CLI'; }
+    await showAlert('Installation failed: ' + e.message, '❌ Error');
+  }
+};
+
+window.connectIMessage = async function () {
+  const btn = document.getElementById('btn-connect-imsg');
+  const statusEl = document.getElementById('imessage-status');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Connecting...'; }
+  if (statusEl) statusEl.textContent = 'Connecting to iMessage...';
+
+  try {
+    const res = await api('/channels/imessage/connect', { method: 'POST' });
+    if (res.ok) {
+      if (statusEl) { statusEl.textContent = '✅ Connected!'; statusEl.style.color = 'var(--success)'; }
+      await showAlert(res.message || 'iMessage connected!', '✅ Success');
+      await loadChannels();
+      render();
+    } else {
+      if (statusEl) { statusEl.textContent = '❌ ' + (res.error || 'Connection failed'); statusEl.style.color = 'var(--error)'; }
+      if (btn) { btn.disabled = false; btn.textContent = '📱 Connect iMessage'; }
+      await showAlert(res.error || 'Connection failed', '❌ Error');
+    }
+  } catch (e) {
+    if (statusEl) { statusEl.textContent = '❌ ' + e.message; statusEl.style.color = 'var(--error)'; }
+    if (btn) { btn.disabled = false; btn.textContent = '📱 Connect iMessage'; }
+    await showAlert('Failed to connect: ' + e.message, '❌ Error');
+  }
+};

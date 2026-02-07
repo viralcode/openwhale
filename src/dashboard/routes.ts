@@ -101,6 +101,28 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
                     process.env.DISCORD_BOT_TOKEN = c.credentials.botToken;
                 }
             }
+
+            // Auto-reconnect iMessage if it was previously enabled (macOS only)
+            if (c.type === "imessage" && c.enabled && process.platform === "darwin") {
+                (async () => {
+                    try {
+                        const { execSync } = await import("node:child_process");
+                        execSync("which imsg", { stdio: "ignore", env: { ...process.env, PATH: `/opt/homebrew/bin:/usr/local/bin:${process.env.HOME}/.cargo/bin:${process.env.PATH}` } });
+
+                        const { createIMessageAdapter } = await import("../channels/imessage/adapter.js");
+                        const imessage = createIMessageAdapter();
+                        if (imessage) {
+                            await imessage.connect();
+                            const { channelRegistry } = await import("../channels/base.js");
+                            channelRegistry.register(imessage);
+                            channelConfigs.set("imessage", { ...channelConfigs.get("imessage")!, connected: true });
+                            console.log("[Dashboard] ✓ iMessage auto-reconnected from saved config");
+                        }
+                    } catch (e) {
+                        console.log("[Dashboard] iMessage auto-reconnect skipped:", e instanceof Error ? e.message : String(e));
+                    }
+                })();
+            }
         }
 
         // Load setup state
@@ -960,6 +982,16 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 connected: channelConfigs.get("discord")?.connected ?? false,
                 messagesSent: 0,
                 messagesReceived: 0
+            },
+            {
+                name: "iMessage",
+                type: "imessage",
+                enabled: channelConfigs.get("imessage")?.enabled ?? false,
+                connected: channelConfigs.get("imessage")?.connected ?? false,
+                messagesSent: 0,
+                messagesReceived: 0,
+                platform: process.platform,
+                available: process.platform === "darwin"
             }
         ];
 
@@ -1131,6 +1163,132 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
     dashboard.get("/api/channels/discord/status", async (c) => {
         const config = channelConfigs.get("discord");
         return c.json({ connected: config?.connected ?? false, enabled: config?.enabled ?? false });
+    });
+
+    // iMessage status
+    dashboard.get("/api/channels/imessage/status", async (c) => {
+        const config = channelConfigs.get("imessage");
+        const isMac = process.platform === "darwin";
+        let imsgInstalled = false;
+
+        if (isMac) {
+            try {
+                await execAsync("which imsg");
+                imsgInstalled = true;
+            } catch { /* not installed */ }
+        }
+
+        return c.json({
+            connected: config?.connected ?? false,
+            enabled: config?.enabled ?? false,
+            isMac,
+            imsgInstalled
+        });
+    });
+
+    // iMessage connect
+    dashboard.post("/api/channels/imessage/connect", async (c) => {
+        try {
+            if (process.platform !== "darwin") {
+                return c.json({ ok: false, error: "iMessage is only available on macOS" }, 400);
+            }
+
+            // Check if imsg CLI is installed
+            try {
+                await execAsync("which imsg");
+            } catch {
+                return c.json({ ok: false, error: "imsg CLI not installed. Click 'Install imsg' first." }, 400);
+            }
+
+            // Start the iMessage adapter
+            const { createIMessageAdapter } = await import("../channels/imessage/adapter.js");
+            const imessage = createIMessageAdapter();
+            if (!imessage) {
+                return c.json({ ok: false, error: "Failed to create iMessage adapter" }, 500);
+            }
+
+            // Set up AI provider if available
+            const enabledProvider = Array.from(providerConfigs.entries()).find(([_, cfg]) => cfg.enabled && cfg.apiKey);
+            if (enabledProvider) {
+                const [provType, _provCfg] = enabledProvider;
+                let aiProvider = null;
+                if (provType === "anthropic") {
+                    const { createAnthropicProvider } = await import("../providers/anthropic.js");
+                    aiProvider = createAnthropicProvider();
+                } else if (provType === "openai") {
+                    const { createOpenAIProvider } = await import("../providers/openai-compatible.js");
+                    aiProvider = createOpenAIProvider();
+                } else if (provType === "google") {
+                    const { createGoogleProvider } = await import("../providers/google.js");
+                    aiProvider = createGoogleProvider();
+                }
+                if (aiProvider) {
+                    const defaultModels: Record<string, string> = {
+                        anthropic: "claude-sonnet-4-20250514",
+                        openai: "gpt-4o",
+                        google: "gemini-2.0-flash",
+                    };
+                    imessage.setAIProvider(aiProvider, defaultModels[provType] || "claude-sonnet-4-20250514");
+                }
+            }
+
+            await imessage.connect();
+
+            // Register with channel registry
+            const { channelRegistry } = await import("../channels/base.js");
+            channelRegistry.register(imessage);
+
+            // Mark as connected
+            channelConfigs.set("imessage", { enabled: true, connected: true });
+
+            // Persist to database
+            await saveChannelToDB(db, "imessage", { enabled: true, connected: true });
+
+            console.log("[Dashboard] iMessage connected!");
+            return c.json({ ok: true, message: "iMessage connected successfully" });
+        } catch (e) {
+            console.error("[Dashboard] iMessage connect error:", e);
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // iMessage: Install imsg CLI
+    dashboard.post("/api/channels/imessage/install", async (c) => {
+        if (process.platform !== "darwin") {
+            return c.json({ ok: false, error: "iMessage is only available on macOS" }, 400);
+        }
+
+        // Augment PATH so child processes can find brew/cargo on macOS
+        const extraPaths = ["/opt/homebrew/bin", "/usr/local/bin", `${process.env.HOME}/.cargo/bin`];
+        const fullPath = [...extraPaths, process.env.PATH].join(":");
+        const execOpts = { env: { ...process.env, PATH: fullPath }, timeout: 180000 };
+
+        try {
+            // Check if already installed
+            try {
+                await execAsync("which imsg", execOpts);
+                return c.json({ ok: true, message: "imsg CLI is already installed", alreadyInstalled: true });
+            } catch { /* not installed, proceed */ }
+
+            // Try installing via Homebrew first (most common on macOS)
+            try {
+                await execAsync("which brew", execOpts);
+                // Brew is available — install imsg
+                await execAsync("brew install steipete/tap/imsg", execOpts);
+                return c.json({ ok: true, message: "imsg CLI installed via Homebrew" });
+            } catch { /* brew not available or install failed */ }
+
+            // Fallback: try cargo (Rust)
+            try {
+                await execAsync("which cargo", execOpts);
+                await execAsync("cargo install imsg", execOpts);
+                return c.json({ ok: true, message: "imsg CLI installed via cargo" });
+            } catch { /* cargo not available */ }
+
+            return c.json({ ok: false, error: "Installation failed. Please install manually:\n  brew install --HEAD nichochar/tap/imsg\nor install Rust and run:\n  cargo install imsg" }, 500);
+        } catch (e) {
+            return c.json({ ok: false, error: `Installation failed: ${e instanceof Error ? e.message : String(e)}` }, 500);
+        }
     });
 
     // Channel message history

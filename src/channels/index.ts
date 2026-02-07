@@ -6,6 +6,7 @@ export { SlackAdapter, createSlackAdapter } from "./slack.js";
 export { webAdapter } from "./web.js";
 export { WhatsAppAdapter, createWhatsAppAdapter } from "./whatsapp.js";
 export { TwitterAdapter, createTwitterAdapter } from "./twitter.js";
+export { IMessageAdapter, createIMessageAdapter } from "./imessage/adapter.js";
 
 // Initialize all available channels
 import { channelRegistry } from "./base.js";
@@ -14,6 +15,7 @@ import { createDiscordAdapter } from "./discord.js";
 import { createSlackAdapter } from "./slack.js";
 import { webAdapter } from "./web.js";
 import { createTwitterAdapter } from "./twitter.js";
+import { createIMessageAdapter } from "./imessage/adapter.js";
 import { registry } from "../providers/index.js";
 import { getProvider, getCurrentModel } from "../sessions/session-service.js";
 // import { createWhatsAppAdapter } from "./whatsapp.js"; // Now using whatsapp-baileys.ts
@@ -91,6 +93,22 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
             console.log("[Twitter] ✓ Connected with AI processing enabled");
         } catch (err) {
             console.error("Failed to connect Twitter:", err);
+        }
+    }
+
+    // Register iMessage if available (macOS only)
+    const imessage = createIMessageAdapter();
+    if (imessage) {
+        if (aiProvider) {
+            imessage.setAIProvider(aiProvider, aiProvider.name || "deepseek-chat");
+        }
+        channelRegistry.register(imessage);
+        try {
+            await imessage.connect();
+            console.log("[iMessage] ✓ Connected with AI processing enabled");
+        } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            console.log(`📱 iMessage not available: ${errMsg}`);
         }
     }
 

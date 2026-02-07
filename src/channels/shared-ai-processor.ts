@@ -24,7 +24,7 @@ interface AIProvider {
 }
 
 interface ProcessMessageOptions {
-    channel: "whatsapp" | "telegram" | "discord" | "twitter";
+    channel: "whatsapp" | "telegram" | "discord" | "twitter" | "imessage";
     from: string;
     content: string;
     aiProvider: AIProvider;

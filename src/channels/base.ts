@@ -1,5 +1,5 @@
 // Channel abstraction for unified messaging
-export type MessageChannel = "whatsapp" | "telegram" | "discord" | "slack" | "web" | "api" | "twitter";
+export type MessageChannel = "whatsapp" | "telegram" | "discord" | "slack" | "web" | "api" | "twitter" | "imessage";
 
 export type IncomingMessage = {
     id: string;
