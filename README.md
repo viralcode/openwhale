@@ -22,7 +22,8 @@
 ---
 
 <p align="center">
-  <a href="FEATURES.md"><strong>📋 View Full Features List</strong></a>
+  <a href="FEATURES.md"><strong>📋 View Full Features List</strong></a> &nbsp;|&nbsp;
+  <a href="tutorials/"><strong>📚 Tutorials</strong></a>
 </p>
 
 ---
@@ -66,7 +67,7 @@ Capable of handling long-running, complex tasks with multi-step reasoning. It pl
 
 ---
 
-### 💬 5 Messaging Channels
+### 💬 6 Messaging Channels
 Your AI responds across all platforms — unified inbox, one brain.
 
 | Channel | How it Works |
@@ -74,12 +75,13 @@ Your AI responds across all platforms — unified inbox, one brain.
 | **WhatsApp** | Scan QR code, uses your personal account |
 | **Telegram** | Create a bot with @BotFather |
 | **Discord** | Add bot to your server |
+| **Slack** | Slack app integration |
 | **Twitter/X** | Auto-reply to mentions via bird CLI (cookie auth, no API!) |
 | **iMessage** | macOS native — read and send iMessages via `imsg` CLI |
 
 ---
 
-### 🛠️ 16 Built-in Tools
+### 🛠️ 33+ Built-in Tools
 The AI can actually DO things, not just talk about them.
 
 | Tool | Capability |
@@ -97,9 +99,24 @@ The AI can actually DO things, not just talk about them.
 | **image** | Analyze and process images with vision |
 | **nodes** | Structured data and knowledge graphs |
 | **camera** | Take photos/video from connected cameras |
-| **location** | Get current geolocation |
 | **imessage** | Read and send iMessages on macOS |
 | **extend** | Create self-extensions for automated workflows |
+| **pdf** | Create, read, merge PDFs with text/images/tables |
+| **slides** | Generate PowerPoint/PDF presentations |
+| **spreadsheet** | Create and edit Excel/CSV files |
+| **git** | Repository management, commits, branches, PRs |
+| **docker** | Container management and orchestration |
+| **ssh** | Remote server connections and commands |
+| **db_query** | SQL database queries (SQLite, PostgreSQL, MySQL) |
+| **email_send** | Send emails via SMTP |
+| **zip** | Compress and extract archives |
+| **qr_code** | Generate QR codes |
+| **system_info** | System diagnostics and monitoring |
+| **clipboard** | Read/write system clipboard |
+| **shortcuts** | Run Apple Shortcuts (macOS) |
+| **calendar_event** | Create calendar events (.ics) |
+| **planning** | Multi-step task planning |
+| **skill_creator** | Create custom markdown skills |
 
 <p align="center">
   <img src="images/tools.png" alt="Available Tools" width="800" />
