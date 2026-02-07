@@ -360,6 +360,32 @@ Password: admin
 - Password change in Settings
 - Logout button in sidebar
 
+### Dashboard Screenshots
+
+**Chat Interface** — Talk to the AI with full tool support:
+
+<p align="center">
+  <img src="images/dashboard-chat.png" alt="Dashboard Chat" width="800" />
+</p>
+
+**Channels** — Connect WhatsApp, Telegram, Discord, and iMessage:
+
+<p align="center">
+  <img src="images/dashboard-channels.png" alt="Dashboard Channels" width="800" />
+</p>
+
+**AI Providers** — Configure Claude, GPT-4, Gemini, DeepSeek, and Ollama:
+
+<p align="center">
+  <img src="images/dashboard-providers.png" alt="Dashboard Providers" width="800" />
+</p>
+
+**Settings** — User management, default model, and browser automation:
+
+<p align="center">
+  <img src="images/dashboard-settings.png" alt="Dashboard Settings" width="800" />
+</p>
+
 ---
 
 ## Connecting Channels
