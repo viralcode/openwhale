@@ -566,16 +566,30 @@ export class BrowserOSBackend {
      */
     async navigate(url: string): Promise<ToolResult> {
         // Use browser_open_tab which is the correct BrowserOS tool
-        const result = await callBrowserOSTool(this.url, "browser_open_tab", { url });
+        let result = await callBrowserOSTool(this.url, "browser_open_tab", { url });
+
+        // Auto-recover from "No current window" by creating one first
+        const resultContent = result.result as { isError?: boolean; content?: Array<{ text?: string }> };
+        const errorMsg = resultContent?.content?.[0]?.text || result.error || "";
+        if (!result.success || resultContent?.isError) {
+            if (errorMsg.toLowerCase().includes("no current window")) {
+                console.log("[BrowserOS] No window found, creating one and retrying...");
+                const createResult = await callBrowserOSTool(this.url, "browser_create_window", {});
+                if (createResult.success) {
+                    console.log("[BrowserOS] ✓ Window created, retrying navigation...");
+                    result = await callBrowserOSTool(this.url, "browser_open_tab", { url });
+                }
+            }
+        }
 
         // Check for isError in the result content
         if (!result.success || (result.result as { isError?: boolean })?.isError) {
             const errorContent = result.result as { content?: Array<{ text?: string }> };
-            const errorMsg = errorContent?.content?.[0]?.text || result.error || "Navigation failed";
+            const finalError = errorContent?.content?.[0]?.text || result.error || "Navigation failed";
             return {
                 success: false,
                 content: "",
-                error: errorMsg,
+                error: finalError,
             };
         }
 

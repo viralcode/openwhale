@@ -377,10 +377,14 @@ Current time: ${now.toLocaleString()}`;
                         const planPreview = result.length > 1500 ? result.slice(0, 1500) + "\n..." : result;
                         await sendText(`📋 Working on it...\n\n${planPreview}`);
                     } else if (args.action === "complete_step" && result.includes("✅")) {
-                        // Step completed — extract the step line and notify
-                        const stepMatch = result.match(/✅\s*\d+\.\s*.+/);
-                        if (stepMatch) {
-                            await sendText(stepMatch[0]);
+                        // Step completed — find the specific step that was just completed
+                        const stepNum = (tc.arguments as { step?: number }).step;
+                        if (stepNum) {
+                            const stepRegex = new RegExp(`✅\\s*${stepNum}\\.\\s*.+`);
+                            const stepMatch = result.match(stepRegex);
+                            if (stepMatch) {
+                                await sendText(stepMatch[0]);
+                            }
                         }
                     } else if (result.includes("🎉 All steps completed")) {
                         // Plan fully complete — notify

@@ -792,6 +792,40 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
                     metadata: toolInfo.metadata,
                     status: toolInfo.status,
                 });
+
+                // Emit structured plan events for the frontend
+                if (tc.name === "plan" && toolInfo.status === "completed") {
+                    const planArgs = tc.arguments as { action?: string; step_id?: number; notes?: string; title?: string; steps?: string[] };
+                    const resultStr = String(toolInfo.result);
+
+                    if (planArgs.action === "create_plan" && planArgs.title && planArgs.steps) {
+                        emit("plan_created", {
+                            title: planArgs.title,
+                            steps: planArgs.steps.map((s: string, i: number) => ({
+                                id: i + 1,
+                                title: s,
+                                status: "pending",
+                            })),
+                        });
+                    } else if (planArgs.action === "complete_step" || planArgs.action === "update_step") {
+                        // Parse progress from result text
+                        const progressMatch = resultStr.match(/(\d+)\/(\d+) steps completed/);
+                        const completed = progressMatch ? parseInt(progressMatch[1]) : 0;
+                        const total = progressMatch ? parseInt(progressMatch[2]) : 0;
+
+                        emit("plan_step_update", {
+                            stepId: planArgs.step_id,
+                            status: planArgs.action === "complete_step" ? "completed" : (planArgs as { status?: string }).status || "in_progress",
+                            notes: planArgs.notes || null,
+                            completedCount: completed,
+                            totalCount: total,
+                        });
+
+                        if (resultStr.includes("🎉 All steps completed")) {
+                            emit("plan_completed", { completedCount: total, totalCount: total });
+                        }
+                    }
+                }
             }
 
             // Add to history for next iteration

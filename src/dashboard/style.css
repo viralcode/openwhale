@@ -1259,6 +1259,255 @@ select.form-input option {
   }
 }
 
+/* ===== PLAN WIDGET - MANUS STYLE TODO LIST ===== */
+.plan-widget {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  padding: 0;
+  margin: 10px 0;
+  overflow: hidden;
+  animation: workingFadeIn 0.3s ease;
+}
+
+.plan-widget.plan-done {
+  border-color: rgba(34, 197, 94, 0.3);
+}
+
+.plan-widget-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.plan-widget-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.plan-widget-icon {
+  font-size: 18px;
+}
+
+.plan-widget-counter {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-elevated);
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border-subtle);
+}
+
+.plan-done .plan-widget-counter {
+  background: rgba(34, 197, 94, 0.12);
+  color: #4ade80;
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+/* Progress bar */
+.plan-progress-bar {
+  height: 3px;
+  background: rgba(255, 255, 255, 0.05);
+  overflow: hidden;
+}
+
+.plan-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-indigo), var(--accent-blue));
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+  border-radius: 0 2px 2px 0;
+}
+
+.plan-progress-fill.done {
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+}
+
+/* Steps */
+.plan-steps {
+  padding: 6px 0;
+}
+
+.plan-step {
+  padding: 0 18px;
+  transition: background 0.15s ease;
+}
+
+.plan-step+.plan-step {
+  border-top: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.plan-step-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 11px 0;
+  user-select: none;
+}
+
+.plan-step-header.clickable {
+  cursor: pointer;
+}
+
+.plan-step-header.clickable:hover {
+  opacity: 0.85;
+}
+
+/* Step status icons */
+.plan-step-check {
+  font-size: 16px;
+  flex-shrink: 0;
+  width: 22px;
+  text-align: center;
+}
+
+.plan-step-spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  flex-shrink: 0;
+  color: var(--accent-blue);
+}
+
+.plan-step-circle {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  flex-shrink: 0;
+  margin: 0 3px;
+}
+
+.plan-step-title {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  line-height: 1.4;
+}
+
+.plan-step-chevron {
+  display: flex;
+  align-items: center;
+  color: var(--text-dim);
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+
+.plan-step-chevron.open {
+  transform: rotate(180deg);
+}
+
+/* Step states */
+.plan-step.in-progress {
+  background: rgba(99, 102, 241, 0.06);
+  position: relative;
+}
+
+.plan-step.in-progress::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent-indigo);
+  animation: planPulseBar 2s ease-in-out infinite;
+}
+
+.plan-step.in-progress .plan-step-title {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.plan-step.completed .plan-step-title {
+  color: var(--text-muted);
+}
+
+.plan-step.skipped .plan-step-title {
+  color: var(--text-dim);
+  text-decoration: line-through;
+}
+
+.plan-step.pending .plan-step-title {
+  color: var(--text-dim);
+}
+
+@keyframes planPulseBar {
+
+  0%,
+  100% {
+    opacity: 0.4;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+/* Step details (expandable) */
+.plan-step-details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.25s ease, opacity 0.2s ease;
+  opacity: 0;
+  padding-left: 34px;
+}
+
+.plan-step-details.show {
+  max-height: 500px;
+  opacity: 1;
+  padding-bottom: 10px;
+}
+
+.plan-step-notes {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 6px 10px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+  margin-bottom: 8px;
+}
+
+/* Nested tool chips under plan steps */
+.plan-step-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.plan-tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+}
+
+.plan-tool-chip .tc-status-icon {
+  display: flex;
+  align-items: center;
+}
+
+.plan-tool-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
 /* ===== TYPING INDICATOR ===== */
 .typing-indicator {
   display: flex;

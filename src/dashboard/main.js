@@ -583,6 +583,7 @@ async function sendMessage(content) {
   state.streamingSteps = [];
   state.streamingContent = '';
   state.streamingDone = false;
+  state.activePlan = null;
   updateChatMessages();
   scrollToBottom();
 
@@ -642,6 +643,7 @@ async function sendMessage(content) {
   state.streamingSteps = [];
   state.streamingContent = '';
   state.streamingDone = false;
+  state.activePlan = null;
   updateChatMessages();
   scrollToBottom();
 }
@@ -665,15 +667,24 @@ function handleStreamEvent(event, data) {
       if (thinkingStep) thinkingStep.done = true;
       break;
 
-    case 'tool_start':
-      state.streamingSteps.push({
+    case 'tool_start': {
+      const toolStep = {
         type: 'tool',
         id: data.id,
         name: data.name,
         arguments: data.arguments,
         status: 'running',
-      });
+      };
+      state.streamingSteps.push(toolStep);
+      // Group tool under active plan step
+      if (state.activePlan && data.name !== 'plan') {
+        const activeStep = state.activePlan.steps.find(s => s.status === 'in_progress');
+        if (activeStep) {
+          activeStep.toolCalls.push(toolStep);
+        }
+      }
       break;
+    }
 
     case 'tool_end':
       const step = state.streamingSteps.find(s => s.id === data.id);
@@ -704,6 +715,38 @@ function handleStreamEvent(event, data) {
         type: 'error',
         message: data.message,
       });
+      break;
+
+    case 'plan_created':
+      state.activePlan = {
+        title: data.title,
+        steps: data.steps.map(s => ({
+          ...s,
+          notes: null,
+          toolCalls: [],
+        })),
+        completed: false,
+      };
+      break;
+
+    case 'plan_step_update': {
+      if (state.activePlan) {
+        const step = state.activePlan.steps.find(s => s.id === data.stepId);
+        if (step) {
+          step.status = data.status;
+          if (data.notes) step.notes = data.notes;
+        }
+      }
+      break;
+    }
+
+    case 'plan_completed':
+      if (state.activePlan) {
+        state.activePlan.completed = true;
+        state.activePlan.steps.forEach(s => {
+          if (s.status !== 'skipped') s.status = 'completed';
+        });
+      }
       break;
   }
 
@@ -755,8 +798,10 @@ function updateStreamingUI() {
     }
   }
 
-  // Render tool steps as compact grouped chips
-  if (toolSteps.length > 0) {
+  // Render plan widget OR tool steps
+  if (state.activePlan) {
+    html += renderPlanWidget();
+  } else if (toolSteps.length > 0) {
     const toolChipsHtml = toolSteps.map((step, idx) => {
       const si = state.streamingSteps.indexOf(step);
       const statusIcon = step.status === 'running'
@@ -855,6 +900,113 @@ window.toggleStreamStep = function (stepIndex) {
     }
   }
 };
+
+// Global function for toggling plan step details
+window.togglePlanStep = function (stepId) {
+  if (!state.activePlan) return;
+  const step = state.activePlan.steps.find(s => s.id === stepId);
+  if (step) {
+    step.expanded = !step.expanded;
+    updateStreamingUI();
+    scrollToBottom();
+  }
+};
+
+function renderPlanWidget() {
+  const plan = state.activePlan;
+  if (!plan) return '';
+
+  const completedCount = plan.steps.filter(s => s.status === 'completed').length;
+  const totalCount = plan.steps.length;
+  const progressPct = totalCount > 0 ? Math.round((completedCount / totalCount) * 100) : 0;
+  const isAllDone = plan.completed || completedCount === totalCount;
+
+  let html = `<div class="plan-widget${isAllDone ? ' plan-done' : ''}">`;
+
+  // Header
+  html += `
+    <div class="plan-widget-header">
+      <div class="plan-widget-title">
+        <span class="plan-widget-icon">${isAllDone ? '🎉' : '📋'}</span>
+        <span>${escapeHtml(plan.title)}</span>
+      </div>
+      <div class="plan-widget-counter">${completedCount} / ${totalCount}</div>
+    </div>`;
+
+  // Progress bar
+  html += `
+    <div class="plan-progress-bar">
+      <div class="plan-progress-fill${isAllDone ? ' done' : ''}" style="width: ${progressPct}%"></div>
+    </div>`;
+
+  // Steps
+  html += '<div class="plan-steps">';
+  for (const step of plan.steps) {
+    const isActive = step.status === 'in_progress';
+    const isDone = step.status === 'completed';
+    const isSkipped = step.status === 'skipped';
+    const stepClass = isActive ? 'in-progress' : isDone ? 'completed' : isSkipped ? 'skipped' : 'pending';
+
+    // Status icon
+    let statusHtml;
+    if (isDone) {
+      statusHtml = '<span class="plan-step-check">✅</span>';
+    } else if (isActive) {
+      statusHtml = `<span class="plan-step-spinner spinning">${icon('loader', 14)}</span>`;
+    } else if (isSkipped) {
+      statusHtml = '<span class="plan-step-check">⏭️</span>';
+    } else {
+      statusHtml = '<span class="plan-step-circle"></span>';
+    }
+
+    const hasDetails = (isDone || isActive) && (step.notes || (step.toolCalls && step.toolCalls.length > 0));
+    const isExpanded = step.expanded && hasDetails;
+
+    html += `
+      <div class="plan-step ${stepClass}">
+        <div class="plan-step-header${hasDetails ? ' clickable' : ''}" ${hasDetails ? `onclick="togglePlanStep(${step.id})"` : ''}>
+          ${statusHtml}
+          <span class="plan-step-title">${escapeHtml(step.title)}</span>
+          ${hasDetails ? `<span class="plan-step-chevron${isExpanded ? ' open' : ''}">${icon('chevronDown', 12)}</span>` : ''}
+        </div>`;
+
+    // Expandable details section: notes + tool calls
+    if (hasDetails) {
+      html += `<div class="plan-step-details${isExpanded ? ' show' : ''}">`;
+
+      // Notes / summary
+      if (step.notes) {
+        html += `<div class="plan-step-notes">${escapeHtml(step.notes)}</div>`;
+      }
+
+      // Nested tool calls as proof of work
+      if (step.toolCalls && step.toolCalls.length > 0) {
+        html += '<div class="plan-step-tools">';
+        for (const tc of step.toolCalls) {
+          const tcIcon = tc.status === 'running'
+            ? `<span class="tc-status-icon running spinning">${icon('loader', 10)}</span>`
+            : tc.status === 'completed'
+              ? `<span class="tc-status-icon done">${icon('check', 10)}</span>`
+              : `<span class="tc-status-icon error">${icon('x', 10)}</span>`;
+          const tcLabel = getToolLabel(tc.name, tc.arguments);
+          html += `
+            <div class="plan-tool-chip">
+              ${tcIcon}
+              <span class="plan-tool-name">${escapeHtml(tcLabel)}</span>
+            </div>`;
+        }
+        html += '</div>';
+      }
+
+      html += '</div>';
+    }
+
+    html += '</div>';
+  }
+  html += '</div></div>';
+
+  return html;
+}
 
 function getToolLabel(name, args) {
   // Generate human-readable labels for tool calls
