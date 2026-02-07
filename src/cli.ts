@@ -286,10 +286,9 @@ function initProviders() {
                 if (p.type === "together") process.env.TOGETHER_API_KEY = p.api_key;
                 if (p.type === "qwen") process.env.QWEN_API_KEY = p.api_key;
 
-                // If this provider is enabled and has a default model set, use it
-                // Logic: prioritize provider-specific selection if it matches current provider context
-                // For now, if we found a deepseek config with a model, use it
-                if (p.type === "deepseek" && p.default_model) {
+                // If we haven't found a global default model yet, and this provider has one, use it
+                // This allows the CLI to "just work" if you've only configured one provider
+                if (currentModel === "deepseek-chat" && p.default_model) {
                     currentModel = p.default_model;
                 }
             }
