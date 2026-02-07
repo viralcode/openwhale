@@ -120,7 +120,10 @@ export function createAgentRoutes(_db: DrizzleDB, _config: OpenWhaleConfig) {
             sessionId?: string;
         }>();
 
-        const model = body.model ?? "claude-3-5-sonnet-20241022";
+        const model = body.model ?? process.env.DEFAULT_MODEL;
+        if (!model) {
+            return c.json({ error: "Model is required" }, 400);
+        }
 
         const response = await registry.complete({
             model,

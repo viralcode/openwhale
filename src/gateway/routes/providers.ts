@@ -22,7 +22,7 @@ export function createProviderRoutes(_config: OpenWhaleConfig) {
             return c.json({ error: "provider not found" }, 404);
         }
 
-        // For now, return static list based on provider
+        // For now, return static list based on provider (TODO: move to provider classes)
         const models: Record<string, string[]> = {
             anthropic: [
                 "claude-3-5-sonnet-20241022",
@@ -43,13 +43,15 @@ export function createProviderRoutes(_config: OpenWhaleConfig) {
             ],
             groq: [
                 "llama-3.3-70b-versatile",
+                "llama-3.1-70b-versatile",
                 "llama-3.1-8b-instant",
                 "mixtral-8x7b-32768",
+                "gemma2-9b-it"
             ],
             google: [
+                "gemini-2.0-flash",
                 "gemini-1.5-pro",
                 "gemini-1.5-flash",
-                "gemini-pro",
             ],
         };
 

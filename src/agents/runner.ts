@@ -59,12 +59,15 @@ export class AgentRunner {
                 .orderBy(messages.createdAt)
                 .all();
 
+            const model = existing.model ?? process.env.DEFAULT_MODEL;
+            if (!model) throw new Error("Session has no model and DEFAULT_MODEL not set");
+
             session = {
                 id: existing.id,
                 key: existing.key,
                 userId: existing.userId ?? undefined,
                 agentId: existing.agentId,
-                model: existing.model ?? "claude-3-5-sonnet-20241022",
+                model,
                 messages: storedMessages.map(m => ({
                     role: m.role as Message["role"],
                     content: m.content,
@@ -77,12 +80,15 @@ export class AgentRunner {
             // Create new session
             const id = randomBytes(16).toString("hex");
 
+            const model = options.model ?? process.env.DEFAULT_MODEL;
+            if (!model) throw new Error("No model specified and DEFAULT_MODEL not set");
+
             this.db.insert(sessions).values({
                 id,
                 key,
                 userId: options.userId,
                 agentId: options.agentId ?? "default",
-                model: options.model,
+                model,
             }).run();
 
             session = {
@@ -90,7 +96,7 @@ export class AgentRunner {
                 key,
                 userId: options.userId,
                 agentId: options.agentId ?? "default",
-                model: options.model ?? "claude-3-5-sonnet-20241022",
+                model,
                 messages: [],
                 workspaceDir: options.workspaceDir ?? process.cwd(),
                 sandboxed: false,
