@@ -8,6 +8,8 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } from "./base.js";
 import { processMessageWithAI } from "./shared-ai-processor.js";
+import { registry } from "../providers/index.js";
+import { getCurrentModel } from "../sessions/session-service.js";
 
 const execAsync = promisify(exec);
 
@@ -30,20 +32,12 @@ export class TwitterAdapter implements ChannelAdapter {
     private connected = false;
     private handlers: MessageHandler[] = [];
     private pollingInterval?: ReturnType<typeof setTimeout>;
-    private aiProvider: any = null;
-    private currentModel: string = "claude-sonnet-4-20250514";
     private username: string = "";
     private lastMentionId: string = "";
     private pollIntervalMs: number;
 
     constructor(pollIntervalMs: number = 60000) {
         this.pollIntervalMs = pollIntervalMs;
-    }
-
-    // Set AI provider for message processing
-    setAIProvider(provider: any, model: string): void {
-        this.aiProvider = provider;
-        this.currentModel = model;
     }
 
     isConnected(): boolean {
@@ -177,13 +171,11 @@ export class TwitterAdapter implements ChannelAdapter {
                     }
 
                     // Process with AI if provider available
-                    if (this.aiProvider) {
+                    if (registry.getProvider(getCurrentModel())) {
                         await processMessageWithAI({
                             channel: "twitter",
                             from: mention.author.username,
                             content: mention.text,
-                            aiProvider: this.aiProvider,
-                            model: this.currentModel,
                             sendText: async (text) => {
                                 // Reply to the tweet
                                 return await this.send({

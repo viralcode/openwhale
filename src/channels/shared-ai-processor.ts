@@ -1,14 +1,33 @@
 /**
  * Shared AI processor for all messaging channels
- * Provides consistent AI processing across WhatsApp, Telegram, Discord
+ * Uses the SAME quality engine as the web chat dashboard:
+ * - registry.complete() for proper provider routing
+ * - Proper tool message format (assistant + tool role messages)
+ * - 25 iterations with 8192 tokens
+ * - Context compaction for long conversations
+ * - No status message spam
  */
 
+import { randomUUID } from "node:crypto";
+import { hostname } from "node:os";
 import { readFile, stat } from "node:fs/promises";
 import { basename, extname } from "node:path";
+import { registry } from "../providers/index.js";
+import type { Message, ToolResult as ProviderToolResult } from "../providers/base.js";
 import { toolRegistry } from "../tools/index.js";
 import { skillRegistry } from "../skills/index.js";
-import { getSessionContext, handleSlashCommand, recordUserMessage, recordAssistantMessage } from "../sessions/session-manager.js";
+import {
+    getSessionContext,
+    handleSlashCommand,
+    recordUserMessage,
+    recordAssistantMessage,
+    recordToolUse,
+    recordToolResult,
+    finalizeExchange,
+} from "../sessions/session-manager.js";
 import { getMemoryContext } from "../memory/memory-files.js";
+import { compactIfNeeded } from "../sessions/compaction.js";
+import { getCurrentModel } from "../sessions/session-service.js";
 
 // Mime types for common file extensions
 const MIME_TYPES: Record<string, string> = {
@@ -33,33 +52,18 @@ const MIME_TYPES: Record<string, string> = {
 };
 
 // Types
-interface AIProvider {
-    complete(options: {
-        model: string;
-        messages: Array<{ role: "user" | "assistant"; content: string }>;
-        systemPrompt: string;
-        tools: unknown[];
-        maxTokens: number;
-        stream: boolean;
-    }): Promise<{
-        content?: string;
-        toolCalls?: Array<{ name: string; arguments: Record<string, unknown> }>;
-    }>;
-}
-
-interface ProcessMessageOptions {
+export interface ProcessMessageOptions {
     channel: "whatsapp" | "telegram" | "discord" | "twitter" | "imessage";
     from: string;
     content: string;
-    aiProvider: AIProvider;
-    model: string;
+    model?: string;
     sendText: (text: string) => Promise<{ success: boolean; error?: string }>;
     sendImage: (imageBuffer: Buffer, caption: string) => Promise<{ success: boolean; error?: string }>;
     sendDocument?: (buffer: Buffer, fileName: string, mimetype: string, caption?: string) => Promise<{ success: boolean; error?: string }>;
     isGroup?: boolean;
 }
 
-interface ProcessResult {
+export interface ProcessResult {
     success: boolean;
     reply?: string;
     error?: string;
@@ -68,16 +72,28 @@ interface ProcessResult {
 
 /**
  * Process a message with AI - shared across all channels
+ * Uses the SAME engine as the web chat (session-service.ts)
  */
 export async function processMessageWithAI(options: ProcessMessageOptions): Promise<ProcessResult> {
-    const { channel, from, content, aiProvider, model, sendText, sendImage, sendDocument, isGroup = false } = options;
+    const { channel, from, content, sendText, sendImage, sendDocument, isGroup = false } = options;
+    const model = options.model || getCurrentModel();
     const channelUpper = channel.charAt(0).toUpperCase() + channel.slice(1);
+    const maxIterations = 100;
 
     console.log(`[${channelUpper}] 📱 Processing message from ${from}: "${content.slice(0, 50)}..."`);
 
+    // Verify provider is available
+    const provider = registry.getProvider(model);
+    if (!provider) {
+        const errMsg = `No AI provider available for model: ${model}`;
+        console.error(`[${channelUpper}] ${errMsg}`);
+        await sendText(`❌ ${errMsg}`);
+        return { success: false, error: errMsg };
+    }
+
     // Build tools list
     const allTools = toolRegistry.getAll();
-    const tools = allTools.map((tool) => ({
+    const tools: Array<{ name: string; description: string; parameters: unknown }> = allTools.map((tool) => ({
         name: tool.name,
         description: tool.description,
         parameters: toolRegistry.zodToJsonSchema(tool.parameters),
@@ -110,60 +126,61 @@ export async function processMessageWithAI(options: ProcessMessageOptions): Prom
     const skillToolNames = skillTools.map(t => t.name);
     const baseToolNames = allTools.map(t => t.name);
 
-    const systemPrompt = `You are OpenWhale, a powerful AI assistant responding via ${channelUpper}.
-You have FULL access to ALL system tools. You are authenticated and can execute code directly.
-User's ID: ${from}. Keep responses concise but complete.
+    // Build system prompt — same quality as session-service.ts
+    const now = new Date();
+    const runtimeInfo = `OS: ${process.platform} ${process.arch} | Host: ${hostname()} | Node: ${process.version} | Time: ${now.toISOString()} | CWD: ${process.cwd()}`;
 
-BASE TOOLS (${baseToolNames.length}): ${baseToolNames.join(", ")}
-${skillToolNames.length > 0 ? `SKILL TOOLS (${skillToolNames.length}): ${skillToolNames.join(", ")}` : ""}
+    const systemPrompt = `You are OpenWhale, an AI assistant with FULL tool access responding via ${channelUpper}.
+You are authenticated and connected. User's ID: ${from}.
+Keep responses concise but complete for messaging platforms.
 
-KEY CAPABILITIES:
-- exec: Run shell commands (bash, zsh). Use for system tasks, file management, git, etc.
-- code_exec: Write and execute JavaScript/Python scripts. Perfect for data processing, calculations, API calls.
-- file: Read/write files anywhere on the system. Can create scripts and save them.
-- browser: Control web browser, navigate pages, take screenshots of websites.
-- screenshot: Capture the user's screen.
-- camera_snap: Take a photo with the device camera.
-- cron: Schedule recurring tasks.
-- tts: Text-to-speech conversion.
-- image: Generate AI images.
-- canvas: Create/manipulate 2D graphics.
-- memory: Store and recall context across conversations.
-- nodes: Control IoT devices.
-- extend: Create extensions that monitor channels and auto-reply.
+## Runtime
+${runtimeInfo}
 
-EXTENSION SYSTEM - YOU CAN MONITOR ALL CHANNEL MESSAGES:
-The 'extend' tool lets you create extensions that can:
-1. Monitor ALL incoming messages on any channel (whatsapp, telegram, discord, slack) - not just the owner's!
-2. Auto-reply to specific contacts (like family members, clients, etc.)
-3. Use openwhale.message to read incoming message content and sender
-4. Use openwhale.reply(text) to respond back to that sender
-5. Use openwhale.handled() to prevent normal AI from also responding
+## Your Available Tools (${tools.length} total)
+Base Tools: ${baseToolNames.join(", ")}
+Skill Tools: ${skillToolNames.length > 0 ? skillToolNames.join(", ") : "None configured"}
 
-EXAMPLE: To auto-reply to a family member at +15551234567:
-Use 'extend' with action='create', channels=['whatsapp'], and code:
-\`\`\`
-if (openwhale.message && openwhale.message.from.includes("5551234567")) {
-    await openwhale.reply("Jijo is busy but will get back to you soon!");
-    openwhale.handled();
-}
-\`\`\`
+## CRITICAL RULES - FOLLOW THESE EXACTLY
+1. **NEVER say "I don't have access"** - You DO have access. Use your tools.
+2. **NEVER ask for credentials, tokens, or API keys** - They are already configured.
+3. **NEVER say "I cannot access your account"** - You CAN. Just use the tool.
+4. When asked about GitHub, emails, calendar, weather, Twitter, etc. - CALL THE TOOL IMMEDIATELY.
+5. You have up to ${maxIterations} tool execution rounds. Use them wisely.
 
-IMPORTANT - EXTENSIONS ARE YOUR FALLBACK:
-If a user asks for something that tools and skills CANNOT do, USE EXTENSIONS:
-- Monitoring channels for specific messages/senders → Extension
-- Auto-replying to specific people → Extension
-- Custom automations/workflows → Extension
-- Integrating external APIs not covered by skills → Extension
-- Persistent background tasks → Extension with cron schedule
-- Any behavior that needs to run without user prompting → Extension
+## Multi-Step Tasks
+For complex tasks requiring 3+ tool calls:
+1. **Plan first**: Use the \`plan\` tool to create a step-by-step plan before executing.
+2. **Execute systematically**: Work through the plan step by step, marking steps complete.
+3. **Track progress**: Use \`plan\` with action \`complete_step\` after finishing each step.
+4. **Wrap up early**: If you're approaching the iteration limit, provide a summary.
 
-TO SEND IMAGES via ${channelUpper}:
+## Tool Usage
+- Planning → use \`plan\` (create_plan, update_step, complete_step, get_plan, add_step)
+- GitHub repos → use \`github_repos\`
+- GitHub issues → use \`github_issues\`
+- Weather → use \`weather_current\` or \`weather_forecast\`
+- Gmail → use \`gmail_read\`, \`gmail_send\`
+- Calendar → use \`calendar_events\`
+- Drive → use \`drive_list\`
+- Twitter timeline → use \`twitter_timeline\`
+- exec: Run shell commands (bash, zsh)
+- code_exec: Execute JavaScript/Python directly
+- file: Read/write files anywhere
+- browser: Control web browser, navigate pages
+
+## Sending Images via ${channelUpper}
 1. Use 'screenshot', 'camera_snap', or 'browser action=screenshot' to capture
 2. Then call '${channel}_send_image' with a caption
 
-For emails use gmail_*, for GitHub use github_*, for weather use weather_*.
-Current time: ${new Date().toLocaleString()}`;
+## Extension System
+Use 'extend' tool to create extensions that monitor channel messages and auto-reply.
+
+## Your Identity
+You are a fully authenticated AI assistant. All integrations are configured and ready.
+Do NOT apologize for previous errors or claim you lack access. Just execute the task.
+
+Current time: ${now.toLocaleString()}`;
 
     // Get or create persistent session
     const sessionType = isGroup ? "group" : "dm";
@@ -195,171 +212,217 @@ Current time: ${new Date().toLocaleString()}`;
 
     // Load memory context
     const memoryContext = getMemoryContext();
-    const systemPromptWithMemory = memoryContext
+    const fullSystemPrompt = memoryContext
         ? systemPrompt + "\n\n" + memoryContext
         : systemPrompt;
 
-    // Build messages with history
-    const messages: Array<{ role: "user" | "assistant"; content: string }> = [
-        ...history,
-        { role: "user", content },
+    // Build message history using proper Message format (matches session-service.ts)
+    const msgHistory: Message[] = [
+        ...history.map(h => ({
+            role: h.role as "user" | "assistant",
+            content: h.content,
+        })),
+        { role: "user" as const, content },
     ];
 
     let reply = "";
     let iterations = 0;
-    const maxIterations = 10;
 
-    // Track whether we've sent a status update to avoid spamming
-    let statusSent = false;
+    try {
+        while (iterations < maxIterations) {
+            iterations++;
 
-    while (iterations < maxIterations) {
-        iterations++;
+            // Compact history if it's getting too long
+            await compactIfNeeded(msgHistory, model, session.sessionId);
 
-        const response = await aiProvider.complete({
-            model,
-            messages,
-            systemPrompt: systemPromptWithMemory,
-            tools,
-            maxTokens: 2000,
-            stream: false,
-        });
-
-        console.log(`[${channelUpper}]   ↳ AI iteration ${iterations}: content=${response.content?.length || 0} chars, toolCalls=${response.toolCalls?.length || 0}`);
-
-        // No tool calls = final response
-        if (!response.toolCalls || response.toolCalls.length === 0) {
-            reply = response.content || "Done!";
-            break;
-        }
-
-        // Push real-time status update to the user
-        const toolNames = response.toolCalls.map(t => t.name).filter(n => !n.includes("_send_image"));
-        if (toolNames.length > 0) {
-            const statusEmoji = iterations === 1 ? "⚡" : "🔄";
-            const statusMsg = iterations === 1
-                ? `${statusEmoji} _Working on it..._ 🔧 ${toolNames.join(", ")}`
-                : `${statusEmoji} _Still working (step ${iterations})..._ 🔧 ${toolNames.join(", ")}`;
-            try {
-                await sendText(statusMsg);
-                statusSent = true;
-            } catch {
-                // Don't fail if status message fails
+            // Warn the AI if approaching the limit
+            if (iterations === Math.floor(maxIterations * 0.8)) {
+                msgHistory.push({
+                    role: "user",
+                    content: `[System] You have used ${iterations}/${maxIterations} iterations. Please wrap up your current task and provide a final response soon.`,
+                });
             }
-        }
 
-        // Execute tool calls
-        const toolResults: Array<{ name: string; result: string }> = [];
+            const response = await registry.complete({
+                model,
+                messages: msgHistory,
+                systemPrompt: fullSystemPrompt,
+                tools: tools as any,
+                maxTokens: 8192,
+                stream: false,
+            });
 
-        for (const toolCall of response.toolCalls) {
-            console.log(`[${channelUpper}]   🔧 Tool: ${toolCall.name}`);
+            console.log(`[${channelUpper}]   ↳ AI iteration ${iterations}: content=${response.content?.length || 0} chars, toolCalls=${response.toolCalls?.length || 0}`);
 
-            try {
-                // Special case: channel_send_image
-                if (toolCall.name === `${channel}_send_image`) {
-                    if (lastScreenshotBase64) {
-                        const imageBuffer = Buffer.from(lastScreenshotBase64, "base64");
-                        console.log(`[${channelUpper}]   📸 Sending image (${imageBuffer.length} bytes)`);
-                        const args = toolCall.arguments as { caption?: string };
-                        const result = await sendImage(imageBuffer, args.caption || "Image from OpenWhale");
-                        if (result.success) {
-                            toolResults.push({ name: toolCall.name, result: "Image sent successfully!" });
-                            console.log(`[${channelUpper}]   ✅ Image sent!`);
+            // No tool calls = final response
+            if (!response.toolCalls || response.toolCalls.length === 0) {
+                reply = response.content || "Done!";
+                break;
+            }
+
+            // Send initial thinking to user on first iteration so they know work has started
+            if (iterations === 1 && response.content && response.content.length > 10) {
+                const thinkingPreview = response.content.length > 200
+                    ? response.content.slice(0, 200) + "..."
+                    : response.content;
+                await sendText(`🧠 ${thinkingPreview}`);
+            }
+
+            // Execute tool calls (same pattern as session-service.ts)
+            const iterationToolResults: ProviderToolResult[] = [];
+
+            for (const tc of response.toolCalls) {
+                const toolCallId = tc.id || randomUUID();
+
+                console.log(`[${channelUpper}]   🔧 Executing: ${tc.name} (iteration ${iterations}/${maxIterations})`);
+                recordToolUse(session.sessionId, tc.name, tc.arguments);
+
+                let result: string;
+                let isError = false;
+
+                try {
+                    // Special case: channel_send_image
+                    if (tc.name === `${channel}_send_image`) {
+                        if (lastScreenshotBase64) {
+                            const imageBuffer = Buffer.from(lastScreenshotBase64, "base64");
+                            console.log(`[${channelUpper}]   📸 Sending image (${imageBuffer.length} bytes)`);
+                            const args = tc.arguments as { caption?: string };
+                            const sendResult = await sendImage(imageBuffer, args.caption || "Image from OpenWhale");
+                            if (sendResult.success) {
+                                result = "Image sent successfully!";
+                                console.log(`[${channelUpper}]   ✅ Image sent!`);
+                            } else {
+                                result = `Error: ${sendResult.error}`;
+                                isError = true;
+                            }
                         } else {
-                            toolResults.push({ name: toolCall.name, result: `Error: ${result.error}` });
+                            result = "No image available. Take a screenshot first.";
+                            isError = true;
                         }
                     } else {
-                        toolResults.push({ name: toolCall.name, result: "No image available. Take a screenshot first." });
-                    }
-                    continue;
-                }
+                        // Try regular tool
+                        const baseTool = allTools.find(t => t.name === tc.name);
 
-                // Try regular tool
-                const baseTool = allTools.find(t => t.name === toolCall.name);
+                        if (baseTool) {
+                            const execResult = await toolRegistry.execute(tc.name, tc.arguments, context);
 
-                if (baseTool) {
-                    const result = await toolRegistry.execute(toolCall.name, toolCall.arguments, context);
-
-                    // Capture screenshots for sending
-                    if ((toolCall.name === "screenshot" || toolCall.name === "camera_snap") && result.metadata?.base64) {
-                        lastScreenshotBase64 = result.metadata.base64 as string;
-                        const type = toolCall.name === "camera_snap" ? "Camera photo" : "Screenshot";
-                        console.log(`[${channelUpper}]   📸 ${type} captured`);
-                        toolResults.push({ name: toolCall.name, result: `${type} captured! Now use ${channel}_send_image to send it.` });
-                    } else if (toolCall.name === "browser" && result.metadata?.image) {
-                        const imageData = result.metadata.image as string;
-                        if (imageData.startsWith("data:image")) {
-                            lastScreenshotBase64 = imageData.split(",")[1];
-                            console.log(`[${channelUpper}]   📸 Browser screenshot captured`);
-                            toolResults.push({ name: toolCall.name, result: `Browser screenshot captured! Now use ${channel}_send_image to send it.` });
-                        } else {
-                            const resultStr = (result.content || result.error || "").slice(0, 2000);
-                            toolResults.push({ name: toolCall.name, result: resultStr });
-                        }
-                    } else {
-                        const resultStr = (result.content || result.error || "").slice(0, 2000);
-                        toolResults.push({ name: toolCall.name, result: resultStr });
-                        console.log(`[${channelUpper}]   ✅ ${toolCall.name}: ${resultStr.slice(0, 100)}...`);
-
-                        // Auto-send created files to the channel
-                        if (sendDocument && result.metadata?.path) {
-                            const filePath = String(result.metadata.path);
-                            const ext = extname(filePath).toLowerCase();
-                            const mime = MIME_TYPES[ext];
-                            if (mime) {
-                                try {
-                                    const fileStat = await stat(filePath);
-                                    // Only send files under 50MB
-                                    if (fileStat.size < 50 * 1024 * 1024) {
-                                        const fileBuffer = await readFile(filePath);
-                                        const fileName = basename(filePath);
-                                        console.log(`[${channelUpper}]   📎 Auto-sending file: ${fileName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
-                                        await sendDocument(fileBuffer, fileName, mime, `📎 ${fileName}`);
-                                    }
-                                } catch (fileErr) {
-                                    console.log(`[${channelUpper}]   ⚠️ Could not auto-send file: ${fileErr instanceof Error ? fileErr.message : String(fileErr)}`);
+                            // Capture screenshots for sending
+                            if ((tc.name === "screenshot" || tc.name === "camera_snap") && execResult.metadata?.base64) {
+                                lastScreenshotBase64 = execResult.metadata.base64 as string;
+                                const type = tc.name === "camera_snap" ? "Camera photo" : "Screenshot";
+                                console.log(`[${channelUpper}]   📸 ${type} captured`);
+                                result = `${type} captured! Now use ${channel}_send_image to send it.`;
+                            } else if (tc.name === "browser" && execResult.metadata?.image) {
+                                const imageData = execResult.metadata.image as string;
+                                if (imageData.startsWith("data:image")) {
+                                    lastScreenshotBase64 = imageData.split(",")[1];
+                                    console.log(`[${channelUpper}]   📸 Browser screenshot captured`);
+                                    result = `Browser screenshot captured! Now use ${channel}_send_image to send it.`;
+                                } else {
+                                    result = (execResult.content || execResult.error || "").slice(0, 10000);
                                 }
+                            } else {
+                                result = (execResult.content || execResult.error || "").slice(0, 10000);
+                                isError = !execResult.success;
+                                console.log(`[${channelUpper}]   ${execResult.success ? "✅" : "❌"} ${tc.name}: ${result.slice(0, 100)}...`);
+
+                                // Auto-send created files to the channel
+                                if (sendDocument && execResult.metadata?.path) {
+                                    const filePath = String(execResult.metadata.path);
+                                    const ext = extname(filePath).toLowerCase();
+                                    const mime = MIME_TYPES[ext];
+                                    if (mime) {
+                                        try {
+                                            const fileStat = await stat(filePath);
+                                            if (fileStat.size < 50 * 1024 * 1024) {
+                                                const fileBuffer = await readFile(filePath);
+                                                const fileName = basename(filePath);
+                                                console.log(`[${channelUpper}]   📎 Auto-sending file: ${fileName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
+                                                await sendDocument(fileBuffer, fileName, mime, `📎 ${fileName}`);
+                                            }
+                                        } catch (fileErr) {
+                                            console.log(`[${channelUpper}]   ⚠️ Could not auto-send file: ${fileErr instanceof Error ? fileErr.message : String(fileErr)}`);
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            // Try skill tool
+                            const skillTool = skillTools.find(t => t.name === tc.name);
+                            if (skillTool) {
+                                const execResult = await skillTool.execute(tc.arguments as Record<string, unknown>, context);
+                                result = (execResult.content || execResult.error || "").slice(0, 10000);
+                                isError = !execResult.success;
+                                console.log(`[${channelUpper}]   ✅ ${tc.name} (skill): ${result.slice(0, 100)}...`);
+                            } else {
+                                result = `Unknown tool: ${tc.name}`;
+                                isError = true;
                             }
                         }
                     }
-                } else {
-                    // Try skill tool
-                    const skillTool = skillTools.find(t => t.name === toolCall.name);
-                    if (skillTool) {
-                        const result = await skillTool.execute(toolCall.arguments as Record<string, unknown>, context);
-                        const resultStr = (result.content || result.error || "").slice(0, 2000);
-                        toolResults.push({ name: toolCall.name, result: resultStr });
-                        console.log(`[${channelUpper}]   ✅ ${toolCall.name} (skill): ${resultStr.slice(0, 100)}...`);
-                    } else {
-                        toolResults.push({ name: toolCall.name, result: `Unknown tool: ${toolCall.name}` });
+                } catch (err) {
+                    result = err instanceof Error ? err.message : String(err);
+                    isError = true;
+                    console.log(`[${channelUpper}]   ❌ ${tc.name}: ${result}`);
+                }
+
+                // Record tool result to transcript
+                recordToolResult(session.sessionId, tc.name, result.slice(0, 2000), !isError);
+
+                // Push plan updates to user so they see progress
+                if (tc.name === "plan" && !isError && result.length > 0) {
+                    const args = tc.arguments as { action?: string };
+                    if (args.action === "create_plan" || (!args.action && result.includes("📋"))) {
+                        // New plan created — send it
+                        const planPreview = result.length > 1500 ? result.slice(0, 1500) + "\n..." : result;
+                        await sendText(`📋 Working on it...\n\n${planPreview}`);
+                    } else if (result.includes("🎉 All steps completed")) {
+                        // Plan fully complete — notify
+                        await sendText("✅ All steps complete! Preparing final response...");
                     }
                 }
-            } catch (err) {
-                const errMsg = err instanceof Error ? err.message : String(err);
-                toolResults.push({ name: toolCall.name, result: `Error: ${errMsg}` });
-                console.log(`[${channelUpper}]   ❌ ${toolCall.name}: ${errMsg}`);
+
+                // Collect for proper tool message format
+                iterationToolResults.push({
+                    toolCallId: toolCallId,
+                    content: result,
+                    isError,
+                });
             }
+
+            // Add to history using PROPER message format (same as session-service.ts)
+            // 1. Assistant message with tool calls
+            msgHistory.push({
+                role: "assistant",
+                content: response.content || "",
+                toolCalls: response.toolCalls,
+            });
+
+            // 2. Tool results as proper "tool" role message
+            msgHistory.push({
+                role: "tool",
+                content: "",
+                toolResults: iterationToolResults,
+            });
         }
 
-        // Add to messages
-        const assistantContent = response.content
-            ? `${response.content}\n\n[Tools executed: ${response.toolCalls.map(t => t.name).join(", ")}]`
-            : `[Tools executed: ${response.toolCalls.map(t => t.name).join(", ")}]`;
-        messages.push({ role: "assistant", content: assistantContent });
+        // Truncate for messaging platforms
+        const maxLength = channel === "discord" ? 1900 : 4000;
+        if (reply.length > maxLength) {
+            reply = reply.slice(0, maxLength - 20) + "\n\n... (truncated)";
+        }
 
-        const toolResultsStr = toolResults.map(t => `${t.name}: ${t.result}`).join("\n\n");
-        messages.push({ role: "user", content: `Tool results:\n${toolResultsStr}\n\nProvide final response to user.` });
+        // Record and finalize
+        recordAssistantMessage(session.sessionId, reply);
+        finalizeExchange(session.sessionKey);
+
+        await sendText(reply);
+
+        return { success: true, reply };
+    } catch (error) {
+        const errMsg = error instanceof Error ? error.message : String(error);
+        console.error(`[${channelUpper}] AI error: ${errMsg}`);
+        await sendText(`Error: ${errMsg.slice(0, 200)}`);
+        return { success: false, error: errMsg };
     }
-
-    // Truncate for messaging platforms
-    const maxLength = channel === "discord" ? 1900 : 4000;
-    if (reply.length > maxLength) {
-        reply = reply.slice(0, maxLength - 3) + "...";
-    }
-
-    // Record and send
-    recordAssistantMessage(session.sessionId, reply);
-
-    await sendText(reply);
-
-    return { success: true, reply };
 }

@@ -5,6 +5,8 @@
 
 import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } from "./base.js";
 import { processMessageWithAI } from "./shared-ai-processor.js";
+import { registry } from "../providers/index.js";
+import { getCurrentModel } from "../sessions/session-service.js";
 
 type MessageHandler = (message: IncomingMessage) => void;
 
@@ -14,17 +16,9 @@ export class TelegramAdapter implements ChannelAdapter {
     private connected = false;
     private handlers: MessageHandler[] = [];
     private pollingInterval?: ReturnType<typeof setTimeout>;
-    private aiProvider: any = null;
-    private currentModel: string = "claude-sonnet-4-20250514";
 
     constructor(token: string) {
         this.token = token;
-    }
-
-    // Set AI provider for message processing
-    setAIProvider(provider: any, model: string): void {
-        this.aiProvider = provider;
-        this.currentModel = model;
     }
 
     getToken(): string {
@@ -224,14 +218,12 @@ export class TelegramAdapter implements ChannelAdapter {
                             // =====================================
 
                             // Process with AI if provider available
-                            if (this.aiProvider) {
+                            if (registry.getProvider(getCurrentModel())) {
                                 console.log(`[Telegram] Processing message from ${incoming.from}`);
                                 await processMessageWithAI({
                                     channel: "telegram",
                                     from: incoming.from,
                                     content: incoming.content,
-                                    aiProvider: this.aiProvider,
-                                    model: this.currentModel,
                                     sendText: async (text) => {
                                         return await this.send({ channel: "telegram", to: chatId, content: text });
                                     },

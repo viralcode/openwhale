@@ -11,6 +11,8 @@ import { processMessageWithAI } from "../shared-ai-processor.js";
 import { IMessageClient, isIMMessageAvailable, type IMessageClientOptions } from "./client.js";
 import { exec } from "node:child_process";
 import { promisify } from "node:util";
+import { registry } from "../../providers/index.js";
+import { getCurrentModel } from "../../sessions/session-service.js";
 
 const execAsync = promisify(exec);
 
@@ -34,8 +36,6 @@ export class IMessageAdapter implements ChannelAdapter {
     private connected = false;
     private handlers: MessageHandler[] = [];
     private pollingInterval?: ReturnType<typeof setInterval>;
-    private aiProvider: any = null;
-    private currentModel: string = "claude-sonnet-4-20250514";
     private seenMessageIds = new Set<string>();
     private cliPath: string;
     private dbPath?: string;
@@ -43,14 +43,6 @@ export class IMessageAdapter implements ChannelAdapter {
     constructor(opts: IMessageClientOptions = {}) {
         this.cliPath = opts.cliPath?.trim() || "imsg";
         this.dbPath = opts.dbPath?.trim() || undefined;
-    }
-
-    /**
-     * Set AI provider for message processing (same pattern as Telegram/Discord)
-     */
-    setAIProvider(provider: any, model: string): void {
-        this.aiProvider = provider;
-        this.currentModel = model;
     }
 
     isConnected(): boolean {
@@ -241,15 +233,13 @@ export class IMessageAdapter implements ChannelAdapter {
         // =====================================
 
         // Process with AI if provider is available
-        if (this.aiProvider) {
+        if (registry.getProvider(getCurrentModel())) {
             console.log(`[iMessage] Processing message from ${incoming.from}`);
             try {
                 await processMessageWithAI({
                     channel: "imessage",
                     from: incoming.from,
                     content: incoming.content,
-                    aiProvider: this.aiProvider,
-                    model: this.currentModel,
                     sendText: async (text) => {
                         return await this.send({
                             channel: "imessage",

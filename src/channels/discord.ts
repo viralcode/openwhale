@@ -7,6 +7,8 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } from "./base.js";
 import { processMessageWithAI } from "./shared-ai-processor.js";
 import { WebSocket } from "ws";
+import { registry } from "../providers/index.js";
+import { getCurrentModel } from "../sessions/session-service.js";
 
 type MessageHandler = (message: IncomingMessage) => void;
 
@@ -23,18 +25,10 @@ export class DiscordAdapter implements ChannelAdapter {
     private sessionId: string | null = null;
     private sequence: number | null = null;
     private botUserId: string | null = null;
-    private aiProvider: any = null;
-    private currentModel: string = "claude-sonnet-4-20250514";
     private resumeGatewayUrl: string | null = null;
 
     constructor(token: string) {
         this.token = token;
-    }
-
-    // Set AI provider for message processing
-    setAIProvider(provider: any, model: string): void {
-        this.aiProvider = provider;
-        this.currentModel = model;
     }
 
     isConnected(): boolean {
@@ -224,13 +218,11 @@ export class DiscordAdapter implements ChannelAdapter {
             // =====================================
 
             // Process with AI
-            if (this.aiProvider && incoming.content) {
+            if (registry.getProvider(getCurrentModel()) && incoming.content) {
                 await processMessageWithAI({
                     channel: "discord",
                     from: incoming.from,
                     content: incoming.content,
-                    aiProvider: this.aiProvider,
-                    model: this.currentModel,
                     sendText: async (text) => {
                         return await this.send({ channel: "discord", to: channelId, content: text });
                     },

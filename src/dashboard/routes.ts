@@ -1102,11 +1102,8 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
             // Start the Telegram adapter
             const { createTelegramAdapter } = await import("../channels/telegram.js");
-            const { createAnthropicProvider } = await import("../providers/anthropic.js");
             const telegram = createTelegramAdapter();
             if (telegram) {
-                const aiProvider = createAnthropicProvider();
-                telegram.setAIProvider(aiProvider, "claude-sonnet-4-20250514");
                 await telegram.connect();
             }
 
@@ -1161,11 +1158,8 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
             // Start Discord adapter
             const { createDiscordAdapter } = await import("../channels/discord.js");
-            const { createAnthropicProvider } = await import("../providers/anthropic.js");
             const discord = createDiscordAdapter();
             if (discord) {
-                const aiProvider = createAnthropicProvider();
-                discord.setAIProvider(aiProvider, "claude-sonnet-4-20250514");
                 await discord.connect();
             }
 
@@ -1223,31 +1217,6 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             const imessage = createIMessageAdapter();
             if (!imessage) {
                 return c.json({ ok: false, error: "Failed to create iMessage adapter" }, 500);
-            }
-
-            // Set up AI provider if available
-            const enabledProvider = Array.from(providerConfigs.entries()).find(([_, cfg]) => cfg.enabled && cfg.apiKey);
-            if (enabledProvider) {
-                const [provType, _provCfg] = enabledProvider;
-                let aiProvider = null;
-                if (provType === "anthropic") {
-                    const { createAnthropicProvider } = await import("../providers/anthropic.js");
-                    aiProvider = createAnthropicProvider();
-                } else if (provType === "openai") {
-                    const { createOpenAIProvider } = await import("../providers/openai-compatible.js");
-                    aiProvider = createOpenAIProvider();
-                } else if (provType === "google") {
-                    const { createGoogleProvider } = await import("../providers/google.js");
-                    aiProvider = createGoogleProvider();
-                }
-                if (aiProvider) {
-                    const defaultModels: Record<string, string> = {
-                        anthropic: "claude-sonnet-4-20250514",
-                        openai: "gpt-4o",
-                        google: "gemini-2.0-flash",
-                    };
-                    imessage.setAIProvider(aiProvider, defaultModels[provType] || "claude-sonnet-4-20250514");
-                }
             }
 
             await imessage.connect();
