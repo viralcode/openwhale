@@ -67,6 +67,7 @@ const ICONS = {
   activity: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
   arrowLeft: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m12 19-7-7 7-7"/><path d="M19 12H5"/></svg>',
   arrowRight: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>',
+  arrowUp: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m18 15-6-6-6 6"/><path d="M12 21V9"/></svg>',
   refresh: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/></svg>',
 
   // Additional tool icons
@@ -1545,7 +1546,7 @@ function renderChat() {
             onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"
           ></textarea>
           <button class="send-btn" id="send-btn" onclick="sendMessage()" ${state.isSending ? 'disabled' : ''}>
-            ${icon('arrowRight', 20)}
+            ${icon('arrowUp', 20)}
           </button>
         </div>
       </div>
@@ -1637,18 +1638,17 @@ function renderMessage(msg) {
   }
 
   // Icons
-  let avatarIcon = icon('bot', 18);
-  if (isUser) avatarIcon = '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>';
+  let avatarIcon = '<span style="font-size: 20px;">🐋</span>'; // OpenWhale Icon
   if (isSystem) avatarIcon = icon('alertCircle', 18);
 
   return `
     <div class="message ${roleClass}">
-      <div class="message-avatar">
+      ${isUser ? '' : `<div class="message-avatar">
         ${avatarIcon}
-      </div>
+      </div>`}
       <div class="message-body">
         <div class="message-header">
-          <span class="message-author">${isUser ? 'You' : isSystem ? 'System' : 'Assistant'}</span>
+          <span class="message-author">${isUser ? '' : isSystem ? 'System' : 'OpenWhale'}</span>
           <span class="message-time">${timeStr}</span>
         </div>
         <div class="message-content">${content}</div>

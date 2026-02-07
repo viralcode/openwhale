@@ -64,9 +64,9 @@ export class TwitterAdapter implements ChannelAdapter {
 
         // Check authentication via bird whoami
         try {
-            const { stdout } = await execAsync("bird whoami --json");
-            const whoami = JSON.parse(stdout);
-            this.username = whoami.username || whoami.screen_name || "unknown";
+            const { stdout } = await execAsync("bird whoami");
+            const match = stdout.match(/@([a-zA-Z0-9_]+)/);
+            this.username = match ? match[1] : "unknown";
             console.log(`[Twitter] Authenticated as @${this.username}`);
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
