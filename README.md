@@ -157,11 +157,6 @@ Community-built skills from [OpenClaw](https://github.com/VoltAgent/awesome-open
   <img src="images/mdskills.png" alt="Markdown Skills" width="800" />
 </p>
 
-Create your own skills with the built-in Skill Creator:
-
-<p align="center">
-  <img src="images/skill-creator.png" alt="Skill Creator" width="800" />
-</p>
 
 ---
 
