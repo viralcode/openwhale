@@ -1,22 +1,16 @@
 # Email Sending
 
-Send emails via SMTP.
+Send emails via Gmail API (not SMTP).
 
-## Configuration
+## Setup
 
-Add to your `.env`:
-```env
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=your-email@gmail.com
-SMTP_PASS=your-app-password
-SMTP_FROM=your-email@gmail.com
-```
+Email uses your Google credentials - the same ones used for Calendar, Drive, etc.
 
-### Gmail Setup
-1. Enable 2FA on your Google account
-2. Create App Password: https://myaccount.google.com/apppasswords
-3. Use the app password in SMTP_PASS
+1. Go to **Dashboard → Skills → Gmail**
+2. Paste your Google credentials JSON
+3. Complete the OAuth authorization
+
+> **Note**: OpenWhale uses Gmail API, not SMTP. You need Google OAuth configured.
 
 ## Basic Commands
 
@@ -25,9 +19,9 @@ SMTP_FROM=your-email@gmail.com
 Send an email to john@example.com with subject "Meeting Tomorrow" and body about the 2pm meeting
 ```
 
-### With formatting
+### With HTML formatting
 ```
-Send a professional email to the team about our Q4 goals
+Send a professional HTML email to the team about our Q4 goals
 ```
 
 ## Examples
@@ -37,19 +31,34 @@ Send a professional email to the team about our Q4 goals
 Generate a sales report PDF and email it to manager@company.com
 ```
 
+### With attachments
+```
+Email the quarterly-report.pdf to finance@company.com with subject "Q4 Report"
+```
+
 ### Notifications
 ```
 Send an email alert about the server status check results
 ```
 
-### Bulk emails
-```
-Send personalized emails to all contacts in contacts.csv
-```
+## Supported Features
+
+- HTML and plain text emails
+- CC and BCC recipients
+- File attachments
+- Automatic formatting
 
 ## Tips
 
-- HTML formatting supported
-- Attachments can be included
-- CC/BCC supported
-- Rate limiting recommended for bulk sends
+- Uses your Gmail account (the one you authorized)
+- Attachments can be any local file
+- HTML formatting supported for professional emails
+- Rate limits apply (Gmail API quotas)
+
+## Troubleshooting
+
+### "Gmail not configured"
+Set up Google OAuth in the Dashboard → Skills → Gmail section first.
+
+### "Invalid credentials"
+Re-paste your credentials JSON and re-authorize.
