@@ -962,9 +962,9 @@ select.form-input option {
 }
 
 .message-content {
-  white-space: pre-wrap;
+  white-space: normal;
   word-wrap: break-word;
-  line-height: 1.75;
+  line-height: 1.55;
   font-size: 15px;
   color: #D4D4D8;
   letter-spacing: 0.01em;
@@ -1065,7 +1065,55 @@ select.form-input option {
   list-style: disc;
 }
 
-/* ===== FILE CHIP (tool-created files) ===== */
+/* ===== MARKDOWN TABLES ===== */
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 14px 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.md-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.md-table thead {
+  background: rgba(99, 102, 241, 0.1);
+  border-bottom: 1px solid rgba(99, 102, 241, 0.2);
+}
+
+.md-table th {
+  padding: 10px 16px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.md-table td {
+  padding: 9px 16px;
+  color: var(--text-secondary);
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.md-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.md-table tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.md-table tbody tr:nth-child(even):hover {
+  background: rgba(255, 255, 255, 0.035);
+}
+
 .tool-file-chip {
   display: inline-flex;
   align-items: center;
@@ -1259,142 +1307,263 @@ select.form-input option {
   }
 }
 
-/* ===== PLAN WIDGET - MANUS STYLE TODO LIST ===== */
+/* ===== PLAN WIDGET — PREMIUM TIMELINE ===== */
 .plan-widget {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-subtle);
-  border-radius: 14px;
-  padding: 0;
-  margin: 10px 0;
+  background: linear-gradient(135deg, rgba(15, 15, 25, 0.8), rgba(20, 20, 35, 0.9));
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 16px;
+  margin: 12px 0;
   overflow: hidden;
-  animation: workingFadeIn 0.3s ease;
+  animation: planSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
 .plan-widget.plan-done {
-  border-color: rgba(34, 197, 94, 0.3);
+  border-color: rgba(34, 197, 94, 0.25);
+  box-shadow: 0 4px 24px rgba(34, 197, 94, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.04);
 }
 
+@keyframes planSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Header */
 .plan-widget-header {
+  padding: 16px 20px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.plan-widget-header-top {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--border-subtle);
-  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 6px;
 }
 
 .plan-widget-title {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-primary);
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(165, 180, 252, 0.8);
 }
 
 .plan-widget-icon {
-  font-size: 18px;
+  font-size: 14px;
 }
 
-.plan-widget-counter {
-  font-size: 12px;
+.plan-widget-subtitle {
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-muted);
-  background: var(--bg-elevated);
-  padding: 4px 10px;
-  border-radius: 12px;
-  border: 1px solid var(--border-subtle);
+  color: var(--text-primary);
+  line-height: 1.4;
+  margin-bottom: 12px;
 }
 
-.plan-done .plan-widget-counter {
+.plan-widget-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(165, 180, 252, 0.9);
+  background: rgba(99, 102, 241, 0.12);
+  padding: 3px 10px;
+  border-radius: 100px;
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  letter-spacing: 0.02em;
+}
+
+.plan-widget-badge.done {
+  color: #86efac;
   background: rgba(34, 197, 94, 0.12);
-  color: #4ade80;
-  border-color: rgba(34, 197, 94, 0.25);
+  border-color: rgba(34, 197, 94, 0.2);
 }
 
-/* Progress bar */
-.plan-progress-bar {
+/* Progress track */
+.plan-progress-track {
   height: 3px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
   overflow: hidden;
+  position: relative;
 }
 
 .plan-progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-indigo), var(--accent-blue));
-  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 0 2px 2px 0;
+  background: linear-gradient(90deg, #6366f1, #818cf8, #a5b4fc);
+  border-radius: 4px;
+  transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  box-shadow: 0 0 12px rgba(99, 102, 241, 0.4);
 }
 
 .plan-progress-fill.done {
-  background: linear-gradient(90deg, #22c55e, #4ade80);
+  background: linear-gradient(90deg, #22c55e, #4ade80, #86efac);
+  box-shadow: 0 0 12px rgba(34, 197, 94, 0.4);
 }
 
-/* Steps */
-.plan-steps {
-  padding: 6px 0;
+/* Timeline */
+.plan-timeline {
+  padding: 16px 20px 12px;
 }
 
-.plan-step {
-  padding: 0 18px;
-  transition: background 0.15s ease;
-}
-
-.plan-step+.plan-step {
-  border-top: 1px solid rgba(255, 255, 255, 0.03);
-}
-
-.plan-step-header {
+.plan-tl-step {
   display: flex;
+  gap: 14px;
+}
+
+/* Gutter: circle + connector */
+.plan-tl-gutter {
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 12px;
-  padding: 11px 0;
-  user-select: none;
-}
-
-.plan-step-header.clickable {
-  cursor: pointer;
-}
-
-.plan-step-header.clickable:hover {
-  opacity: 0.85;
-}
-
-/* Step status icons */
-.plan-step-check {
-  font-size: 16px;
   flex-shrink: 0;
-  width: 22px;
-  text-align: center;
+  width: 28px;
 }
 
-.plan-step-spinner {
+.plan-tl-circle {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
+  font-size: 12px;
+  font-weight: 700;
   flex-shrink: 0;
-  color: var(--accent-blue);
+  transition: all 0.3s ease;
+  position: relative;
+  z-index: 1;
 }
 
-.plan-step-circle {
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.15);
-  flex-shrink: 0;
-  margin: 0 3px;
+/* Pending circle */
+.plan-tl-step.pending .plan-tl-circle {
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.25);
 }
 
-.plan-step-title {
+/* Active circle: gradient with glow */
+.plan-tl-step.active .plan-tl-circle {
+  background: linear-gradient(135deg, #6366f1, #818cf8);
+  border: 2px solid rgba(129, 140, 248, 0.5);
+  color: white;
+  box-shadow: 0 0 16px rgba(99, 102, 241, 0.5), 0 0 4px rgba(99, 102, 241, 0.8);
+  animation: planCirclePulse 2s ease-in-out infinite;
+}
+
+.plan-num-spinner {
+  display: flex;
+  align-items: center;
+  color: white;
+}
+
+/* Done circle: green */
+.plan-tl-step.done .plan-tl-circle {
+  background: linear-gradient(135deg, #22c55e, #4ade80);
+  border: 2px solid rgba(74, 222, 128, 0.4);
+  color: white;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.3);
+}
+
+/* Skipped */
+.plan-tl-step.skipped .plan-tl-circle {
+  background: rgba(255, 255, 255, 0.04);
+  border: 2px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes planCirclePulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 12px rgba(99, 102, 241, 0.3), 0 0 4px rgba(99, 102, 241, 0.6);
+  }
+
+  50% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.6), 0 0 8px rgba(99, 102, 241, 0.9);
+  }
+}
+
+/* Vertical connector */
+.plan-tl-connector {
+  width: 2px;
+  flex: 1;
+  min-height: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  margin: 4px 0;
+  border-radius: 2px;
+  transition: background 0.3s ease;
+}
+
+.plan-tl-step.done .plan-tl-connector {
+  background: rgba(34, 197, 94, 0.25);
+}
+
+.plan-tl-step.active .plan-tl-connector {
+  background: linear-gradient(180deg, rgba(99, 102, 241, 0.3), rgba(255, 255, 255, 0.06));
+}
+
+/* Content area */
+.plan-tl-content {
+  flex: 1;
+  min-width: 0;
+  padding-bottom: 16px;
+}
+
+.plan-tl-row {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  gap: 8px;
+}
+
+.plan-tl-row.clickable {
+  cursor: pointer;
+}
+
+.plan-tl-row.clickable:hover .plan-tl-label {
+  color: var(--text-primary);
+}
+
+.plan-tl-label {
   flex: 1;
   font-size: 13px;
   font-weight: 500;
-  color: var(--text-secondary);
-  line-height: 1.4;
+  line-height: 1.5;
+  transition: color 0.15s ease;
 }
 
-.plan-step-chevron {
+/* Label states */
+.plan-tl-step.pending .plan-tl-label {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.plan-tl-step.active .plan-tl-label {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.plan-tl-step.done .plan-tl-label {
+  color: var(--text-muted);
+}
+
+.plan-tl-step.skipped .plan-tl-label {
+  color: rgba(255, 255, 255, 0.2);
+  text-decoration: line-through;
+}
+
+.plan-tl-chevron {
   display: flex;
   align-items: center;
   color: var(--text-dim);
@@ -1402,50 +1571,109 @@ select.form-input option {
   flex-shrink: 0;
 }
 
-.plan-step-chevron.open {
+.plan-tl-chevron.open {
   transform: rotate(180deg);
 }
 
-/* Step states */
-.plan-step.in-progress {
+/* Expandable details */
+.plan-tl-details {
+  max-height: 0;
+  overflow: hidden;
+  opacity: 0;
+  transition: max-height 0.3s ease, opacity 0.2s ease, margin 0.2s ease;
+  margin-top: 0;
+}
+
+.plan-tl-details.show {
+  max-height: 400px;
+  opacity: 1;
+  margin-top: 8px;
+}
+
+.plan-tl-notes {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  padding: 8px 12px;
   background: rgba(99, 102, 241, 0.06);
+  border-radius: 8px;
+  border-left: 3px solid rgba(99, 102, 241, 0.3);
+  margin-bottom: 8px;
+}
+
+.plan-tl-notes svg {
+  flex-shrink: 0;
+  margin-top: 2px;
+  color: rgba(165, 180, 252, 0.6);
+}
+
+/* Tool chips inside timeline */
+.plan-tl-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.plan-tl-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 6px;
+  font-size: 11px;
+  color: var(--text-dim);
+  transition: background 0.15s ease;
+}
+
+.plan-tl-tool:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.plan-tl-tool .tc-status-icon {
+  display: flex;
+  align-items: center;
+}
+
+.plan-tl-tool span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+/* Active step shimmer effect */
+.plan-tl-step.active .plan-tl-content {
   position: relative;
 }
 
-.plan-step.in-progress::before {
+.plan-tl-step.active .plan-tl-content::before {
   content: '';
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 3px;
-  background: var(--accent-indigo);
-  animation: planPulseBar 2s ease-in-out infinite;
+  top: -2px;
+  left: -8px;
+  right: -8px;
+  bottom: -2px;
+  background: linear-gradient(90deg,
+      transparent 0%,
+      rgba(99, 102, 241, 0.04) 30%,
+      rgba(99, 102, 241, 0.08) 50%,
+      rgba(99, 102, 241, 0.04) 70%,
+      transparent 100%);
+  border-radius: 8px;
+  pointer-events: none;
+  animation: planShimmer 3s ease-in-out infinite;
 }
 
-.plan-step.in-progress .plan-step-title {
-  color: var(--text-primary);
-  font-weight: 600;
-}
-
-.plan-step.completed .plan-step-title {
-  color: var(--text-muted);
-}
-
-.plan-step.skipped .plan-step-title {
-  color: var(--text-dim);
-  text-decoration: line-through;
-}
-
-.plan-step.pending .plan-step-title {
-  color: var(--text-dim);
-}
-
-@keyframes planPulseBar {
+@keyframes planShimmer {
 
   0%,
   100% {
-    opacity: 0.4;
+    opacity: 0;
   }
 
   50% {
@@ -1453,59 +1681,21 @@ select.form-input option {
   }
 }
 
-/* Step details (expandable) */
-.plan-step-details {
-  max-height: 0;
-  overflow: hidden;
-  transition: max-height 0.25s ease, opacity 0.2s ease;
-  opacity: 0;
-  padding-left: 34px;
-}
-
-.plan-step-details.show {
-  max-height: 500px;
-  opacity: 1;
-  padding-bottom: 10px;
-}
-
-.plan-step-notes {
-  font-size: 12px;
-  color: var(--text-muted);
-  line-height: 1.5;
-  padding: 6px 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border-radius: 6px;
-  margin-bottom: 8px;
-}
-
-/* Nested tool chips under plan steps */
-.plan-step-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.plan-tool-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 3px 8px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 6px;
-  font-size: 11px;
-  color: var(--text-dim);
-}
-
-.plan-tool-chip .tc-status-icon {
+/* Footer */
+.plan-widget-footer {
   display: flex;
   align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-.plan-tool-name {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 200px;
+.plan-widget-footer.done {
+  color: #86efac;
+  background: rgba(34, 197, 94, 0.06);
 }
 
 /* ===== TYPING INDICATOR ===== */

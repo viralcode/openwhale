@@ -923,65 +923,67 @@ function renderPlanWidget() {
 
   let html = `<div class="plan-widget${isAllDone ? ' plan-done' : ''}">`;
 
-  // Header
+  // Header with gradient accent
   html += `
     <div class="plan-widget-header">
-      <div class="plan-widget-title">
-        <span class="plan-widget-icon">${isAllDone ? '🎉' : '📋'}</span>
-        <span>${escapeHtml(plan.title)}</span>
+      <div class="plan-widget-header-top">
+        <div class="plan-widget-title">
+          <span class="plan-widget-icon">${isAllDone ? '✨' : '⚡'}</span>
+          <span>Plan</span>
+        </div>
+        <div class="plan-widget-badge ${isAllDone ? 'done' : ''}">${isAllDone ? 'Completed' : `${completedCount} of ${totalCount}`}</div>
       </div>
-      <div class="plan-widget-counter">${completedCount} / ${totalCount}</div>
+      <div class="plan-widget-subtitle">${escapeHtml(plan.title)}</div>
+      <div class="plan-progress-track">
+        <div class="plan-progress-fill${isAllDone ? ' done' : ''}" style="width: ${progressPct}%"></div>
+      </div>
     </div>`;
 
-  // Progress bar
-  html += `
-    <div class="plan-progress-bar">
-      <div class="plan-progress-fill${isAllDone ? ' done' : ''}" style="width: ${progressPct}%"></div>
-    </div>`;
-
-  // Steps
-  html += '<div class="plan-steps">';
-  for (const step of plan.steps) {
+  // Timeline steps
+  html += '<div class="plan-timeline">';
+  for (let i = 0; i < plan.steps.length; i++) {
+    const step = plan.steps[i];
     const isActive = step.status === 'in_progress';
     const isDone = step.status === 'completed';
     const isSkipped = step.status === 'skipped';
-    const stepClass = isActive ? 'in-progress' : isDone ? 'completed' : isSkipped ? 'skipped' : 'pending';
+    const isLast = i === plan.steps.length - 1;
+    const stepClass = isActive ? 'active' : isDone ? 'done' : isSkipped ? 'skipped' : 'pending';
 
-    // Status icon
-    let statusHtml;
+    // Step number circle
+    let circleContent;
     if (isDone) {
-      statusHtml = '<span class="plan-step-check">✅</span>';
+      circleContent = icon('check', 14);
     } else if (isActive) {
-      statusHtml = `<span class="plan-step-spinner spinning">${icon('loader', 14)}</span>`;
-    } else if (isSkipped) {
-      statusHtml = '<span class="plan-step-check">⏭️</span>';
+      circleContent = `<span class="plan-num-spinner spinning">${icon('loader', 14)}</span>`;
     } else {
-      statusHtml = '<span class="plan-step-circle"></span>';
+      circleContent = `${i + 1}`;
     }
 
     const hasDetails = (isDone || isActive) && (step.notes || (step.toolCalls && step.toolCalls.length > 0));
     const isExpanded = step.expanded && hasDetails;
 
     html += `
-      <div class="plan-step ${stepClass}">
-        <div class="plan-step-header${hasDetails ? ' clickable' : ''}" ${hasDetails ? `onclick="togglePlanStep(${step.id})"` : ''}>
-          ${statusHtml}
-          <span class="plan-step-title">${escapeHtml(step.title)}</span>
-          ${hasDetails ? `<span class="plan-step-chevron${isExpanded ? ' open' : ''}">${icon('chevronDown', 12)}</span>` : ''}
-        </div>`;
+      <div class="plan-tl-step ${stepClass}">
+        <div class="plan-tl-gutter">
+          <div class="plan-tl-circle">${circleContent}</div>
+          ${!isLast ? '<div class="plan-tl-connector"></div>' : ''}
+        </div>
+        <div class="plan-tl-content">
+          <div class="plan-tl-row${hasDetails ? ' clickable' : ''}" ${hasDetails ? `onclick="togglePlanStep(${step.id})"` : ''}>
+            <span class="plan-tl-label">${escapeHtml(step.title)}</span>
+            ${hasDetails ? `<span class="plan-tl-chevron${isExpanded ? ' open' : ''}">${icon('chevronDown', 12)}</span>` : ''}
+          </div>`;
 
-    // Expandable details section: notes + tool calls
+    // Expandable proof of work
     if (hasDetails) {
-      html += `<div class="plan-step-details${isExpanded ? ' show' : ''}">`;
+      html += `<div class="plan-tl-details${isExpanded ? ' show' : ''}">`;
 
-      // Notes / summary
       if (step.notes) {
-        html += `<div class="plan-step-notes">${escapeHtml(step.notes)}</div>`;
+        html += `<div class="plan-tl-notes">${icon('info', 12)} ${escapeHtml(step.notes)}</div>`;
       }
 
-      // Nested tool calls as proof of work
       if (step.toolCalls && step.toolCalls.length > 0) {
-        html += '<div class="plan-step-tools">';
+        html += '<div class="plan-tl-tools">';
         for (const tc of step.toolCalls) {
           const tcIcon = tc.status === 'running'
             ? `<span class="tc-status-icon running spinning">${icon('loader', 10)}</span>`
@@ -989,11 +991,7 @@ function renderPlanWidget() {
               ? `<span class="tc-status-icon done">${icon('check', 10)}</span>`
               : `<span class="tc-status-icon error">${icon('x', 10)}</span>`;
           const tcLabel = getToolLabel(tc.name, tc.arguments);
-          html += `
-            <div class="plan-tool-chip">
-              ${tcIcon}
-              <span class="plan-tool-name">${escapeHtml(tcLabel)}</span>
-            </div>`;
+          html += `<div class="plan-tl-tool">${tcIcon}<span>${escapeHtml(tcLabel)}</span></div>`;
         }
         html += '</div>';
       }
@@ -1001,10 +999,16 @@ function renderPlanWidget() {
       html += '</div>';
     }
 
-    html += '</div>';
+    html += '</div></div>';
   }
-  html += '</div></div>';
+  html += '</div>';
 
+  // Footer with completion celebration
+  if (isAllDone) {
+    html += `<div class="plan-widget-footer done"><span>🎉</span> All steps completed successfully</div>`;
+  }
+
+  html += '</div>';
   return html;
 }
 
@@ -1074,6 +1078,39 @@ function formatMarkdown(text) {
   // Inline formatting
   html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
   html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Markdown tables — must come before \n → <br>
+  html = html.replace(/((?:^\|.+\|$\n?){2,})/gm, function (tableBlock) {
+    const rows = tableBlock.trim().split('\n').filter(r => r.trim());
+    if (rows.length < 2) return tableBlock;
+    // Check for separator row (---|---|---)
+    const sepIdx = rows.findIndex(r => /^\|[\s\-:|]+\|$/.test(r));
+    if (sepIdx < 0) return tableBlock;
+
+    const cleanCell = (c) => c.trim()
+      .replace(/&lt;br\s*\/?&gt;/gi, '<br>')
+      .replace(/\\n/g, '<br>');
+    const parseRow = (row) => row.replace(/^\||\|$/g, '').split('|').map(cleanCell);
+    const headerRows = rows.slice(0, sepIdx);
+    const bodyRows = rows.slice(sepIdx + 1);
+
+    let tableHtml = '<div class="md-table-wrap"><table class="md-table">';
+    if (headerRows.length > 0) {
+      tableHtml += '<thead>';
+      for (const hr of headerRows) {
+        tableHtml += '<tr>' + parseRow(hr).map(c => `<th>${c}</th>`).join('') + '</tr>';
+      }
+      tableHtml += '</thead>';
+    }
+    if (bodyRows.length > 0) {
+      tableHtml += '<tbody>';
+      for (const br of bodyRows) {
+        tableHtml += '<tr>' + parseRow(br).map(c => `<td>${c}</td>`).join('') + '</tr>';
+      }
+      tableHtml += '</tbody>';
+    }
+    tableHtml += '</table></div>';
+    return tableHtml;
+  });
   html = html.replace(/\n/g, '<br>');
   return html;
 }
@@ -1800,23 +1837,7 @@ function renderMessage(msg) {
   const date = msg.createdAt ? new Date(msg.createdAt) : new Date();
   const timeStr = date.toLocaleString('en-US', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 
-  let content = escapeHtml(msg.content);
-  // Simple markdown rendering
-  content = content.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
-  // Headings
-  content = content.replace(/^#### (.+)$/gm, '<h4>$1</h4>');
-  content = content.replace(/^### (.+)$/gm, '<h3>$1</h3>');
-  content = content.replace(/^## (.+)$/gm, '<h2>$1</h2>');
-  content = content.replace(/^# (.+)$/gm, '<h1>$1</h1>');
-  // Horizontal rules
-  content = content.replace(/^---$/gm, '<hr>');
-  // Lists
-  content = content.replace(/^- (.+)$/gm, '<li>$1</li>');
-  content = content.replace(/^\d+\. (.+)$/gm, '<li>$1</li>');
-  // Inline
-  content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
-  content = content.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-  content = content.replace(/\n/g, '<br>');
+  let content = formatMarkdown(msg.content);
 
   let toolCallsHtml = '';
   if (msg.toolCalls && msg.toolCalls.length > 0) {
