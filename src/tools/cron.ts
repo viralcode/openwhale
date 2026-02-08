@@ -29,7 +29,7 @@ async function executeJobTask(job: { id: string; task: string; name?: string; ex
         const { processMessage, getCurrentModel } = await import("../sessions/session-service.js");
 
         // Use whatever model is currently active in the system
-        const model = getCurrentModel() || "deepseek-chat";
+        const model = getCurrentModel();
 
         // Send the task to the AI with context about what triggered it
         const prompt = `[SCHEDULED TASK - AUTO-EXECUTE]\nA cron job has fired. You MUST execute the following task NOW, do not ask for confirmation:\n\nTask: ${job.task}\nJob Name: ${job.name || job.id}\nSchedule: ${job.expression}\nFired at: ${localTime} (${tz})\n\nExecute this task immediately using the appropriate tools.`;

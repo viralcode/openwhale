@@ -162,16 +162,9 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
 
         // Sync the session-service's currentModel with the enabled provider
         // so channels (WhatsApp, Telegram, etc.) use the correct provider
-        const defaultModels: Record<string, string> = {
-            anthropic: "claude-sonnet-4-20250514",
-            openai: "gpt-4o",
-            google: "gemini-2.0-flash",
-            deepseek: "deepseek-chat",
-            ollama: "llama3.2",
-        };
         for (const [type, config] of providerConfigs.entries()) {
             if (config.enabled && config.apiKey) {
-                const model = (config as any).selectedModel || defaultModels[type] || "deepseek-chat";
+                const model = config.selectedModel || configStore.get("defaultModel") as string || "";
                 setModel(model);
                 console.log(`[Dashboard] Set active model to ${model} (provider: ${type})`);
                 break;
@@ -916,14 +909,7 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             for (const [type, config] of providerConfigs.entries()) {
                 if (config.enabled && config.apiKey) {
                     // Use the selected model for this provider, or a default
-                    const defaultModels: Record<string, string> = {
-                        anthropic: "claude-sonnet-4-20250514",
-                        openai: "gpt-4o",
-                        google: "gemini-2.0-flash",
-                        deepseek: "deepseek-chat",
-                        ollama: "llama3.2",
-                    };
-                    effectiveModel = config.selectedModel || defaultModels[type] || "deepseek-chat";
+                    effectiveModel = config.selectedModel || configStore.get("defaultModel") as string;
                     console.log(`[Dashboard] Using enabled provider: ${type}, model: ${effectiveModel}`);
                     break;
                 }
@@ -941,7 +927,7 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                         createdAt: new Date().toISOString()
                     });
                 }
-                effectiveModel = configStore.get("defaultModel") || "claude-sonnet-4-20250514";
+                effectiveModel = configStore.get("defaultModel") as string || "";
                 console.log(`[Dashboard] No enabled provider found, falling back to: ${effectiveModel}`);
             }
         }
@@ -1038,21 +1024,14 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         // Resolve model (same logic as /api/chat)
         let effectiveModel = requestModel;
         if (!effectiveModel) {
-            for (const [type, config] of providerConfigs.entries()) {
+            for (const [, config] of providerConfigs.entries()) {
                 if (config.enabled && config.apiKey) {
-                    const defaultModels: Record<string, string> = {
-                        anthropic: "claude-sonnet-4-20250514",
-                        openai: "gpt-4o",
-                        google: "gemini-2.0-flash",
-                        deepseek: "deepseek-chat",
-                        ollama: "llama3.2",
-                    };
-                    effectiveModel = config.selectedModel || defaultModels[type] || "deepseek-chat";
+                    effectiveModel = config.selectedModel || configStore.get("defaultModel") as string;
                     break;
                 }
             }
             if (!effectiveModel) {
-                effectiveModel = configStore.get("defaultModel") || "claude-sonnet-4-20250514";
+                effectiveModel = configStore.get("defaultModel") as string || "";
             }
         }
 
@@ -2577,21 +2556,14 @@ echo "Hello from ${name}"
 
             // Find the active model (same logic as /api/chat)
             let effectiveModel: string | undefined;
-            for (const [type, config] of providerConfigs.entries()) {
+            for (const [, config] of providerConfigs.entries()) {
                 if (config.enabled && config.apiKey) {
-                    const defaultModels: Record<string, string> = {
-                        anthropic: "claude-sonnet-4-20250514",
-                        openai: "gpt-4o",
-                        google: "gemini-2.0-flash",
-                        deepseek: "deepseek-chat",
-                        ollama: "llama3.2",
-                    };
-                    effectiveModel = config.selectedModel || defaultModels[type] || "deepseek-chat";
+                    effectiveModel = config.selectedModel || configStore.get("defaultModel") as string;
                     break;
                 }
             }
             if (!effectiveModel) {
-                effectiveModel = configStore.get("defaultModel") as string || "claude-sonnet-4-20250514";
+                effectiveModel = configStore.get("defaultModel") as string || "";
             }
 
             // Use a dedicated session for extensions

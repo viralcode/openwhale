@@ -69,7 +69,22 @@ import { db } from "../db/index.js";
 
 // ============== SINGLETON STATE ==============
 
-let currentModel = "claude-sonnet-4-20250514";
+// Read the active model from DB at startup instead of hardcoding
+function getEffectiveModelFromDB(): string {
+    try {
+        // First: check for an enabled provider with a configured default_model
+        const row = db.prepare(
+            "SELECT default_model, type FROM provider_config WHERE enabled = 1 AND api_key IS NOT NULL LIMIT 1"
+        ).get() as { default_model: string | null; type: string } | undefined;
+        if (row?.default_model) return row.default_model;
+        // Second: check the global config store for a defaultModel
+        const cfg = db.prepare("SELECT value FROM config WHERE key = 'defaultModel'").get() as { value: string } | undefined;
+        if (cfg?.value) return cfg.value;
+    } catch { /* DB not ready yet */ }
+    return "";
+}
+
+let currentModel = getEffectiveModelFromDB();
 
 // Dashboard-specific message store (with tool call info)
 // Uses in-memory cache + SQLite persistence

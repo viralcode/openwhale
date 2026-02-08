@@ -80,7 +80,7 @@ ${c("dim", "                    v0.1.0 (Agentic)                ")}
 `;
 
 // State - will be loaded from database
-let currentModel = "deepseek-chat"; // Default fallback
+let currentModel = ""; // Will be loaded from database
 type ChatMessage = {
     role: "user" | "assistant" | "system" | "tool";
     content: string;
@@ -288,7 +288,7 @@ function initProviders() {
 
                 // If we haven't found a global default model yet, and this provider has one, use it
                 // This allows the CLI to "just work" if you've only configured one provider
-                if (currentModel === "deepseek-chat" && p.default_model) {
+                if (!currentModel && p.default_model) {
                     currentModel = p.default_model;
                 }
             }
@@ -1843,12 +1843,12 @@ async function testProviders() {
 }
 
 async function testChat() {
-    const provider = registry.getProvider("claude-sonnet-4-20250514");
-    if (!provider) throw new Error("Anthropic provider not available");
+    const provider = registry.getProvider(currentModel);
+    if (!provider) throw new Error(`Provider for model ${currentModel} not available`);
 
     let gotResponse = false;
     for await (const event of provider.stream({
-        model: "claude-sonnet-4-20250514",
+        model: currentModel,
         messages: [{ role: "user", content: "Say 'test passed' in exactly 2 words" }],
         maxTokens: 10,
     })) {

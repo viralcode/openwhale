@@ -12,6 +12,8 @@
  * /help           - List available commands
  */
 
+import { getCurrentModel } from "../sessions/session-service.js";
+
 export interface SessionSettings {
     thinkingLevel: "off" | "low" | "medium" | "high";
     verboseMode: boolean;
@@ -33,7 +35,7 @@ export function getSessionSettings(userId: string): SessionSettings {
         sessionSettings.set(userId, {
             thinkingLevel: "medium",
             verboseMode: false,
-            model: process.env.DEFAULT_MODEL || "claude-sonnet-4-20250514",
+            model: process.env.DEFAULT_MODEL || getCurrentModel(),
             usageDisplay: "tokens",
             tokenCount: 0,
             messageCount: 0,
@@ -50,7 +52,7 @@ export function resetSession(userId: string): void {
     sessionSettings.set(userId, {
         thinkingLevel: "medium",
         verboseMode: false,
-        model: process.env.DEFAULT_MODEL || "claude-sonnet-4-20250514",
+        model: process.env.DEFAULT_MODEL || getCurrentModel(),
         usageDisplay: "tokens",
         tokenCount: 0,
         messageCount: 0,
