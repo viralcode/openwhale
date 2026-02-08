@@ -4,6 +4,10 @@
   "description": "Next-gen AI assistant with enterprise security and multi-model support",
   "type": "module",
   "main": "dist/index.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/viralcode/openwhale.git"
+  },
   "bin": {
     "openwhale": "./openwhale.mjs"
   },
