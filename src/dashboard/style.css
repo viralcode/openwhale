@@ -2016,6 +2016,8 @@ select.form-input option {
   max-width: 700px;
   margin: 0 auto;
   padding: 40px 20px;
+  overflow-y: auto;
+  max-height: 100vh;
 }
 
 .wizard-header {
@@ -2121,14 +2123,14 @@ select.form-input option {
 .prereq-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 6px;
 }
 
 .prereq-item {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
+  gap: 10px;
+  padding: 10px 12px;
   background: var(--bg-elevated);
   border-radius: var(--radius-md);
   transition: var(--transition-fast);
@@ -2139,14 +2141,15 @@ select.form-input option {
 }
 
 .prereq-icon {
-  font-size: 24px;
-  width: 48px;
-  height: 48px;
+  font-size: 18px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: var(--bg-surface);
-  border-radius: var(--radius-sm);
+  border-radius: 6px;
+  flex-shrink: 0;
 }
 
 .prereq-info {
@@ -2155,16 +2158,19 @@ select.form-input option {
 
 .prereq-name {
   font-weight: 600;
-  margin-bottom: 2px;
+  font-size: 13px;
+  margin-bottom: 1px;
 }
 
 .prereq-desc {
-  font-size: 13px;
+  font-size: 11px;
   color: var(--text-muted);
 }
 
 .prereq-status {
-  font-size: 20px;
+  font-size: 12px;
+  white-space: nowrap;
+  color: var(--text-secondary);
 }
 
 /* ===== SPINNER ===== */

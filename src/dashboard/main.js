@@ -1209,8 +1209,15 @@ async function loadPrerequisites() {
 
 async function installPrerequisite(name) {
   const descriptions = {
+    python: 'Python 3 - for code execution tool',
+    homebrew: 'Homebrew - macOS package manager',
     ffmpeg: 'FFmpeg - for audio/video processing and screen recording',
-    imagesnap: 'ImageSnap - for camera capture on macOS'
+    imagesnap: 'ImageSnap - for camera capture on macOS',
+    docker: 'Docker - for container management tool',
+    git: 'Git - for version control and git tool',
+    pnpm: 'pnpm - recommended Node.js package manager',
+    ssh: 'SSH - for remote server connections',
+    playwright: 'Playwright - browser automation (installs via npm)',
   };
 
   const confirmed = await showConfirm(
@@ -3091,63 +3098,61 @@ function renderWelcomeStep() {
 }
 
 function renderPrereqStep() {
-  // Core runtimes (info only)
+  // Core runtimes (required)
   const corePrereqs = [
     { id: 'node', name: 'Node.js', desc: 'JavaScript runtime (required)', info: state.prerequisites?.node },
-    { id: 'python', name: 'Python 3', desc: 'For code execution', info: state.prerequisites?.python },
-    { id: 'homebrew', name: 'Homebrew', desc: 'Package manager', info: state.prerequisites?.homebrew },
+    { id: 'pnpm', name: 'pnpm', desc: 'Recommended package manager', info: state.prerequisites?.pnpm },
+    { id: 'git', name: 'Git', desc: 'Version control & Git tool', info: state.prerequisites?.git },
   ];
 
-  // Optional tools (can install)
-  const optionalPrereqs = [
-    { id: 'ffmpeg', name: 'FFmpeg', desc: 'Audio/video processing', info: state.prerequisites?.ffmpeg },
-    { id: 'imagesnap', name: 'ImageSnap', desc: 'Camera capture (macOS)', info: state.prerequisites?.imagesnap },
+  // Recommended tools
+  const recommendedPrereqs = [
+    { id: 'python', name: 'Python 3', desc: 'Code execution tool', info: state.prerequisites?.python },
+    { id: 'homebrew', name: 'Homebrew', desc: 'Package manager (macOS)', info: state.prerequisites?.homebrew },
+    { id: 'ffmpeg', name: 'FFmpeg', desc: 'Screen recording & audio/video', info: state.prerequisites?.ffmpeg },
+    { id: 'docker', name: 'Docker', desc: 'Container management tool', info: state.prerequisites?.docker },
+    { id: 'playwright', name: 'Playwright', desc: 'Browser automation (Chromium)', info: state.prerequisites?.playwright },
   ];
+
+  // Optional / platform-specific
+  const optionalPrereqs = [
+    { id: 'imagesnap', name: 'ImageSnap', desc: 'Camera capture (macOS)', info: state.prerequisites?.imagesnap },
+    { id: 'ssh', name: 'SSH Client', desc: 'Remote server connections', info: state.prerequisites?.ssh },
+  ];
+
+  const renderGroup = (title, items, canInstall) => `
+    <div style="margin-bottom: 20px;">
+      <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">${title}</div>
+      <div class="prereq-list">
+        ${items.map(p => `
+          <div class="prereq-item">
+            <span class="prereq-icon">${p.info?.installed ? '✅' : (canInstall ? '📦' : '❌')}</span>
+            <div class="prereq-info">
+              <div class="prereq-name">${p.name}</div>
+              <div class="prereq-desc">${p.desc}</div>
+            </div>
+            <div class="prereq-status ${p.info?.installed ? 'installed' : 'missing'}">
+              ${p.info?.installed ? (p.info.version || 'Installed') : (canInstall ? `
+                <button class="btn btn-secondary" onclick="installPrerequisite('${p.id}')">
+                  Install
+                </button>
+              ` : 'Not found')}
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
 
   return `
     <div class="wizard-section-title">System Check</div>
     <p class="wizard-section-desc">
       Checking your system for required and optional tools that enhance OpenWhale's capabilities.
     </p>
-    
-    <div style="margin-bottom: 16px;">
-      <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Core Requirements</div>
-      <div class="prereq-list">
-        ${corePrereqs.map(p => `
-          <div class="prereq-item">
-            <span class="prereq-icon">${p.info?.installed ? '✅' : '❌'}</span>
-            <div class="prereq-info">
-              <div class="prereq-name">${p.name}</div>
-              <div class="prereq-desc">${p.desc}</div>
-            </div>
-            <div class="prereq-status ${p.info?.installed ? 'installed' : 'missing'}">
-              ${p.info?.installed ? (p.info.version || 'Installed') : 'Not found'}
-            </div>
-          </div>
-        `).join('')}
-      </div>
-    </div>
-    
-    <div>
-      <div style="font-weight: 600; margin-bottom: 8px; color: var(--text-secondary);">Optional Tools</div>
-      <div class="prereq-list">
-        ${optionalPrereqs.map(p => `
-          <div class="prereq-item">
-            <span class="prereq-icon">${p.info?.installed ? '✅' : '📦'}</span>
-            <div class="prereq-info">
-              <div class="prereq-name">${p.name}</div>
-              <div class="prereq-desc">${p.desc}</div>
-            </div>
-            <div class="prereq-status ${p.info?.installed ? 'installed' : 'missing'}">
-              ${p.info?.installed ? 'Installed' : `
-                <button class="btn btn-secondary" onclick="installPrerequisite('${p.id}')">
-                  Install
-                </button>
-              `}
-            </div>
-          </div>
-        `).join('')}
-      </div>
+    <div style="max-height: 400px; overflow-y: auto; margin-bottom: 8px; padding-right: 4px;">
+    ${renderGroup('Core Requirements', corePrereqs, false)}
+    ${renderGroup('Recommended Tools', recommendedPrereqs, true)}
+    ${renderGroup('Optional / Platform', optionalPrereqs, true)}
     </div>
     
     <div class="wizard-actions">
@@ -3165,26 +3170,42 @@ function renderProvidersStep() {
   return `
     <div class="wizard-section-title">AI Providers</div>
     <p class="wizard-section-desc">
-      Configure at least one AI provider to use OpenWhale. We recommend Anthropic's Claude for the best experience.
+      Configure at least one AI provider to use OpenWhale.
     </p>
     
-    <div class="form-group">
-      <label class="form-label">Anthropic API Key (Recommended)</label>
-      <input type="password" class="form-input" id="setup-anthropic" placeholder="sk-ant-...">
-      <div class="form-hint">Get your key from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></div>
+    <div style="max-height: 380px; overflow-y: auto; padding-right: 4px; margin-bottom: 8px;">
+      <div class="form-group">
+        <label class="form-label">Anthropic API Key (Recommended)</label>
+        <input type="password" class="form-input" id="setup-anthropic" placeholder="sk-ant-...">
+        <div class="form-hint">Get your key from <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a></div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">OpenAI API Key</label>
+        <input type="password" class="form-input" id="setup-openai" placeholder="sk-...">
+        <div class="form-hint">Get your key from <a href="https://platform.openai.com/api-keys" target="_blank">platform.openai.com</a></div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Google AI API Key</label>
+        <input type="password" class="form-input" id="setup-google" placeholder="AIza...">
+        <div class="form-hint">Get your key from <a href="https://aistudio.google.com/apikey" target="_blank">aistudio.google.com</a></div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">DeepSeek API Key</label>
+        <input type="password" class="form-input" id="setup-deepseek" placeholder="sk-...">
+        <div class="form-hint">Get your key from <a href="https://platform.deepseek.com" target="_blank">platform.deepseek.com</a></div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Ollama (Local)</label>
+        <input type="text" class="form-input" id="setup-ollama" placeholder="http://localhost:11434">
+        <div class="form-hint">No API key needed — run models locally with <a href="https://ollama.com" target="_blank">ollama.com</a></div>
+      </div>
     </div>
     
-    <div class="form-group">
-      <label class="form-label">OpenAI API Key (Optional)</label>
-      <input type="password" class="form-input" id="setup-openai" placeholder="sk-...">
-    </div>
-    
-    <div class="form-group">
-      <label class="form-label">Google AI API Key (Optional)</label>
-      <input type="password" class="form-input" id="setup-google" placeholder="AIza...">
-    </div>
-    
-    <div style="background: var(--bg-secondary); padding: 16px; border-radius: var(--radius-sm); margin-bottom: 16px; border: 1px solid var(--border-color);">
+    <div style="background: var(--bg-secondary); padding: 12px; border-radius: var(--radius-sm); margin-bottom: 8px; border: 1px solid var(--border-color);">
       <div style="display: flex; align-items: center; gap: 12px;">
         <button class="btn btn-secondary" onclick="testAIProvider()" id="test-ai-btn">
           🧪 Test AI Connection
@@ -3461,12 +3482,16 @@ window.saveProviderSetup = async function () {
   const anthropic = document.getElementById('setup-anthropic')?.value;
   const openai = document.getElementById('setup-openai')?.value;
   const google = document.getElementById('setup-google')?.value;
+  const deepseek = document.getElementById('setup-deepseek')?.value;
+  const ollama = document.getElementById('setup-ollama')?.value;
 
   await saveSetupStep(2, {
     providers: {
       anthropic: { apiKey: anthropic, enabled: !!anthropic },
       openai: { apiKey: openai, enabled: !!openai },
-      google: { apiKey: google, enabled: !!google }
+      google: { apiKey: google, enabled: !!google },
+      deepseek: { apiKey: deepseek, enabled: !!deepseek },
+      ollama: { baseUrl: ollama, enabled: !!ollama }
     }
   });
 };
@@ -3668,8 +3693,11 @@ window.testAIProvider = async function () {
 
   const anthropicKey = document.getElementById('setup-anthropic')?.value;
   const openaiKey = document.getElementById('setup-openai')?.value;
+  const googleKey = document.getElementById('setup-google')?.value;
+  const deepseekKey = document.getElementById('setup-deepseek')?.value;
+  const ollamaUrl = document.getElementById('setup-ollama')?.value;
 
-  if (!anthropicKey && !openaiKey) {
+  if (!anthropicKey && !openaiKey && !googleKey && !deepseekKey && !ollamaUrl) {
     if (statusEl) statusEl.textContent = '⚠️ Enter an API key first';
     return;
   }
@@ -3678,26 +3706,38 @@ window.testAIProvider = async function () {
   if (statusEl) statusEl.textContent = '🔄 Testing...';
 
   try {
-    // Try Anthropic first, then OpenAI
-    const provider = anthropicKey ? 'anthropic' : 'openai';
-    const apiKey = anthropicKey || openaiKey;
+    // Pick the first provider with a key
+    let provider, apiKey;
+    if (anthropicKey) { provider = 'anthropic'; apiKey = anthropicKey; }
+    else if (openaiKey) { provider = 'openai'; apiKey = openaiKey; }
+    else if (googleKey) { provider = 'google'; apiKey = googleKey; }
+    else if (deepseekKey) { provider = 'deepseek'; apiKey = deepseekKey; }
+    else if (ollamaUrl) { provider = 'ollama'; apiKey = ollamaUrl; }
 
-    const res = await api('/setup/test-ai', 'POST', { provider, apiKey });
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.sessionId) headers['Authorization'] = 'Bearer ' + state.sessionId;
+
+    const response = await fetch('/dashboard/api/setup/test-ai', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ provider, apiKey })
+    });
+    const res = await response.json();
 
     if (res.ok) {
       if (statusEl) {
-        statusEl.textContent = '✅ ' + (res.message || 'AI is working!');
+        statusEl.textContent = 'AI is working! ' + (res.message || '');
         statusEl.style.color = 'var(--success)';
       }
     } else {
       if (statusEl) {
-        statusEl.textContent = '❌ ' + (res.error || 'Test failed');
+        statusEl.textContent = 'Test failed: ' + (res.error || 'Unknown error');
         statusEl.style.color = 'var(--error)';
       }
     }
   } catch (e) {
     if (statusEl) {
-      statusEl.textContent = '❌ Error: ' + e.message;
+      statusEl.textContent = 'Error: ' + e.message;
       statusEl.style.color = 'var(--error)';
     }
   } finally {

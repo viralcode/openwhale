@@ -10,7 +10,7 @@ import { sessions, users, messages, auditLogs } from "../db/schema.js";
 import { providerConfig, skillConfig, channelConfig, setupState as setupStateTable, dashboardUsers, authSessions } from "../db/config-schema.js";
 import { db as sqliteDb } from "../db/index.js";
 import { desc, sql, eq } from "drizzle-orm";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -580,6 +580,18 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             prereqs.node = { installed: true, version: nodeVersion };
         } catch { prereqs.node = { installed: false }; }
 
+        // pnpm (recommended package manager)
+        try {
+            const pnpmVersion = execSync("pnpm --version", { encoding: "utf-8" }).trim();
+            prereqs.pnpm = { installed: true, version: `v${pnpmVersion}` };
+        } catch { prereqs.pnpm = { installed: false }; }
+
+        // Git (for git tool, version control)
+        try {
+            const gitVersion = execSync("git --version", { encoding: "utf-8" }).trim();
+            prereqs.git = { installed: true, version: gitVersion.replace("git version ", "") };
+        } catch { prereqs.git = { installed: false }; }
+
         // Python (for code_exec tool)
         try {
             const pythonVersion = execSync("python3 --version", { encoding: "utf-8" }).trim();
@@ -592,17 +604,34 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             prereqs.homebrew = { installed: true };
         } catch { prereqs.homebrew = { installed: false }; }
 
-        // FFmpeg
+        // FFmpeg (screen recording, audio/video)
         try {
             execSync("which ffmpeg", { stdio: "ignore" });
             prereqs.ffmpeg = { installed: true };
         } catch { prereqs.ffmpeg = { installed: false }; }
 
-        // ImageSnap (macOS)
+        // ImageSnap (macOS camera capture)
         try {
             execSync("which imagesnap", { stdio: "ignore" });
             prereqs.imagesnap = { installed: true };
         } catch { prereqs.imagesnap = { installed: false }; }
+
+        // Docker (container management)
+        try {
+            const dockerVersion = execSync("docker --version", { encoding: "utf-8" }).trim();
+            prereqs.docker = { installed: true, version: dockerVersion.replace("Docker version ", "").split(",")[0] };
+        } catch { prereqs.docker = { installed: false }; }
+
+        // Playwright / Chromium (browser automation)
+        try {
+            prereqs.playwright = { installed: existsSync(join(process.cwd(), "node_modules", "playwright")) };
+        } catch { prereqs.playwright = { installed: false }; }
+
+        // SSH client
+        try {
+            execSync("which ssh", { stdio: "ignore" });
+            prereqs.ssh = { installed: true };
+        } catch { prereqs.ssh = { installed: false }; }
 
         return c.json(prereqs);
     });
@@ -655,6 +684,54 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
                 const data = await res.json() as { choices: Array<{ message: { content: string } }> };
                 return c.json({ ok: true, message: data.choices[0]?.message?.content || "AI responded!" });
+            } else if (provider === "google" && apiKey) {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{ parts: [{ text: "Say 'Hello! I am working correctly.' in exactly those words." }] }],
+                    }),
+                });
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    return c.json({ ok: false, error: `API error: ${err}` });
+                }
+
+                const data = await res.json() as { candidates: Array<{ content: { parts: Array<{ text: string }> } }> };
+                return c.json({ ok: true, message: data.candidates?.[0]?.content?.parts?.[0]?.text || "AI responded!" });
+            } else if (provider === "deepseek" && apiKey) {
+                const res = await fetch("https://api.deepseek.com/v1/chat/completions", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${apiKey}`,
+                    },
+                    body: JSON.stringify({
+                        model: "deepseek-chat",
+                        max_tokens: 50,
+                        messages: [{ role: "user", content: "Say 'Hello! I am working correctly.' in exactly those words." }],
+                    }),
+                });
+
+                if (!res.ok) {
+                    const err = await res.text();
+                    return c.json({ ok: false, error: `API error: ${err}` });
+                }
+
+                const data = await res.json() as { choices: Array<{ message: { content: string } }> };
+                return c.json({ ok: true, message: data.choices[0]?.message?.content || "AI responded!" });
+            } else if (provider === "ollama" && apiKey) {
+                const baseUrl = apiKey.replace(/\/$/, "");
+                const res = await fetch(`${baseUrl}/api/tags`);
+
+                if (!res.ok) {
+                    return c.json({ ok: false, error: `Cannot reach Ollama at ${baseUrl}` });
+                }
+
+                const data = await res.json() as { models?: Array<{ name: string }> };
+                const modelCount = data.models?.length || 0;
+                return c.json({ ok: true, message: `Ollama connected! ${modelCount} model${modelCount !== 1 ? 's' : ''} available.` });
             }
 
             return c.json({ ok: false, error: "Provider not supported for testing" });
