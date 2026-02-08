@@ -15,7 +15,7 @@
 <p align="center">
   <strong>🚧 Active Development</strong> — This project is being actively built. Expect frequent updates!<br/>
   <strong>🐢 Long-Running Tasks</strong> — Handles complex, multi-step tasks that run for hours<br/>
-  <strong>🌐 OpenWhale Website</strong> — Coming soon<br/>
+  <strong>🌐 OpenWhale Website</strong> — https://viralcode.github.io/openwhale<br/>
   <strong>☁️ OpenWhale Hosting</strong> — Managed hosting coming soon
 </p>
 
