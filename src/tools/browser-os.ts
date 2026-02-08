@@ -641,7 +641,7 @@ export class BrowserOSBackend {
     /**
      * Take a screenshot
      */
-    async screenshot(fullPage: boolean = false): Promise<ToolResult> {
+    async screenshot(_fullPage: boolean = false): Promise<ToolResult> {
         // First get the active tab to get its ID
         const tabResult = await callBrowserOSTool(this.url, "browser_get_active_tab", {});
 
@@ -795,7 +795,7 @@ export class BrowserOSBackend {
     /**
      * Scroll the page
      */
-    async scroll(direction: "up" | "down", amount?: number): Promise<ToolResult> {
+    async scroll(direction: "up" | "down", _amount?: number): Promise<ToolResult> {
         const toolName = direction === "down" ? "browser_scroll_down" : "browser_scroll_up";
         const result = await callBrowserOSTool(this.url, toolName, {});
 

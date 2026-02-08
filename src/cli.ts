@@ -1167,7 +1167,7 @@ ${c("bold", "Memory Location:")}
  * Handle extensions commands
  */
 async function handleExtensionsCommand(subcommand?: string) {
-    const { existsSync, readdirSync, readFileSync } = await import("node:fs");
+    const { existsSync, readdirSync } = await import("node:fs");
     const { homedir } = await import("node:os");
     const { join } = await import("node:path");
     const extDir = join(homedir(), ".openwhale", "extensions");
@@ -1341,7 +1341,7 @@ ${c("bold", "How it works:")}
 async function handleVoiceCommand(subcommand?: string) {
     const { homedir } = await import("node:os");
     const { join } = await import("node:path");
-    const { existsSync, readFileSync, writeFileSync, mkdirSync } = await import("node:fs");
+    const { readFileSync, writeFileSync, mkdirSync } = await import("node:fs");
 
     const configPath = join(homedir(), ".openwhale", "settings", "voicewake.json");
     const DEFAULT_TRIGGERS = ["openwhale", "claude", "computer"];

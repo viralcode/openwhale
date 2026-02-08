@@ -151,7 +151,7 @@ function persistMessage(msg: ChatMessage): void {
 
 // ============== INITIALIZATION ==============
 
-export function initializeProvider(apiKey: string, model?: string): void {
+export function initializeProvider(_apiKey: string, model?: string): void {
     // Legacy function - provider initialization now handled by registry
     if (model) currentModel = model;
     ensureDbInit(); // Load history on init

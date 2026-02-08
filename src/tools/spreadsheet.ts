@@ -1,8 +1,8 @@
 import { z } from "zod";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
 import ExcelJS from "exceljs";
-import { readFile, writeFile, mkdir } from "node:fs/promises";
-import { dirname, extname } from "node:path";
+import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 
 const SpreadsheetActionSchema = z.object({
     action: z.enum(["create", "read", "add_sheet", "add_rows", "format"]).describe("Action to perform"),

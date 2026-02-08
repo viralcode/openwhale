@@ -36,7 +36,7 @@ async function birdExec(command: string): Promise<string> {
     }
 }
 
-async function checkBirdAvailable(): Promise<boolean> {
+export async function checkBirdAvailable(): Promise<boolean> {
     try {
         await execAsync("which bird");
         return true;
