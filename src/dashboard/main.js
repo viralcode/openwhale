@@ -18,6 +18,8 @@ const ICONS = {
 
   // Channels
   smartphone: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>',
+  phone: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+  phoneCall: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/><path d="M14.05 2a9 9 0 0 1 8 7.94"/><path d="M14.05 6A5 5 0 0 1 18 10"/></svg>',
   send: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
   globe: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
 
@@ -827,6 +829,13 @@ function updateStreamingUI() {
           </div>
           ${step.result ? `
             <div class="tool-call-chip-body${step.expanded ? ' show' : ''}">
+              ${step.metadata?.audio ? `
+                <div class="tool-call-audio" style="margin: 8px 0;">
+                  <audio controls autoplay style="width: 100%; height: 36px; border-radius: 8px;">
+                    <source src="${step.metadata.audio}" type="audio/mpeg">
+                  </audio>
+                </div>
+              ` : ''}
               <div class="tool-call-result">${typeof step.result === 'string' ? escapeHtml(step.result).substring(0, 500) : JSON.stringify(step.result, null, 2).substring(0, 500)}</div>
               ${renderFileChip(step.metadata)}
             </div>
@@ -1925,6 +1934,13 @@ function renderMessage(msg) {
                 <img src="${imageSrc}" alt="Tool Result" style="max-width: 100%; border-radius: 6px; margin-top: 6px;">
               </div>
             ` : ''}
+            ${tcMeta?.audio ? `
+              <div class="tool-call-audio" style="margin: 8px 0;">
+                <audio controls style="width: 100%; height: 36px; border-radius: 8px;">
+                  <source src="${tcMeta.audio}" type="audio/mpeg">
+                </audio>
+              </div>
+            ` : ''}
             <div class="tool-call-result">${typeof tc.result === 'string' ? escapeHtml(tc.result).substring(0, 500) : JSON.stringify(tc.result, null, 2).substring(0, 500)}</div>
             ${fileChipHtml}
           ` : ''}
@@ -2273,10 +2289,29 @@ function renderSkills() {
       name: 'Twitter/X',
       iconName: 'twitter',
       desc: 'Post tweets, read timeline, mentions',
-      placeholder: '', // No API key needed
+      placeholder: '',
       helpUrl: 'https://github.com/steipete/bird',
       helpText: 'Uses bird CLI with cookie auth. Install: npm i -g @steipete/bird, then run "bird check" to authenticate.',
-      noCreds: true // Flag indicating no credentials input needed
+      noCreds: true
+    },
+    {
+      id: 'elevenlabs',
+      name: 'ElevenLabs',
+      iconName: 'volume2',
+      desc: 'High-quality text-to-speech voices',
+      placeholder: 'sk_xxxx...',
+      helpUrl: 'https://elevenlabs.io/app/settings/api-keys',
+      helpText: 'Sign up at elevenlabs.io → Profile → API Keys → Create API Key. Free tier includes ~10,000 characters/month.'
+    },
+    {
+      id: 'twilio',
+      name: 'Twilio',
+      iconName: 'phone',
+      desc: 'SMS, WhatsApp & AI voice calls',
+      placeholder: '',
+      helpUrl: 'https://console.twilio.com',
+      helpText: 'Get your Account SID, Auth Token from twilio.com/console, and a phone number from Phone Numbers → Manage → Buy a number.',
+      multiField: true
     }
   ];
 
@@ -2369,6 +2404,24 @@ function renderSkills() {
                         ${icon('check', 14)} Save Cookies
                       </button>
                     </div>
+                  </div>
+                ` : s.multiField ? `
+                  <div class="skill-form" style="flex-direction: column; gap: 8px;">
+                    <input type="password" class="form-input" 
+                           placeholder="Account SID (AC...)"
+                           id="skill-twilio-sid"
+                           style="font-family: monospace; font-size: 12px;">
+                    <input type="password" class="form-input" 
+                           placeholder="Auth Token"
+                           id="skill-twilio-token"
+                           style="font-family: monospace; font-size: 12px;">
+                    <input type="text" class="form-input" 
+                           placeholder="Phone Number (+1...)"
+                           id="skill-twilio-phone"
+                           style="font-family: monospace; font-size: 12px;">
+                    <button class="btn btn-primary" onclick="saveTwilioConfig()" style="width: 100%; justify-content: center;">
+                      ${icon('check', 14)} ${hasKey ? 'Update' : 'Connect'}
+                    </button>
                   </div>
                 ` : `
                   <div class="skill-form">
@@ -2649,7 +2702,13 @@ function renderTools() {
     docker: 'container',
     ssh: 'server',
     db_query: 'databaseZap',
-    slides: 'presentation'
+    slides: 'presentation',
+    elevenlabs_tts: 'volume2',
+    elevenlabs_voices: 'mic',
+    twilio_send_sms: 'messageSquare',
+    twilio_send_whatsapp: 'messageCircle',
+    twilio_make_call: 'phone',
+    twilio_agent_call: 'phoneCall'
   };
 
   const categoryColors = {
@@ -4065,6 +4124,19 @@ window.saveProvider = async function (type) {
 window.saveSkill = async function (id) {
   const apiKey = document.getElementById(`skill-${id}`)?.value;
   await saveSkillConfig(id, { apiKey, enabled: !!apiKey });
+};
+
+window.saveTwilioConfig = async function () {
+  const sid = document.getElementById('skill-twilio-sid')?.value;
+  const token = document.getElementById('skill-twilio-token')?.value;
+  const phone = document.getElementById('skill-twilio-phone')?.value;
+  if (!sid || !token) {
+    await showAlert('Account SID and Auth Token are required', '❌ Error');
+    return;
+  }
+  const apiKey = JSON.stringify({ sid, authToken: token, phone: phone || '' });
+  await saveSkillConfig('twilio', { apiKey, enabled: true });
+  await showAlert('Twilio configured successfully!', '✅ Success');
 };
 
 window.switchSkillsTab = function (tab) {

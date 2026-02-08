@@ -78,6 +78,19 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
                 if (s.id === "weather") process.env.OPENWEATHERMAP_API_KEY = s.apiKey;
                 if (s.id === "notion") process.env.NOTION_API_KEY = s.apiKey;
                 if (s.id === "1password") process.env.OP_SERVICE_ACCOUNT_TOKEN = s.apiKey;
+                if (s.id === "elevenlabs") process.env.ELEVENLABS_API_KEY = s.apiKey;
+                // Twilio stores JSON-encoded credentials: {sid, authToken, phone}
+                if (s.id === "twilio") {
+                    try {
+                        const creds = JSON.parse(s.apiKey);
+                        if (creds.sid) process.env.TWILIO_ACCOUNT_SID = creds.sid;
+                        if (creds.authToken) process.env.TWILIO_AUTH_TOKEN = creds.authToken;
+                        if (creds.phone) process.env.TWILIO_FROM_NUMBER = creds.phone;
+                    } catch {
+                        // Legacy: treat as plain SID if not JSON
+                        process.env.TWILIO_ACCOUNT_SID = s.apiKey;
+                    }
+                }
             }
             // Handle Twitter enablement (no API key needed, uses bird CLI)
             if (s.id === "twitter" && s.enabled) {
@@ -1622,9 +1635,24 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 id: "twitter",
                 name: "Twitter/X",
                 enabled: skillConfigs.get("twitter")?.enabled ?? !!process.env.TWITTER_ENABLED,
-                hasKey: true, // Uses bird CLI with cookie auth, no API key needed
+                hasKey: true,
                 description: "Post tweets, read timeline, mentions",
-                noCreds: true // Flag to indicate no credentials needed
+                noCreds: true
+            },
+            {
+                id: "elevenlabs",
+                name: "ElevenLabs",
+                enabled: skillConfigs.get("elevenlabs")?.enabled ?? !!process.env.ELEVENLABS_API_KEY,
+                hasKey: !!(skillConfigs.get("elevenlabs")?.apiKey || process.env.ELEVENLABS_API_KEY),
+                description: "High-quality text-to-speech voices"
+            },
+            {
+                id: "twilio",
+                name: "Twilio",
+                enabled: skillConfigs.get("twilio")?.enabled ?? !!process.env.TWILIO_ACCOUNT_SID,
+                hasKey: !!(skillConfigs.get("twilio")?.apiKey || process.env.TWILIO_ACCOUNT_SID),
+                description: "SMS, WhatsApp, and AI voice calls",
+                multiField: true
             }
         ];
 
@@ -1877,6 +1905,17 @@ echo "Hello from ${name}"
             if (id === "weather") process.env.OPENWEATHERMAP_API_KEY = apiKey;
             if (id === "notion") process.env.NOTION_API_KEY = apiKey;
             if (id === "trello") process.env.TRELLO_API_KEY = apiKey;
+            if (id === "elevenlabs") process.env.ELEVENLABS_API_KEY = apiKey;
+            if (id === "twilio") {
+                try {
+                    const creds = JSON.parse(apiKey);
+                    if (creds.sid) process.env.TWILIO_ACCOUNT_SID = creds.sid;
+                    if (creds.authToken) process.env.TWILIO_AUTH_TOKEN = creds.authToken;
+                    if (creds.phone) process.env.TWILIO_FROM_NUMBER = creds.phone;
+                } catch {
+                    process.env.TWILIO_ACCOUNT_SID = apiKey;
+                }
+            }
         }
 
         // Persist to database

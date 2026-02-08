@@ -12,6 +12,8 @@ import { notionSkill } from "./notion.js";
 import { onePasswordSkill } from "./onepassword.js";
 import { appleNotesSkill, appleRemindersSkill } from "./apple.js";
 import { twitterSkill } from "./twitter.js";
+import { elevenlabsSkill } from "./elevenlabs.js";
+import { twilioSkill } from "./twilio.js";
 
 // Import Google skills
 import { googleCalendarSkill } from "../integrations/google/calendar.js";
@@ -34,6 +36,8 @@ export async function registerAllSkills(): Promise<void> {
     skillRegistry.register(notionSkill);
     skillRegistry.register(onePasswordSkill);
     skillRegistry.register(twitterSkill);
+    skillRegistry.register(elevenlabsSkill);
+    skillRegistry.register(twilioSkill);
 
     // Apple (macOS only)
     if (process.platform === "darwin") {
