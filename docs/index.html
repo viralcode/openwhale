@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenWhale | The AI Operating System</title>
+    <meta name="description"
+        content="OpenWhale is the self-extensible local AI assistant. Multi-model, multi-channel, real browser automation.">
+    <link rel="stylesheet" href="assets/css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+</head>
+
+<body>
+    <div class="grid-bg"></div>
+    <div class="scanline"></div>
+
+    <nav class="navbar">
+        <div class="nav-content">
+            <div class="logo">🐋 OPENWHALE <span class="blink">_</span></div>
+            <div class="nav-links">
+                <a href="#capabilities">CAPABILITIES</a>
+                <a href="#specs">SPECS</a>
+                <a href="https://github.com/viralcode/openwhale" target="_blank" class="github-btn">GITHUB_REPO</a>
+            </div>
+        </div>
+    </nav>
+
+    <main>
+        <header class="hero">
+            <div class="hero-top">
+                <h1 class="hero-title">
+                    USER AGENTIC<br>
+                    OPERATING SYSTEM
+                </h1>
+                <p class="hero-subtitle">
+                    DEPLOY AUTONOMOUS AGENTS LOCALLY.<br>
+                    CONNECTS TO 8 MODELS. CONTROLS 6 CHANNELS.
+                </p>
+
+                <div class="hero-icons-row">
+                    <div class="icon-item" title="WhatsApp"><i class="fab fa-whatsapp"></i></div>
+                    <div class="icon-item" title="Telegram"><i class="fab fa-telegram"></i></div>
+                    <div class="icon-item" title="Discord"><i class="fab fa-discord"></i></div>
+                    <div class="icon-item" title="Slack"><i class="fab fa-slack"></i></div>
+                    <div class="icon-item" title="Twitter/X"><i class="fab fa-twitter"></i></div>
+                    <div class="icon-item" title="iMessage"><i class="fas fa-comment-dots"></i></div>
+                </div>
+
+                <div class="hero-actions">
+                    <div class="install-cmd" onclick="copyInstall()">
+                        <span class="prompt">$</span> git clone https://github.com/jijojohn/openwhale.git
+                        <span class="copy-icon"><i class="far fa-copy"></i></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="hero-visual">
+                <div class="cyber-window">
+                    <div class="window-bar">
+                        <span>PRIME_DIRECTIVE: ASSIST_USER</span>
+                        <div class="window-controls">:::</div>
+                    </div>
+                    <div class="terminal-content" id="typing-terminal"></div>
+                </div>
+            </div>
+        </header>
+
+        <section id="about" class="grid-section" style="padding-bottom: 0;">
+            <div class="grid-header">
+                <h2>SYSTEM OVERVIEW</h2>
+                <div class="line-separator"></div>
+            </div>
+            <div class="about-content" style="max-width: 800px; margin: 0 auto; line-height: 1.8; color: #ccc;">
+                <p style="margin-bottom: 1.5rem;">
+                    OpenWhale is a <strong>self-extensible local AI assistant</strong> designed for developers and power
+                    users who want their AI to take action, not just chat. It acts as an autonomous layer between your
+                    LLMs and your operating system.
+                </p>
+                <p>
+                    Unlike standard chatbots, OpenWhale can control your browser, execute code, manage files, and
+                    interact with your messaging apps (WhatsApp, Telegram, etc.) bi-directionally. It supports
+                    hot-swapping between 8+ AI providers including Anthropic, OpenAI, and local Llamas.
+                </p>
+            </div>
+        </section>
+
+        <section id="advanced" class="grid-section" style="padding-top: 2rem;">
+            <div class="grid-header">
+                <h2>ADVANCED CAPABILITIES</h2>
+                <div class="line-separator"></div>
+            </div>
+
+            <div class="scrolling-text-container"
+                style="overflow: hidden; white-space: nowrap; margin-bottom: 3rem; border-top: 1px solid #333; border-bottom: 1px solid #333; padding: 1rem 0;">
+                <div class="scrolling-text" style="display: inline-block; animation: scrollLeft 20s linear infinite;">
+                    SELF AWARE // SELF EXTENSIBLE // SKILL CREATOR // TOOL BUILDER // BROWSER AUTOMATION // MEMORY
+                    PERSISTENCE //
+                </div>
+            </div>
+
+            <div class="modules-grid" style="grid-template-columns: repeat(2, 1fr);">
+                <!-- Skill Creator -->
+                <div class="module-card">
+                    <div class="card-header">
+                        <span class="module-id">CORE</span>
+                        <h3>SKILL_CREATOR</h3>
+                    </div>
+                    <p>OpenWhale writes its own tools. Describe a task ("Check Bitcoin price every hour"), and it
+                        generates the TypeScript code, installs dependencies, and hot-loads the new skill instantly.</p>
+                </div>
+
+                <!-- Self Aware -->
+                <div class="module-card">
+                    <div class="card-header">
+                        <span class="module-id">CORE</span>
+                        <h3>SELF_AWARE</h3>
+                    </div>
+                    <p>It understands its own codebase. It can debug itself, refactor its own architecture, and improve
+                        its performance without human intervention.</p>
+                </div>
+            </div>
+
+            <div class="about-content" style="max-width: 800px; margin: 3rem auto 0; color: #888; font-size: 0.9rem;">
+                <p><strong>INCLUDED TOOLS:</strong> File System, Terminal Exec, Browser (Playwright/BrowserOS), Docker
+                    Control, SQL Query, Code Execution, and Community Skills.</p>
+            </div>
+        </section>
+
+        <section id="capabilities" class="grid-section">
+            <div class="grid-header">
+                <h2>SYSTEM MODULES</h2>
+                <div class="line-separator"></div>
+            </div>
+
+            <div class="modules-grid">
+                <!-- Module 1 -->
+                <div class="module-card">
+                    <div class="card-header">
+                        <span class="module-id">01</span>
+                        <h3>MULTI_MODEL_CORE</h3>
+                    </div>
+                    <p>Hot-swap intelligence engines. Anthropic, OpenAI, DeepSeek, Google, or Local Llama. Zero
+                        friction.</p>
+                    <div class="tech-tags">
+                        <span>GPT-4o</span><span>CLAUDE 3.5</span><span>GEMINI</span>
+                    </div>
+                </div>
+
+                <!-- Module 2 -->
+                <div class="module-card">
+                    <div class="card-header">
+                        <span class="module-id">02</span>
+                        <h3>OMNI_CHANNEL</h3>
+                    </div>
+                    <p>Unified communication matrix. The AI lives in your WhatsApp, Telegram, Discord, and Slack
+                        simultaneously.</p>
+                    <div class="tech-tags">
+                        <span>WHATSAPP</span><span>TELEGRAM</span><span>DISCORD</span>
+                    </div>
+                </div>
+
+                <!-- Module 3 -->
+                <div class="module-card">
+                    <div class="card-header">
+                        <span class="module-id">03</span>
+                        <h3>BROWSER_OS</h3>
+                    </div>
+                    <p>Full autonomous web navigation. It uses your Chrome profile, cookies, and extensions to execute
+                        tasks.</p>
+                    <div class="tech-tags">
+                        <span>PLAYWRIGHT</span><span>CHROME</span>
+                    </div>
+                </div>
+
+                <!-- Module 4 -->
+                <div class="module-card">
+                    <div class="card-header">
+                        <span class="module-id">04</span>
+                        <h3>SELF_EVOLUTION</h3>
+                    </div>
+                    <p>Recursively extensible. Ask it to create new tools or cron jobs, and it writes the code to
+                        upgrade itself.</p>
+                    <div class="tech-tags">
+                        <span>TYPESCRIPT</span><span>DYNAMIC_LOAD</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="specs" class="specs-section">
+            <div class="spec-container">
+                <div class="spec-row">
+                    <div class="spec-label">ARCHITECTURE</div>
+                    <div class="spec-val">LOCAL_FIRST / NODE.JS</div>
+                </div>
+                <div class="spec-row">
+                    <div class="spec-label">MEMORY</div>
+                    <div class="spec-val">VECTOR_EMBEDDINGS + SQLITE</div>
+                </div>
+                <div class="spec-row">
+                    <div class="spec-label">LICENSE</div>
+                    <div class="spec-val">MIT OPEN SOURCE</div>
+                </div>
+                <div class="spec-row">
+                    <div class="spec-label">PRIVACY</div>
+                    <div class="spec-val">100% USER OWNED DATA</div>
+                </div>
+            </div>
+        </section>
+
+        <footer class="cyber-footer">
+            <div class="footer-line">
+                OPENWHALE PROJECT &copy; 2026
+                <span class="footer-right">INITIATED WITH ❤️ BY <a href="https://jijojohn.me" target="_blank"
+                        style="color: inherit; text-decoration: none;">JIJOJOHN</a></span>
+            </div>
+        </footer>
+    </main>
+
+    <script src="assets/js/script.js"></script>
+</body>
+
+</html>
