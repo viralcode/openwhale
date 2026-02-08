@@ -786,6 +786,8 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             for (const [type, enabled] of Object.entries(data.channels)) {
                 const existing = channelConfigs.get(type) || { enabled: false, connected: false };
                 channelConfigs.set(type, { ...existing, enabled: enabled as boolean });
+                // Persist to database
+                await saveChannelToDB(db, type, channelConfigs.get(type)!);
             }
         }
 

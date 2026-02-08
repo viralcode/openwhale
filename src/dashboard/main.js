@@ -3497,11 +3497,12 @@ window.saveProviderSetup = async function () {
 };
 
 window.saveChannelSetup = async function () {
-  const whatsapp = document.getElementById('setup-whatsapp')?.checked;
-  const telegram = document.getElementById('setup-telegram')?.checked;
+  const whatsapp = document.getElementById('setup-whatsapp')?.checked ?? state.whatsappConnected;
+  const telegram = state.setupTelegramEnabled || false;
+  const discord = state.setupDiscordEnabled || false;
 
   await saveSetupStep(3, {
-    channels: { whatsapp, telegram, web: true }
+    channels: { whatsapp, telegram, discord, web: true }
   });
 };
 
