@@ -4,122 +4,339 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenWhale | THE AI OS</title>
+    <title>OpenWhale | Self-Extensible AI Assistant</title>
     <link rel="stylesheet" href="assets/css/style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 
 <body>
 
+    <!-- Navigation -->
     <nav class="navbar">
-        <div class="nav-content">
-            <div class="logo">
-                <span style="font-size: 2rem;">🐋</span> OpenWhale
-            </div>
+        <div class="container nav-inner">
+            <a href="#" class="logo">
+                <span style="font-size: 1.5rem;">🐋</span> OpenWhale
+            </a>
             <div class="nav-links">
-                <a href="#features" class="nav-item">Features</a>
-                <a href="#specs" class="nav-item">Specs</a>
-                <a href="https://github.com/viralcode/openwhale" target="_blank" class="nav-item">GitHub</a>
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#comparison" class="nav-link">Compare</a>
+                <a href="#tools" class="nav-link">Tools</a>
+                <a href="#browser" class="nav-link">BrowserOS</a>
+                <a href="https://github.com/viralcode/openwhale" target="_blank" class="nav-link">GitHub ↗</a>
             </div>
         </div>
     </nav>
 
     <main>
-        <section class="hero">
-            <div class="hero-left">
-                <div class="hero-tag">v2.0 BETA IS HERE</div>
-                <h1 class="hero-title">The Local<br>AI Operating<br>System.</h1>
+        <!-- Hero Section -->
+        <section class="hero" style="position: relative; overflow: hidden;">
+            <div id="hero-background"></div>
+            <div class="container" style="position: relative; z-index: 1;">
+                <h1>The Self-Extensible<br>AI Assistant.</h1>
                 <p class="hero-sub">
-                    Forget Chatbots. Deploy <strong>autonomous agents</strong> that control your browser, apps, and OS.
-                    Secure. Local. <strong>Raw Power.</strong>
+                    Built for folks who want their AI to actually <strong>do things</strong> — not just chat.
+                    Connects to 8+ models. Controls your browser & apps. Runs deeply local.
                 </p>
 
-                <div class="hero-btns">
-                    <a href="https://github.com/viralcode/openwhale"><button class="btn-main">Get Code ⚡</button></a>
-
-                    <div class="code-snippet" onclick="copyInstall()">
-                        <i class="fas fa-chevron-right"></i>
-                        <span>git clone https://github.com/viralcode/openwhale.git</span>
+                <div class="hero-actions">
+                    <div class="code-copy" onclick="copyInstall()">
+                        <i class="fas fa-terminal"></i>
+                        <span id="cmd-text">git clone https://github.com/viralcode/openwhale.git</span>
                         <i class="far fa-copy" style="margin-left: auto;"></i>
+                    </div>
+                    <p style="font-size: 0.85rem; color: #9ca3af;">Requires Node.js 22+</p>
+
+                    <div class="hero-icons" style="margin-top: 2rem; display: flex; gap: 1.5rem; opacity: 0.7;">
+                        <i class="fab fa-whatsapp" title="WhatsApp"></i>
+                        <i class="fab fa-telegram" title="Telegram"></i>
+                        <i class="fab fa-discord" title="Discord"></i>
+                        <i class="fab fa-slack" title="Slack"></i>
+                        <i class="fas fa-comment-dots" title="iMessage"></i>
+                    </div>
+                </div>
+
+                <!-- Chat Simulation -->
+                <div class="chat-visual" style="background: #000; border: none;">
+                    <div class="chat-header" style="background: transparent; border-bottom: none; padding-bottom: 0;">
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <div class="dot"></div>
+                        <span id="chat-header-text"
+                            style="font-size: 0.85rem; color: #6b7280; font-weight: 500; margin-left: auto;">OpenWhale
+                            Local</span>
+                    </div>
+
+                    <!-- View 1: Terminal / Dark (Default) -->
+                    <div class="chat-body dark-theme active-view" id="view-terminal">
+                        <!-- User Message -->
+                        <div class="msg user-dark" style="align-self: flex-end; margin-bottom: 1.5rem;">
+                            hey
+                        </div>
+
+                        <!-- AI Message -->
+                        <div class="msg ai-dark" style="align-self: flex-start; max-width: 90%;">
+                            <div class="ai-header">
+                                <span class="ai-name">OpenWhale</span>
+                                <span class="ai-time">Feb 7, 09:59 PM</span>
+                            </div>
+                            <div class="ai-content">
+                                Hey! 👋 I'm OpenWhale, your AI assistant with full access to tools and integrations. I'm
+                                ready to help you with anything you need.
+                                <br><br>
+                                What can I help you with today?
+                            </div>
+                        </div>
+
+                        <!-- User Message 2 -->
+                        <div class="msg user-dark"
+                            style="align-self: flex-end; margin-top: 1.5rem; margin-bottom: 1.5rem;">
+                            can you go and organize my desktop
+                        </div>
+
+                        <!-- AI Tool Use -->
+                        <div class="msg ai-dark"
+                            style="align-self: flex-start; width: 100%; max-width: 100%; background: transparent; padding: 0;">
+                            <div class="tool-status">
+                                <i class="fas fa-wrench"></i> 2 tool calls <span
+                                    style="opacity: 0.5; margin-left: 8px;">2 done</span>
+                            </div>
+
+                            <div class="tool-logs">
+                                <div class="tool-log-item">
+                                    <i class="fas fa-check" style="color: #10b981;"></i>
+                                    <span>Taking screenshot</span>
+                                    <i class="fas fa-chevron-down"
+                                        style="margin-left: auto; opacity: 0.5; font-size: 0.8em;"></i>
+                                </div>
+                                <div class="tool-log-item">
+                                    <i class="fas fa-check" style="color: #10b981;"></i>
+                                    <span>Running: ls -la ~/Desktop/</span>
+                                    <i class="fas fa-chevron-down"
+                                        style="margin-left: auto; opacity: 0.5; font-size: 0.8em;"></i>
+                                </div>
+                            </div>
+
+                            <div style="margin-top: 1rem; color: #d1d5db;">
+                                Now let me check what files and folders are currently on your desktop:
+                            </div>
+
+                            <!-- Loader -->
+                            <div class="ai-loader-box">
+                                <div class="loader-dot"></div>
+                                <span>Generating response...</span>
+                                <div style="margin-left: auto;"><i class="fas fa-circle-notch fa-spin"></i></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- View 2: WhatsApp -->
+                    <div class="chat-body whatsapp-theme hidden-view" id="view-whatsapp">
+                        <div class="msg user-wa" style="align-self: flex-end; margin-bottom: 1rem;">
+                            Summarize the last 5 emails from "Project X"
+                            <span class="wa-time">10:02 AM <i class="fas fa-check-double"></i></span>
+                        </div>
+                        <div class="msg ai-wa" style="align-self: flex-start;">
+                            <div style="font-weight: 600; color: #d97706; font-size: 0.8rem; margin-bottom: 4px;">
+                                OpenWhale</div>
+                            Here are the last 5 emails summary:
+                            <br>1. Budget approved ✅
+                            <br>2. Meeting rescheduled to Friday
+                            <br>3. New designs attached
+                            ...
+                            <span class="wa-time" style="color: #6b7280;">10:02 AM</span>
+                        </div>
+                    </div>
+
+                    <!-- View 3: Discord -->
+                    <div class="chat-body discord-theme hidden-view" id="view-discord">
+                        <div class="discord-msg">
+                            <div class="discord-avatar user-av"></div>
+                            <div class="discord-content">
+                                <span class="discord-name">User</span> <span class="discord-timestamp">Today at 10:05
+                                    AM</span>
+                                <div class="discord-text">Ban all users who joined in last 10m</div>
+                            </div>
+                        </div>
+                        <div class="discord-msg">
+                            <div class="discord-avatar ai-av"><i class="fas fa-robot"></i></div>
+                            <div class="discord-content">
+                                <span class="discord-name bot">OpenWhale <span class="bot-tag">BOT</span></span> <span
+                                    class="discord-timestamp">Today at 10:05 AM</span>
+                                <div class="discord-text">
+                                    <i class="fas fa-shield-alt"></i> Executing moderation tool...
+                                    <div class="discord-embed">
+                                        ✅ Banned 14 users.<br>
+                                        Reason: Raid protection active.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
+        </section>
 
-            <!-- Brutalist Visual -->
-            <div class="hero-visual">
-                <div class="big-emoji">🐋</div>
+        <!-- Features Grid -->
+        <section id="features" class="alt-bg">
+            <div class="container">
+                <div class="section-head">
+                    <h2>Everything included.</h2>
+                    <p>OpenWhale is designed to be the only AI assistant you need running on your machine.</p>
+                </div>
 
-                <!-- Scattered "Stickers" -->
-                <div class="sticker st-1" title="WhatsApp"><i class="fab fa-whatsapp"></i></div>
-                <div class="sticker st-2" title="Discord"><i class="fab fa-discord"></i></div>
-                <div class="sticker st-3" title="Terminal"><i class="fas fa-terminal"></i></div>
+                <div class="feature-grid">
+                    <!-- Feature 1 -->
+                    <div class="feature-card">
+                        <div class="icon-box"><i class="fas fa-brain"></i></div>
+                        <h3>8+ AI Providers</h3>
+                        <p>Switch between GPT-4o, Claude 3.5, Gemini Pro, DeepSeek, and Local Models (Ollama) instantly.
+                        </p>
+                    </div>
+
+                    <!-- Feature 2 -->
+                    <div class="feature-card">
+                        <div class="icon-box"><i class="fas fa-comments"></i></div>
+                        <h3>Omni-Channel</h3>
+                        <p>Unified brain for WhatsApp, Telegram, Discord, Slack, Twitter/X, and iMessage (macOS).</p>
+                    </div>
+
+                    <!-- Feature 3 -->
+                    <div class="feature-card">
+                        <div class="icon-box"><i class="fas fa-globe"></i></div>
+                        <h3>Real Browser Automation</h3>
+                        <p>Don't just scrape. Control your real Chrome browser with cookies, extensions, and logins.</p>
+                    </div>
+
+                    <!-- Feature 4 -->
+                    <div class="feature-card">
+                        <div class="icon-box"><i class="fas fa-puzzle-piece"></i></div>
+                        <h3>Self-Extensible</h3>
+                        <p>The AI can write its own tools. "Create a tool to check BTC price" -> Done.</p>
+                    </div>
+
+                    <!-- Feature 5 -->
+                    <div class="feature-card">
+                        <div class="icon-box"><i class="fas fa-database"></i></div>
+                        <h3>Persistent Memory</h3>
+                        <p>Vector search over long-term memory. It remembers facts and context across restarts.</p>
+                    </div>
+
+                    <!-- Feature 6 -->
+                    <div class="feature-card">
+                        <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
+                        <h3>Local & Secure</h3>
+                        <p>Runs on your machine. Your data stays with you. No mandatory cloud dependency.</p>
+                    </div>
+                </div>
             </div>
         </section>
 
-        <!-- Features -->
-        <section id="features" class="section-features">
-            <h2 class="section-head">Hardcore Features</h2>
 
-            <div class="card-grid">
-                <!-- Card 1 -->
-                <div class="feature-card">
-                    <div class="card-icon"><i class="fas fa-brain"></i></div>
-                    <h3>Multi-Model</h3>
-                    <p>GPT-4o, Claude 3.5, or Local Models. Hot-swap instantly. No constraints.</p>
+
+        <!-- Tools List -->
+        <section id="tools" class="alt-bg">
+            <div class="container">
+                <div class="section-head">
+                    <h2>33+ Built-in Tools</h2>
+                    <p>The AI can actually DO things effectively.</p>
                 </div>
 
-                <!-- Card 2 -->
-                <div class="feature-card">
-                    <div class="card-icon"><i class="fas fa-comments"></i></div>
-                    <h3>Omni-Channel</h3>
-                    <p>Unified Brain for WhatsApp, Telegram, Discord, and Slack.</p>
-                </div>
-
-                <!-- Card 3 -->
-                <div class="feature-card">
-                    <div class="card-icon"><i class="fas fa-globe"></i></div>
-                    <h3>BrowserOS</h3>
-                    <p>Real Chrome Automation. It uses your cookies, your extensions, your life.</p>
-                </div>
-
-                <!-- Card 4 -->
-                <div class="feature-card">
-                    <div class="card-icon"><i class="fas fa-code"></i></div>
-                    <h3>Self-Code</h3>
-                    <p>It writes its own tools in TypeScript. The system grows as you use it.</p>
+                <div class="tools-grid">
+                    <div class="tool-item"><span class="tool-name">exec</span>Run shell commands</div>
+                    <div class="tool-item"><span class="tool-name">file</span>Read/Write files</div>
+                    <div class="tool-item"><span class="tool-name">browser</span>Full automation</div>
+                    <div class="tool-item"><span class="tool-name">code_exec</span>Run Python/JS/TS</div>
+                    <div class="tool-item"><span class="tool-name">memory</span>Vector recall</div>
+                    <div class="tool-item"><span class="tool-name">web_fetch</span>Fetch URLs/APIs</div>
+                    <div class="tool-item"><span class="tool-name">cron</span>Schedule tasks</div>
+                    <div class="tool-item"><span class="tool-name">screenshot</span>Capture screen</div>
+                    <div class="tool-item"><span class="tool-name">camera</span>Photo/Video</div>
+                    <div class="tool-item"><span class="tool-name">imessage</span>Read/Send (macOS)</div>
+                    <div class="tool-item"><span class="tool-name">pdf</span>Create/Read PDFs</div>
+                    <div class="tool-item"><span class="tool-name">slides</span>Generate PPTX</div>
+                    <div class="tool-item"><span class="tool-name">spreadsheet</span>Excel/CSV</div>
+                    <div class="tool-item"><span class="tool-name">sql</span>Query DBs</div>
+                    <div class="tool-item"><span class="tool-name">git</span>Manage Repos</div>
+                    <div class="tool-item"><span class="tool-name">docker</span>Manage Containers</div>
+                    <div class="tool-item"><span class="tool-name">ssh</span>Remote connect</div>
+                    <div class="tool-item"><span class="tool-name">email</span>Send via Gmail</div>
+                    <div class="tool-item"><span class="tool-name">zip</span>Compress/Extract</div>
+                    <div class="tool-item"><span class="tool-name">qr_code</span>Generate QRs</div>
+                    <div class="tool-item"><span class="tool-name">calendar</span>Create Events</div>
+                    <div class="tool-item"><span class="tool-name">shortcuts</span>Apple Shortcuts</div>
+                    <div class="tool-item"><span class="tool-name">system</span>Diagnostics</div>
+                    <div class="tool-item"><span class="tool-name">tts</span>Text-to-Speech</div>
                 </div>
             </div>
         </section>
 
-        <!-- Specs -->
-        <section id="specs" class="specs">
-            <div class="specs-box">
-                <div class="spec-row">
-                    <span class="spec-label">Runtime</span>
-                    <span class="spec-val">Node.js 22+</span>
+        <!-- BrowserOS vs Playwright -->
+        <section id="browser">
+            <div class="container">
+                <div class="section-head">
+                    <h2>Two Automated Browsers</h2>
+                    <p>Choose the backend that fits your mission.</p>
                 </div>
-                <div class="spec-row">
-                    <span class="spec-label">Memory</span>
-                    <span class="spec-val">Vector + SQLite</span>
-                </div>
-                <div class="spec-row">
-                    <span class="spec-label">License</span>
-                    <span class="spec-val">MIT</span>
-                </div>
-                <div class="spec-row">
-                    <span class="spec-label">Status</span>
-                    <span class="spec-val">Ready</span>
+
+                <div class="browser-grid">
+                    <!-- Playwright -->
+                    <div class="browser-card lite">
+                        <div class="icon-box" style="margin-bottom: 1.5rem; background: #f3f4f6; color: #4b5563;">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <h3>Playwright (Headless)</h3>
+                        <p class="description" style="border: none; margin-bottom: 1.5rem; padding: 0;">
+                            Best for: Simple scraping, zero setup.
+                        </p>
+                        <ul class="feature-list" style="list-style: none; padding: 0;">
+                            <li><i class="fas fa-check"></i> Faster Performance</li>
+                            <li><i class="fas fa-check"></i> Zero Configuration</li>
+                            <li class="pro-feature"><i class="fas fa-times"></i> No cookies/login persistence</li>
+                            <li class="pro-feature"><i class="fas fa-times"></i> Detectable by anti-bots</li>
+                        </ul>
+                    </div>
+
+                    <!-- BrowserOS -->
+                    <div class="browser-card recommended">
+                        <div class="icon-box"
+                            style="margin-bottom: 1.5rem; background: rgba(37, 99, 235, 0.2); color: #60a5fa;">
+                            <i class="fas fa-fingerprint"></i>
+                        </div>
+                        <h3>BrowserOS (Real User)</h3>
+                        <p class="description">
+                            Best for: Complex tasks, logged-in sites (Gmail, GitHub).
+                        </p>
+                        <ul class="feature-list" style="list-style: none; padding: 0;">
+                            <li><i class="fas fa-check"></i> Uses <strong>YOUR</strong> Chrome Profile</li>
+                            <li><i class="fas fa-check"></i> Supports 1Password, AdBlock, Extensions</li>
+                            <li><i class="fas fa-check"></i> Undetectable by anti-bots</li>
+                            <li><i class="fas fa-check"></i> Visible real-time execution</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
         </section>
+
+        <!-- Footer -->
+        <footer>
+            <div class="container">
+                <div class="footer-inner">
+                    <div class="footer-brand">
+                        <span>🐋</span> OpenWhale
+                    </div>
+                    <div>
+                        <a href="https://github.com/viralcode/openwhale" class="footer-link">GitHub</a>
+                        <span style="margin: 0 1rem; opacity: 0.3;">|</span>
+                        <a href="https://jijojohn.me" class="footer-link" target="_blank">Built by JijoJohn</a>
+                    </div>
+                </div>
+                <div class="copyright">
+                    <p>&copy; 2026 OpenWhale Project. Open Source (MIT).</p>
+                </div>
+            </div>
+        </footer>
+
     </main>
-
-    <footer class="footer">
-        <p style="font-family: 'Space Mono'; font-size: 1.2rem; margin-bottom: 1rem;">OPENWHALE PROJECT &copy; 2026</p>
-        <a href="https://jijojohn.me" target="_blank" class="footer-link">
-            💖 Built by JijoJohn
-        </a>
-    </footer>
 
     <script src="assets/js/script.js"></script>
 </body>
