@@ -20,6 +20,8 @@ const ICONS = {
   smartphone: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="20" x="5" y="2" rx="2" ry="2"/><path d="M12 18h.01"/></svg>',
   phone: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
   phoneCall: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/><path d="M14.05 2a9 9 0 0 1 8 7.94"/><path d="M14.05 6A5 5 0 0 1 18 10"/></svg>',
+  mic: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>',
+  micOff: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="2" x2="22" y1="2" y2="22"/><path d="M18.89 13.23A7.12 7.12 0 0 0 19 12v-2"/><path d="M5 10v2a7 7 0 0 0 12 5"/><path d="M15 9.34V5a3 3 0 0 0-5.68-1.33"/><path d="M9 9v3a3 3 0 0 0 5.12 2.12"/><line x1="12" x2="12" y1="19" y2="22"/></svg>',
   send: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></svg>',
   globe: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>',
 
@@ -148,7 +150,13 @@ let state = {
   // Tools page
   toolsSearch: '',
   toolsPage: 0,
-  toolsCategory: 'all'
+  toolsCategory: 'all',
+  // Voice mode
+  voiceMode: false,
+  isListening: false,
+  isSpeaking: false,
+  voiceRecognition: null,
+  voiceAudio: null
 };
 
 // ============================================
@@ -655,6 +663,229 @@ async function sendMessage(content) {
   scrollToBottom();
 }
 
+// ============================================
+// Voice Mode - Real-time voice conversation
+// ============================================
+
+function toggleVoiceMode() {
+  if (state.voiceMode) {
+    // Turn off voice mode
+    stopVoiceMode();
+    return;
+  }
+
+  // Check for Web Speech API support
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    showAlert('Voice mode requires a browser that supports the Web Speech API (Chrome, Edge, or Safari).', 'Not Supported');
+    return;
+  }
+
+  state.voiceMode = true;
+  state.isListening = true;
+
+  const recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = true;
+  recognition.lang = 'en-US';
+
+  recognition.onstart = () => {
+    state.isListening = true;
+    updateChatMessages();
+  };
+
+  recognition.onresult = (event) => {
+    let finalTranscript = '';
+    let interimTranscript = '';
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) {
+        finalTranscript += transcript;
+      } else {
+        interimTranscript += transcript;
+      }
+    }
+
+    // Show interim results in the input
+    if (interimTranscript) {
+      const input = document.getElementById('chat-input');
+      if (input) input.value = interimTranscript;
+    }
+
+    // Send final transcript as a message
+    if (finalTranscript.trim()) {
+      const input = document.getElementById('chat-input');
+      if (input) input.value = '';
+      state.isListening = false;
+      updateChatMessages();
+      sendMessage(finalTranscript.trim());
+    }
+  };
+
+  recognition.onerror = (event) => {
+    console.warn('[Voice] Recognition error:', event.error);
+    if (event.error === 'not-allowed') {
+      showAlert('Microphone access was denied. Please allow microphone access in your browser settings.', 'Microphone Blocked');
+      stopVoiceMode();
+      return;
+    }
+    // Auto-restart on recoverable errors
+    if (state.voiceMode && !state.isSending && !state.isSpeaking) {
+      setTimeout(() => startListeningLoop(), 500);
+    }
+  };
+
+  recognition.onend = () => {
+    // Auto-restart listening if still in voice mode and not sending/speaking
+    if (state.voiceMode && !state.isSending && !state.isSpeaking) {
+      setTimeout(() => startListeningLoop(), 300);
+    }
+  };
+
+  state.voiceRecognition = recognition;
+  updateChatMessages();
+  startListeningLoop();
+}
+
+function startListeningLoop() {
+  if (!state.voiceMode || state.isSending || state.isSpeaking) return;
+
+  try {
+    state.isListening = true;
+    state.voiceRecognition?.start();
+    updateChatMessages();
+  } catch (e) {
+    // Already started, ignore
+  }
+}
+
+function stopVoiceMode() {
+  state.voiceMode = false;
+  state.isListening = false;
+  state.isSpeaking = false;
+
+  if (state.voiceRecognition) {
+    try { state.voiceRecognition.abort(); } catch (e) { }
+    state.voiceRecognition = null;
+  }
+
+  if (state.voiceAudio) {
+    state.voiceAudio.pause();
+    state.voiceAudio = null;
+  }
+
+  const input = document.getElementById('chat-input');
+  if (input) input.value = '';
+
+  updateChatMessages();
+}
+
+async function speakResponse(text) {
+  if (!state.voiceMode) return;
+
+  // Strip markdown for cleaner speech
+  const cleanText = text
+    .replace(/```[\s\S]*?```/g, 'code block omitted')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/#{1,6}\s/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[-*]\s/g, '')
+    .replace(/\n{2,}/g, '. ')
+    .replace(/\n/g, ' ')
+    .trim();
+
+  if (!cleanText) return;
+
+  // Truncate very long responses for TTS
+  const ttsText = cleanText.length > 1000 ? cleanText.slice(0, 1000) + '... response truncated for voice.' : cleanText;
+
+  state.isSpeaking = true;
+  state.isListening = false;
+  updateChatMessages();
+
+  try {
+    // Stop recognition while speaking
+    if (state.voiceRecognition) {
+      try { state.voiceRecognition.abort(); } catch (e) { }
+    }
+
+    const response = await fetch(`${API_BASE}/tts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: ttsText })
+    });
+
+    if (!response.ok) {
+      throw new Error(`TTS failed: ${response.status}`);
+    }
+
+    const { audio } = await response.json();
+
+    if (audio && state.voiceMode) {
+      const audioEl = new Audio(audio);
+      state.voiceAudio = audioEl;
+
+      audioEl.onended = () => {
+        state.isSpeaking = false;
+        state.voiceAudio = null;
+        updateChatMessages();
+        // Auto-restart listening after speaking 
+        if (state.voiceMode) {
+          setTimeout(() => startListeningLoop(), 500);
+        }
+      };
+
+      audioEl.onerror = () => {
+        state.isSpeaking = false;
+        state.voiceAudio = null;
+        updateChatMessages();
+        if (state.voiceMode) {
+          setTimeout(() => startListeningLoop(), 500);
+        }
+      };
+
+      await audioEl.play();
+    } else {
+      // Fallback: use browser TTS
+      fallbackSpeak(ttsText);
+    }
+  } catch (e) {
+    console.warn('[Voice] TTS error, falling back to browser speech:', e);
+    fallbackSpeak(ttsText);
+  }
+}
+
+function fallbackSpeak(text) {
+  if (!window.speechSynthesis) {
+    state.isSpeaking = false;
+    updateChatMessages();
+    if (state.voiceMode) startListeningLoop();
+    return;
+  }
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1.0;
+  utterance.pitch = 1.0;
+
+  utterance.onend = () => {
+    state.isSpeaking = false;
+    updateChatMessages();
+    if (state.voiceMode) {
+      setTimeout(() => startListeningLoop(), 500);
+    }
+  };
+
+  utterance.onerror = () => {
+    state.isSpeaking = false;
+    updateChatMessages();
+    if (state.voiceMode) startListeningLoop();
+  };
+
+  speechSynthesis.speak(utterance);
+}
 function handleStreamEvent(event, data) {
   switch (event) {
     case 'thinking':
@@ -714,6 +945,10 @@ function handleStreamEvent(event, data) {
           model: data.message.model,
           createdAt: data.message.createdAt || new Date().toISOString()
         });
+        // Voice mode: auto-speak the response
+        if (state.voiceMode && data.message.content) {
+          speakResponse(data.message.content);
+        }
       }
       break;
 
@@ -1841,14 +2076,20 @@ function renderChat() {
         </div>
       </div>
       <div class="chat-input-container">
-        <div class="chat-input-wrapper">
+        <div class="chat-input-wrapper ${state.voiceMode ? 'voice-active' : ''}">
           <textarea 
             class="chat-input" 
             id="chat-input"
-            placeholder="Type your message..." 
+            placeholder="${state.isListening ? '🎙️ Listening...' : state.isSpeaking ? '🔊 Speaking...' : 'Type your message...'}" 
             rows="1"
             onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"
           ></textarea>
+          <button class="voice-btn ${state.voiceMode ? 'active' : ''} ${state.isListening ? 'listening' : ''} ${state.isSpeaking ? 'speaking' : ''}" 
+            id="voice-btn" 
+            onclick="toggleVoiceMode()" 
+            title="${state.voiceMode ? 'Stop voice mode' : 'Talk to OpenWhale'}">
+            ${state.voiceMode ? icon('mic', 18) : icon('mic', 18)}
+          </button>
           <button class="send-btn" id="send-btn" onclick="sendMessage()" ${state.isSending ? 'disabled' : ''}>
             ${icon('arrowUp', 20)}
           </button>
@@ -2098,6 +2339,12 @@ function renderOverview() {
 
 function renderChannels() {
   return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Channels</h1>
+        <p class="page-subtitle">Manage your messaging channels and connections</p>
+      </div>
+    </div>
     <div class="channel-grid">
       ${state.channels.map(ch => `
         <div class="channel-card">

@@ -981,6 +981,56 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         }
     });
 
+    // TTS endpoint for voice mode - generates speech from text via ElevenLabs
+    dashboard.post("/api/tts", async (c) => {
+        try {
+            const { text, voiceId } = await c.req.json();
+            if (!text) {
+                return c.json({ error: "No text provided" }, 400);
+            }
+
+            const apiKey = process.env.ELEVENLABS_API_KEY;
+            if (!apiKey) {
+                return c.json({ error: "ElevenLabs API key not configured" }, 400);
+            }
+
+            const voice = voiceId || "JBFqnCBsd6RMkjVDRZzb"; // George default
+            const response = await fetch(
+                `https://api.elevenlabs.io/v1/text-to-speech/${voice}`,
+                {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "xi-api-key": apiKey,
+                    },
+                    body: JSON.stringify({
+                        text: text.slice(0, 2000), // Limit to 2000 chars
+                        model_id: "eleven_flash_v2_5",
+                        voice_settings: {
+                            stability: 0.5,
+                            similarity_boost: 0.75,
+                        },
+                    }),
+                }
+            );
+
+            if (!response.ok) {
+                const errText = await response.text();
+                console.error("[TTS] ElevenLabs error:", errText);
+                return c.json({ error: "TTS generation failed" }, 500);
+            }
+
+            const audioBuffer = await response.arrayBuffer();
+            const base64 = Buffer.from(audioBuffer).toString("base64");
+            const audio = `data:audio/mpeg;base64,${base64}`;
+
+            return c.json({ audio });
+        } catch (err) {
+            console.error("[TTS] Error:", err);
+            return c.json({ error: "TTS generation failed" }, 500);
+        }
+    });
+
     // Stream chat message via SSE for real-time step updates
     dashboard.post("/api/chat/stream", async (c) => {
         const { message, model: requestModel } = await c.req.json();
@@ -2478,7 +2528,7 @@ echo "Hello from ${name}"
             // Stop any scheduled job
             const loaded = getLoadedExtensions().get(name);
             if (loaded?.scheduledJob) {
-                clearTimeout(loaded.scheduledJob);
+                loaded.scheduledJob.stop();
             }
             getLoadedExtensions().delete(name);
 
@@ -2510,6 +2560,64 @@ echo "Hello from ${name}"
             return c.json({ ok: false, error: String(error) }, 500);
         }
     });
+
+    // ============== AI CHAT (for extensions) ==============
+
+    // Allow extensions to send prompts to the active AI and get responses
+    dashboard.post("/api/ai/chat", async (c) => {
+        try {
+            const { prompt, extensionName } = await c.req.json() as {
+                prompt: string;
+                extensionName?: string;
+            };
+
+            if (!prompt) {
+                return c.json({ ok: false, error: "Prompt is required" }, 400);
+            }
+
+            // Find the active model (same logic as /api/chat)
+            let effectiveModel: string | undefined;
+            for (const [type, config] of providerConfigs.entries()) {
+                if (config.enabled && config.apiKey) {
+                    const defaultModels: Record<string, string> = {
+                        anthropic: "claude-sonnet-4-20250514",
+                        openai: "gpt-4o",
+                        google: "gemini-2.0-flash",
+                        deepseek: "deepseek-chat",
+                        ollama: "llama3.2",
+                    };
+                    effectiveModel = config.selectedModel || defaultModels[type] || "deepseek-chat";
+                    break;
+                }
+            }
+            if (!effectiveModel) {
+                effectiveModel = configStore.get("defaultModel") as string || "claude-sonnet-4-20250514";
+            }
+
+            // Use a dedicated session for extensions
+            const sessionId = extensionName ? `extension-${extensionName}` : "extension";
+
+            setModel(effectiveModel);
+            console.log(`[Extension AI] ${extensionName || "unknown"} → prompt: "${prompt.slice(0, 80)}..." (model: ${effectiveModel})`);
+
+            const response = await processSessionMessage(sessionId, prompt, {
+                model: effectiveModel,
+                onToolStart: (tool) => console.log(`[Extension AI] 🔧 ${tool.name}`),
+                onToolEnd: (tool) => console.log(`[Extension AI] ✅ ${tool.name} (${tool.status})`),
+            });
+
+            return c.json({
+                ok: true,
+                response: response.content,
+                model: effectiveModel,
+                toolCalls: response.toolCalls || [],
+            });
+        } catch (error) {
+            console.error("[Extension AI] Error:", error);
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
     // ============== TOOL EXECUTION (for extensions) ==============
 
     // Execute a tool from extension context - FULL ACCESS to all system tools
@@ -2673,7 +2781,7 @@ echo "Hello from ${name}"
       <div class="loading"><div class="spinner"></div></div>
     </div>
   </div>
-  <script type="module" src="/dashboard/assets/main.js"></script>
+  <script src="/dashboard/assets/main.js"></script>
 </body>
 </html>`);
     });

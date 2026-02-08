@@ -1960,6 +1960,90 @@ select.form-input option {
   transform: none;
 }
 
+/* ===== VOICE MODE ===== */
+.voice-btn {
+  background: transparent;
+  border: 1px solid var(--border-subtle);
+  border-radius: 12px;
+  padding: 0;
+  width: 32px;
+  height: 32px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  right: 50px;
+  bottom: 10px;
+  z-index: 2;
+}
+
+.voice-btn:hover {
+  background: rgba(99, 102, 241, 0.1);
+  color: var(--accent-indigo);
+  border-color: var(--accent-indigo);
+}
+
+.voice-btn.active {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.4);
+}
+
+.voice-btn.listening {
+  animation: voicePulse 1.5s ease-in-out infinite;
+  box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+}
+
+.voice-btn.speaking {
+  background: rgba(99, 102, 241, 0.15);
+  color: var(--accent-indigo);
+  border-color: var(--accent-indigo);
+  animation: voiceSpeaking 1s ease-in-out infinite;
+}
+
+.chat-input-wrapper.voice-active {
+  border-color: rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 20px rgba(239, 68, 68, 0.08);
+}
+
+.chat-input-wrapper.voice-active .chat-input {
+  padding-right: 90px;
+}
+
+@keyframes voicePulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5);
+    transform: scale(1);
+  }
+
+  50% {
+    box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    transform: scale(1.08);
+  }
+
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+    transform: scale(1);
+  }
+}
+
+@keyframes voiceSpeaking {
+
+  0%,
+  100% {
+    opacity: 0.8;
+    transform: scale(1);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
 /* ===== CHANNEL GRID ===== */
 .channel-grid {
   display: grid;

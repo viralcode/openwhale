@@ -8,6 +8,7 @@
 
 import { z } from "zod";
 import { spawn } from "node:child_process";
+import cron, { type ScheduledTask } from "node-cron";
 import {
     writeFileSync,
     readFileSync,
@@ -49,11 +50,11 @@ interface ExtensionManifest {
 // In-memory registry of loaded extensions
 const loadedExtensions: Map<string, {
     manifest: ExtensionManifest;
-    scheduledJob?: NodeJS.Timeout;
+    scheduledJob?: ScheduledTask;
 }> = new Map();
 
-// Scheduled jobs registry  
-const scheduledJobs: Map<string, NodeJS.Timeout> = new Map();
+// Scheduled jobs registry (node-cron tasks)
+const scheduledJobs: Map<string, ScheduledTask> = new Map();
 
 // Channel notification callback (set by extension-loader)
 let notifyChannel: ((channel: string, message: string) => Promise<void>) | null = null;
@@ -75,7 +76,7 @@ export function getExtensionsDir(): string {
 /**
  * Get loaded extensions
  */
-export function getLoadedExtensions(): Map<string, { manifest: ExtensionManifest; scheduledJob?: NodeJS.Timeout }> {
+export function getLoadedExtensions(): Map<string, { manifest: ExtensionManifest; scheduledJob?: ScheduledTask }> {
     return loadedExtensions;
 }
 
@@ -401,6 +402,24 @@ const openwhale = {
         },
     },
     
+    // ========== AI ACCESS ==========
+    // Send prompts to the active AI agent (same one used across dashboard, WhatsApp, etc.)
+    ai: {
+        // Send a prompt to the AI and get a response (with full tool access)
+        chat: async (prompt: string): Promise<{ ok: boolean; response: string; model?: string; toolCalls?: unknown[]; error?: string }> => {
+            try {
+                const res = await fetch(\`\${__API_BASE__}/api/ai/chat\`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ prompt, extensionName: __EXTENSION_NAME__ })
+                });
+                return await res.json();
+            } catch (e) {
+                return { ok: false, response: "", error: String(e) };
+            }
+        },
+    },
+    
     // Logging
     log: (message: string): void => {
         console.log(\`[\${__EXTENSION_NAME__}] \${message}\`);
@@ -457,43 +476,18 @@ function writeManifest(name: string, manifest: ExtensionManifest): void {
 }
 
 /**
- * Parse cron expression to next run time (simple implementation)
+ * Get the system's local timezone (e.g. "America/New_York")
  */
-function parseCronToMs(expression: string): number | null {
-    const parts = expression.trim().split(/\s+/);
-    if (parts.length < 5) return null;
-
-    const [minute, hour] = parts;
-
-    // Handle */N patterns (every N minutes)
-    const everyNMatch = minute.match(/^\*\/(\d+)$/);
-    if (everyNMatch) {
-        const n = parseInt(everyNMatch[1], 10);
-        return n * 60 * 1000; // Every N minutes
+function getSystemTimezone(): string {
+    try {
+        return Intl.DateTimeFormat().resolvedOptions().timeZone;
+    } catch {
+        return "UTC";
     }
-
-    // Every minute: * * * * *
-    if (minute === "*" && hour === "*") {
-        return 60 * 1000; // Every minute
-    }
-
-    // For specific times, calculate next occurrence
-    const now = new Date();
-    const targetMinute = minute === "*" ? now.getMinutes() : parseInt(minute, 10);
-    const targetHour = hour === "*" ? now.getHours() : parseInt(hour, 10);
-
-    const next = new Date(now);
-    next.setHours(targetHour, targetMinute, 0, 0);
-
-    if (next <= now) {
-        next.setDate(next.getDate() + 1);
-    }
-
-    return next.getTime() - now.getTime();
 }
 
 /**
- * Schedule an extension to run
+ * Schedule an extension to run using node-cron
  */
 function scheduleExtension(name: string, manifest: ExtensionManifest): void {
     if (!manifest.schedule || !manifest.enabled) return;
@@ -501,34 +495,35 @@ function scheduleExtension(name: string, manifest: ExtensionManifest): void {
     // Clear existing schedule
     const existingJob = scheduledJobs.get(name);
     if (existingJob) {
-        clearTimeout(existingJob);
+        existingJob.stop();
         scheduledJobs.delete(name);
     }
 
-    const intervalMs = parseCronToMs(manifest.schedule);
-    if (!intervalMs) return;
+    // Validate cron expression
+    if (!cron.validate(manifest.schedule)) {
+        console.error(`[Extension] Invalid cron expression for ${name}: ${manifest.schedule}`);
+        return;
+    }
 
-    const runJob = async () => {
-        if (!manifest.enabled) return;
+    const tz = getSystemTimezone();
 
-        console.log(`[Extension] Running scheduled: ${name}`);
+    const task = cron.schedule(manifest.schedule, async () => {
+        // Re-read manifest to check if still enabled
+        const currentManifest = readManifest(name);
+        if (!currentManifest?.enabled) return;
+
+        console.log(`[Extension] Running scheduled: ${name} (timezone: ${tz})`);
         try {
             await executeExtension(name);
         } catch (err) {
             console.error(`[Extension] Scheduled run failed for ${name}:`, err);
         }
+    }, {
+        timezone: tz,
+    });
 
-        // Reschedule
-        const nextInterval = parseCronToMs(manifest.schedule!);
-        if (nextInterval) {
-            const job = setTimeout(runJob, nextInterval);
-            scheduledJobs.set(name, job);
-        }
-    };
-
-    const job = setTimeout(runJob, intervalMs);
-    scheduledJobs.set(name, job);
-    console.log(`[Extension] Scheduled ${name} to run in ${Math.round(intervalMs / 1000)}s`);
+    scheduledJobs.set(name, task);
+    console.log(`[Extension] Scheduled ${name} with cron "${manifest.schedule}" (timezone: ${tz})`);
 }
 
 /**
@@ -634,7 +629,7 @@ export async function hotReloadExtension(name: string): Promise<void> {
         loadedExtensions.delete(name);
         const job = scheduledJobs.get(name);
         if (job) {
-            clearTimeout(job);
+            job.stop();
             scheduledJobs.delete(name);
         }
         return;
@@ -645,7 +640,7 @@ export async function hotReloadExtension(name: string): Promise<void> {
     // Reschedule if needed
     const existingJob = scheduledJobs.get(name);
     if (existingJob) {
-        clearTimeout(existingJob);
+        existingJob.stop();
         scheduledJobs.delete(name);
     }
 
@@ -835,7 +830,7 @@ export const extendTool: AgentTool<ExtendAction> = {
                 // Stop scheduled job
                 const job = scheduledJobs.get(params.name);
                 if (job) {
-                    clearTimeout(job);
+                    job.stop();
                     scheduledJobs.delete(params.name);
                 }
 
@@ -898,7 +893,7 @@ export const extendTool: AgentTool<ExtendAction> = {
                 // Stop scheduled job
                 const job = scheduledJobs.get(params.name);
                 if (job) {
-                    clearTimeout(job);
+                    job.stop();
                     scheduledJobs.delete(params.name);
                 }
 

@@ -49,6 +49,7 @@
     "googleapis": "^171.2.0",
     "hono": "^4.6.0",
     "jose": "^5.9.0",
+    "node-cron": "^4.2.1",
     "node-llama-cpp": "^3.15.1",
     "openai": "^4.70.0",
     "pdf-lib": "^1.17.1",
