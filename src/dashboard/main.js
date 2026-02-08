@@ -3347,7 +3347,7 @@ function renderSkillsStep() {
       Connect external services to give OpenWhale more capabilities. All of these are optional - you can configure them later in Settings.
     </p>
     
-    <!-- Google Services (OAuth) -->
+    <!-- Google Services (Credentials) -->
     <div class="form-group" style="background: var(--bg-secondary); padding: 20px; border-radius: var(--radius-sm); margin-bottom: 16px; border: 1px solid var(--border-color);">
       <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
         <span style="font-size: 24px;">🌐</span>
@@ -3358,15 +3358,20 @@ function renderSkillsStep() {
         <span id="google-status" style="margin-left: auto; font-size: 13px; color: var(--text-secondary);">Not connected</span>
       </div>
       <p style="color: var(--text-secondary); font-size: 13px; margin-bottom: 12px;">
-        Connect your Google account to let OpenWhale read emails, manage calendar events, and access Drive files.
+        Paste your Google API credentials JSON to enable Gmail, Calendar, Drive, and Tasks.
       </p>
-      <button class="btn btn-primary" onclick="connectGoogleOAuth()" style="width: 100%;">
-        🔗 Connect Google Account
-      </button>
-      <div style="margin-top: 12px; padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-muted);">
-        <strong>First time setup:</strong> Create OAuth 2.0 credentials at 
+
+      <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+        <input type="password" class="form-input" id="setup-google-creds" placeholder="Paste Google API credentials JSON..." style="flex: 1;">
+        <button class="btn btn-primary" onclick="saveGoogleCredsInSetup()">
+          Save
+        </button>
+      </div>
+
+      <div style="padding: 12px; background: var(--bg-tertiary); border-radius: var(--radius-sm); font-size: 12px; color: var(--text-muted);">
+        Create OAuth 2.0 credentials at 
         <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a> → 
-        Download credentials.json → Save to <code>~/.openwhale/google/credentials.json</code>
+        Download credentials.json → Paste the file contents above
       </div>
     </div>
     
@@ -3518,6 +3523,23 @@ window.saveSkillSetup = async function () {
       notion: { apiKey: notion, enabled: !!notion }
     }
   });
+};
+
+window.saveGoogleCredsInSetup = async function () {
+  const creds = document.getElementById('setup-google-creds')?.value;
+  if (!creds) {
+    const statusEl = document.getElementById('google-status');
+    if (statusEl) { statusEl.textContent = 'Please paste credentials'; statusEl.style.color = 'var(--error)'; }
+    return;
+  }
+  try {
+    await saveSkillConfig('google', { apiKey: creds, enabled: true });
+    const statusEl = document.getElementById('google-status');
+    if (statusEl) { statusEl.textContent = 'Configured'; statusEl.style.color = 'var(--success)'; }
+  } catch (e) {
+    const statusEl = document.getElementById('google-status');
+    if (statusEl) { statusEl.textContent = 'Failed: ' + e.message; statusEl.style.color = 'var(--error)'; }
+  }
 };
 
 window.completeSetup = async function () {
