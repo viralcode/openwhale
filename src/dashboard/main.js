@@ -3280,15 +3280,15 @@ function renderChannelsStep() {
             <div class="prereq-desc">Chat via Telegram bot</div>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="setup-telegram">
+            <input type="checkbox" id="setup-telegram" ${state.setupTelegramEnabled ? 'checked' : ''} onchange="toggleSetupChannel('telegram', this.checked)">
             <span class="toggle-slider"></span>
           </label>
         </div>
-        ${document.getElementById?.('setup-telegram')?.checked ? `
+        ${state.setupTelegramEnabled ? `
           <div style="margin-top: 16px; padding: 16px; background: var(--bg-secondary); border-radius: var(--radius-sm);">
-            <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 14px;">🤖 Create a Telegram bot with @BotFather</p>
+            <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 14px;">Create a Telegram bot with @BotFather</p>
             <button class="btn btn-primary" onclick="connectChannelInSetup('telegram')" style="width: 100%;">
-              🔑 Enter Bot Token
+              Connect Telegram Bot
             </button>
           </div>
         ` : ''}
@@ -3302,15 +3302,15 @@ function renderChannelsStep() {
             <div class="prereq-desc">Chat via Discord bot</div>
           </div>
           <label class="toggle">
-            <input type="checkbox" id="setup-discord">
+            <input type="checkbox" id="setup-discord" ${state.setupDiscordEnabled ? 'checked' : ''} onchange="toggleSetupChannel('discord', this.checked)">
             <span class="toggle-slider"></span>
           </label>
         </div>
-        ${document.getElementById?.('setup-discord')?.checked ? `
+        ${state.setupDiscordEnabled ? `
           <div style="margin-top: 16px; padding: 16px; background: var(--bg-secondary); border-radius: var(--radius-sm);">
-            <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 14px;">🤖 Create a Discord bot at Discord Developer Portal</p>
+            <p style="margin-bottom: 12px; color: var(--text-secondary); font-size: 14px;">Create a Discord bot at Discord Developer Portal</p>
             <button class="btn btn-primary" onclick="connectChannelInSetup('discord')" style="width: 100%;">
-              🔑 Enter Bot Token
+              Connect Discord Bot
             </button>
           </div>
         ` : ''}
@@ -3790,6 +3790,13 @@ window.connectGoogleOAuth = async function () {
 // Back button handler
 window.goBack = function (step) {
   state.setupStep = step;
+  render();
+};
+
+// Toggle channel in setup wizard
+window.toggleSetupChannel = function (type, checked) {
+  if (type === 'telegram') state.setupTelegramEnabled = checked;
+  if (type === 'discord') state.setupDiscordEnabled = checked;
   render();
 };
 
