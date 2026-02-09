@@ -8,6 +8,7 @@
  */
 
 import type { ToolResult } from "./base.js";
+import { logger } from "../logger.js";
 
 // Default BrowserOS MCP endpoint
 const DEFAULT_BROWSEROS_URL = "http://127.0.0.1:9201";
@@ -46,10 +47,10 @@ export async function isBrowserOSAvailable(url: string = DEFAULT_BROWSEROS_URL):
     // Try using the MCPClient which handles the protocol properly
     try {
         const mcpUrl = url.endsWith("/mcp") ? url : `${url}/mcp`;
-        console.log(`[BrowserOS] Checking MCPClient at ${mcpUrl}...`);
+        logger.debug("tool", `BrowserOS: checking MCPClient at ${mcpUrl}`);
         const client = getMCPClient(mcpUrl);
         const tools = await client.listTools();
-        console.log(`[BrowserOS] MCPClient returned ${tools.length} tools:`, tools.join(", "));
+        logger.debug("tool", `BrowserOS: MCPClient returned ${tools.length} tools`, { tools: tools.join(", ") });
 
         // Only consider available if we actually got tools
         if (tools.length > 0) {
@@ -62,10 +63,10 @@ export async function isBrowserOSAvailable(url: string = DEFAULT_BROWSEROS_URL):
         }
 
         // 0 tools means MCP server isn't properly responding
-        console.log("[BrowserOS] MCPClient returned 0 tools - server not ready");
+        logger.debug("tool", "BrowserOS: MCPClient returned 0 tools - server not ready");
         // Fall through to try direct check
     } catch (mcpErr) {
-        console.log("[BrowserOS] MCPClient check failed:", mcpErr instanceof Error ? mcpErr.message : String(mcpErr));
+        logger.debug("tool", "BrowserOS: MCPClient check failed", { error: mcpErr instanceof Error ? mcpErr.message : String(mcpErr) });
         // MCPClient failed, continue with direct check
     }
 
@@ -216,7 +217,7 @@ export async function launchBrowserOS(url: string = DEFAULT_BROWSEROS_URL): Prom
         };
     }
 
-    console.log("[BrowserOS] Launching BrowserOS...");
+    logger.info("tool", "BrowserOS: launching");
 
     try {
         // Launch based on platform
@@ -238,8 +239,7 @@ export async function launchBrowserOS(url: string = DEFAULT_BROWSEROS_URL): Prom
             }).unref();
         }
 
-        // Wait for BrowserOS to be ready (up to 30 seconds)
-        console.log("[BrowserOS] Waiting for MCP server to be ready...");
+        logger.info("tool", "BrowserOS: waiting for MCP server");
         const maxWait = 30000;
         const checkInterval = 1000;
         let waited = 0;
@@ -250,13 +250,13 @@ export async function launchBrowserOS(url: string = DEFAULT_BROWSEROS_URL): Prom
 
             const checkStatus = await isBrowserOSAvailable(url);
             if (checkStatus.available) {
-                console.log("[BrowserOS] ✓ Ready!");
+                logger.info("tool", "BrowserOS: ready");
                 return { success: true };
             }
 
             // Print progress every 5 seconds
             if (waited % 5000 === 0) {
-                console.log(`[BrowserOS] Still waiting... (${waited / 1000}s)`);
+                logger.debug("tool", `BrowserOS: still waiting (${waited / 1000}s)`);
             }
         }
 
@@ -506,13 +506,13 @@ async function callBrowserOSTool(
     const mcpUrl = url.endsWith("/mcp") ? url : `${url}/mcp`;
     const client = getMCPClient(mcpUrl);
 
-    console.log(`[BrowserOS] Calling tool: ${toolName} with args:`, JSON.stringify(args));
+    logger.debug("tool", `BrowserOS: calling tool ${toolName}`, { args: JSON.stringify(args) });
     try {
         const result = await client.callTool(toolName, args);
-        console.log(`[BrowserOS] Tool result: success=${result.success}, error=${result.error || "none"}, result=${JSON.stringify(result.result)?.substring(0, 200)}`);
+        logger.debug("tool", `BrowserOS: tool result`, { success: result.success, error: result.error || "none", preview: JSON.stringify(result.result)?.substring(0, 200) });
         return result;
     } catch (err) {
-        console.error(`[BrowserOS] Tool call error:`, err);
+        logger.error("tool", "BrowserOS: tool call error", { error: err instanceof Error ? err.message : String(err) });
         return { success: false, error: err instanceof Error ? err.message : String(err) };
     }
 }
@@ -573,10 +573,10 @@ export class BrowserOSBackend {
         const errorMsg = resultContent?.content?.[0]?.text || result.error || "";
         if (!result.success || resultContent?.isError) {
             if (errorMsg.toLowerCase().includes("no current window")) {
-                console.log("[BrowserOS] No window found, creating one and retrying...");
+                logger.debug("tool", "BrowserOS: no window found, creating one");
                 const createResult = await callBrowserOSTool(this.url, "browser_create_window", {});
                 if (createResult.success) {
-                    console.log("[BrowserOS] ✓ Window created, retrying navigation...");
+                    logger.debug("tool", "BrowserOS: window created, retrying navigation");
                     result = await callBrowserOSTool(this.url, "browser_open_tab", { url });
                 }
             }
@@ -659,7 +659,7 @@ export class BrowserOSBackend {
             };
         }
 
-        console.log(`[BrowserOS] Taking screenshot of tab ${tabId}`);
+        logger.debug("tool", `BrowserOS: taking screenshot of tab ${tabId}`);
         const result = await callBrowserOSTool(this.url, "browser_get_screenshot", { tabId });
 
         if (!result.success) {
@@ -697,7 +697,7 @@ export class BrowserOSBackend {
             }
         }
 
-        console.log(`[BrowserOS] Screenshot captured. Base64 length: ${base64?.length || 0}`);
+        logger.debug("tool", `BrowserOS: screenshot captured`, { base64Length: base64?.length || 0 });
 
         if (!base64) {
             return {

@@ -31,7 +31,7 @@ export const calendarEventTool: AgentTool<CalendarAction> = {
 
     async execute(params: CalendarAction, _context: ToolCallContext): Promise<ToolResult> {
         if (process.platform !== "darwin") {
-            return { success: false, content: "", error: "Calendar tool only available on macOS" };
+            return { success: false, content: "", error: "Apple Calendar tool is only available on macOS. Use the google_calendar skill for cross-platform calendar management." };
         }
 
         try {

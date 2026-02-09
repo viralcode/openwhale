@@ -33,7 +33,10 @@ export const systemInfoTool: AgentTool<SystemInfoAction> = {
 
                     let diskInfo = "";
                     try {
-                        const { stdout } = await execAsync("df -h / | tail -1");
+                        const diskCmd = process.platform === "win32"
+                            ? "wmic logicaldisk get size,freespace,caption"
+                            : "df -h / | tail -1";
+                        const { stdout } = await execAsync(diskCmd);
                         diskInfo = stdout.trim();
                     } catch { /* ignore */ }
 
@@ -85,9 +88,14 @@ export const systemInfoTool: AgentTool<SystemInfoAction> = {
                 }
 
                 case "disk": {
-                    const cmd = process.platform === "darwin"
-                        ? "df -h | head -20"
-                        : "df -h --total | head -20";
+                    let cmd: string;
+                    if (process.platform === "win32") {
+                        cmd = "wmic logicaldisk get caption,freespace,size /format:table";
+                    } else if (process.platform === "darwin") {
+                        cmd = "df -h | head -20";
+                    } else {
+                        cmd = "df -h --total | head -20";
+                    }
                     const { stdout } = await execAsync(cmd);
                     return { success: true, content: `**Disk Usage**\n\`\`\`\n${stdout.trim()}\n\`\`\`` };
                 }
@@ -107,24 +115,52 @@ export const systemInfoTool: AgentTool<SystemInfoAction> = {
                 }
 
                 case "battery": {
-                    if (process.platform !== "darwin") {
-                        return { success: true, content: "Battery info only available on macOS" };
-                    }
-                    try {
-                        const { stdout } = await execAsync("pmset -g batt");
-                        return { success: true, content: `**Battery**\n${stdout.trim()}` };
-                    } catch {
-                        return { success: true, content: "No battery found (desktop Mac)" };
+                    if (process.platform === "darwin") {
+                        try {
+                            const { stdout } = await execAsync("pmset -g batt");
+                            return { success: true, content: `**Battery**\n${stdout.trim()}` };
+                        } catch {
+                            return { success: true, content: "No battery found (desktop Mac)" };
+                        }
+                    } else if (process.platform === "win32") {
+                        try {
+                            const { stdout } = await execAsync("WMIC PATH Win32_Battery Get EstimatedChargeRemaining,BatteryStatus /format:list");
+                            return { success: true, content: `**Battery**\n${stdout.trim()}` };
+                        } catch {
+                            return { success: true, content: "No battery found or WMIC unavailable" };
+                        }
+                    } else {
+                        // Linux
+                        try {
+                            const { stdout } = await execAsync("cat /sys/class/power_supply/BAT0/capacity 2>/dev/null && cat /sys/class/power_supply/BAT0/status 2>/dev/null");
+                            return { success: true, content: `**Battery**\n${stdout.trim()}` };
+                        } catch {
+                            return { success: true, content: "No battery found" };
+                        }
                     }
                 }
 
                 case "processes": {
                     const count = params.count || 10;
-                    const cmd = process.platform === "darwin"
-                        ? `ps aux | sort -k3 -r | head -${count + 1}`
-                        : `ps aux --sort=-%cpu | head -${count + 1}`;
-                    const { stdout } = await execAsync(cmd);
-                    return { success: true, content: `**Top ${count} Processes (by CPU)**\n\`\`\`\n${stdout.trim()}\n\`\`\`` };
+                    let cmd: string;
+                    if (process.platform === "win32") {
+                        cmd = `tasklist /FO TABLE /NH | sort /R | more +1 | findstr /N "^" | findstr /B "[1-${count}]:"`;
+                    } else if (process.platform === "darwin") {
+                        cmd = `ps aux | sort -k3 -r | head -${count + 1}`;
+                    } else {
+                        cmd = `ps aux --sort=-%cpu | head -${count + 1}`;
+                    }
+                    try {
+                        const { stdout } = await execAsync(cmd);
+                        return { success: true, content: `**Top ${count} Processes (by CPU)**\n\`\`\`\n${stdout.trim()}\n\`\`\`` };
+                    } catch {
+                        // Fallback for Windows if the complex pipe fails
+                        if (process.platform === "win32") {
+                            const { stdout } = await execAsync("tasklist /FO TABLE");
+                            return { success: true, content: `**Running Processes**\n\`\`\`\n${stdout.trim()}\n\`\`\`` };
+                        }
+                        throw new Error("Failed to list processes");
+                    }
                 }
 
                 default:

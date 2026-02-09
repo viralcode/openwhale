@@ -11,6 +11,7 @@ import path from "node:path";
 import os from "node:os";
 import { z } from "zod";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
+import { logger } from "../logger.js";
 
 const ScreenRecordToolSchema = z.object({
     action: z.enum(["start", "stop", "status"]).describe("Action to perform"),
@@ -44,7 +45,7 @@ async function startRecordingMacOS(outputPath: string, duration?: number): Promi
 
     currentRecording.on("close", () => {
         currentRecording = null;
-        console.log(`[ScreenRecord] Recording saved to ${outputPath}`);
+        logger.info("tool", "Screen recording saved", { path: outputPath, platform: "macOS" });
     });
 }
 
@@ -69,7 +70,31 @@ async function startRecordingLinux(outputPath: string, duration?: number): Promi
 
     currentRecording.on("close", () => {
         currentRecording = null;
-        console.log(`[ScreenRecord] Recording saved to ${outputPath}`);
+        logger.info("tool", "Screen recording saved", { path: outputPath, platform: "linux" });
+    });
+}
+
+/**
+ * Start screen recording (Windows - ffmpeg gdigrab)
+ */
+async function startRecordingWindows(outputPath: string, duration?: number): Promise<void> {
+    const args = [
+        "-f", "gdigrab",
+        "-framerate", "30",
+        "-i", "desktop",
+        "-t", String(duration || 60),
+        "-c:v", "libx264",
+        "-preset", "ultrafast",
+        outputPath,
+    ];
+
+    currentRecording = spawn("ffmpeg", args, { stdio: "ignore" });
+    recordingPath = outputPath;
+    recordingStartTime = Date.now();
+
+    currentRecording.on("close", () => {
+        currentRecording = null;
+        logger.info("tool", "Screen recording saved", { path: outputPath, platform: "windows" });
     });
 }
 
@@ -149,6 +174,8 @@ export const screenRecordTool: AgentTool<ScreenRecordParams> = {
                         await startRecordingMacOS(outputPath, params.duration);
                     } else if (platform === "linux") {
                         await startRecordingLinux(outputPath, params.duration);
+                    } else if (platform === "win32") {
+                        await startRecordingWindows(outputPath, params.duration);
                     } else {
                         return {
                             success: false,

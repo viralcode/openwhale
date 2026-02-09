@@ -12,23 +12,28 @@ const ClipboardActionSchema = z.object({
 
 type ClipboardAction = z.infer<typeof ClipboardActionSchema>;
 
+const platform = process.platform;
+
 export const clipboardTool: AgentTool<ClipboardAction> = {
     name: "clipboard",
-    description: "Read from or write to the system clipboard. macOS (pbcopy/pbpaste) and Linux (xclip) supported.",
+    description: "Read from or write to the system clipboard. Supports macOS (pbcopy/pbpaste), Windows (PowerShell), and Linux (xclip).",
     category: "system",
     parameters: ClipboardActionSchema,
 
     async execute(params: ClipboardAction, _context: ToolCallContext): Promise<ToolResult> {
-        const isMac = process.platform === "darwin";
-        const isLinux = process.platform === "linux";
-
-        if (!isMac && !isLinux) {
-            return { success: false, content: "", error: "Clipboard only supported on macOS and Linux" };
-        }
-
         try {
             if (params.action === "read") {
-                const cmd = isMac ? "pbpaste" : "xclip -selection clipboard -o";
+                let cmd: string;
+                if (platform === "darwin") {
+                    cmd = "pbpaste";
+                } else if (platform === "win32") {
+                    cmd = "powershell -NoProfile -Command Get-Clipboard";
+                } else if (platform === "linux") {
+                    cmd = "xclip -selection clipboard -o";
+                } else {
+                    return { success: false, content: "", error: `Clipboard not supported on ${platform}` };
+                }
+
                 const { stdout } = await execAsync(cmd);
                 return {
                     success: true,
@@ -39,8 +44,18 @@ export const clipboardTool: AgentTool<ClipboardAction> = {
                 if (!params.content) {
                     return { success: false, content: "", error: "content is required for write action" };
                 }
-                const cmd = isMac ? "pbcopy" : "xclip -selection clipboard";
-                await execAsync(`echo ${JSON.stringify(params.content)} | ${cmd}`);
+
+                if (platform === "darwin") {
+                    await execAsync(`echo ${JSON.stringify(params.content)} | pbcopy`);
+                } else if (platform === "win32") {
+                    // Use PowerShell Set-Clipboard — pipe content via stdin
+                    await execAsync(`powershell -NoProfile -Command "Set-Clipboard -Value '${params.content.replace(/'/g, "''")}'"`);
+                } else if (platform === "linux") {
+                    await execAsync(`echo ${JSON.stringify(params.content)} | xclip -selection clipboard`);
+                } else {
+                    return { success: false, content: "", error: `Clipboard not supported on ${platform}` };
+                }
+
                 return {
                     success: true,
                     content: `Copied ${params.content.length} characters to clipboard`,
