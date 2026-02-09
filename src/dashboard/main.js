@@ -683,7 +683,7 @@ function prependLogEntry(entry) {
   if (!tbody) return;
 
   const levelColors = { DEBUG: '#6b7280', INFO: '#3b82f6', WARN: '#f59e0b', ERROR: '#ef4444' };
-  const categoryIcons = { chat: 'messageSquare', channel: 'radio', provider: 'bot', tool: 'zap', session: 'settings', dashboard: 'layoutDashboard', system: 'globe', cron: 'clock', extension: 'puzzle', auth: 'shield' };
+  const categoryIcons = { chat: 'messageSquare', channel: 'radio', provider: 'bot', tool: 'zap', session: 'settings', dashboard: 'layoutDashboard', system: 'globe', cron: 'clock', extension: 'puzzle', auth: 'shield', heartbeat: 'clock' };
 
   const ts = new Date(entry.timestamp);
   const timeStr = ts.toLocaleDateString() + ' ' + ts.toLocaleTimeString();
@@ -3351,7 +3351,7 @@ function renderLogs() {
   const f = state.logsFilter;
   const totalPages = Math.ceil(state.logsTotal / 100);
   const levelColors = { DEBUG: '#6b7280', INFO: '#3b82f6', WARN: '#f59e0b', ERROR: '#ef4444' };
-  const categoryIcons = { chat: 'messageSquare', channel: 'radio', provider: 'bot', tool: 'zap', session: 'settings', dashboard: 'layoutDashboard', system: 'globe', cron: 'clock', extension: 'puzzle', auth: 'shield' };
+  const categoryIcons = { chat: 'messageSquare', channel: 'radio', provider: 'bot', tool: 'zap', session: 'settings', dashboard: 'layoutDashboard', system: 'globe', cron: 'clock', extension: 'puzzle', auth: 'shield', heartbeat: 'clock' };
 
   return `
     <div class="page-header" style="margin-bottom: 20px;">
@@ -3578,6 +3578,92 @@ function renderSettings() {
           <span id="browseros-status-text" style="color: var(--text-secondary); font-size: 13px;">Checking BrowserOS...</span>
         </div>
         <div id="browseros-tools" style="margin-top: 8px; font-size: 12px; color: var(--text-muted);"></div>
+      </div>
+    </div>
+    
+    <!-- Heartbeat Settings -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">💓 Heartbeat</h3>
+      </div>
+      
+      <div style="margin-bottom: 16px; color: var(--text-secondary); font-size: 13px;">
+        Periodic AI agent wake-ups to proactively check on tasks, inboxes, and reminders.
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" style="display: flex; align-items: center; gap: 12px; cursor: pointer;">
+          <input type="checkbox" id="heartbeat-enabled" onchange="toggleHeartbeat()" style="width: 18px; height: 18px; accent-color: var(--accent);">
+          Enable Heartbeat
+        </label>
+      </div>
+
+      <div id="heartbeat-fields">
+        <div class="form-group">
+          <label class="form-label">Interval</label>
+          <select class="form-input" id="heartbeat-interval">
+            <option value="5m">Every 5 minutes</option>
+            <option value="10m">Every 10 minutes</option>
+            <option value="15m">Every 15 minutes</option>
+            <option value="30m" selected>Every 30 minutes</option>
+            <option value="1h">Every hour</option>
+            <option value="2h">Every 2 hours</option>
+          </select>
+          <div class="form-hint">How often the AI wakes up to check on things</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Model Override (optional)</label>
+          <select class="form-input" id="heartbeat-model">
+            <option value="">Use default model</option>
+            ${state.providers.map(p =>
+    p.models.map(m => '<option value="' + m + '">' + p.name + ': ' + m + '</option>').join('')
+  ).join('')}
+          </select>
+          <div class="form-hint">Use a different (cheaper) model for heartbeats to save costs</div>
+        </div>
+
+        <div style="display: flex; gap: 12px;">
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">Active Hours Start</label>
+            <input type="time" class="form-input" id="heartbeat-hours-start" placeholder="08:00">
+            <div class="form-hint">Leave empty = always active</div>
+          </div>
+          <div class="form-group" style="flex: 1;">
+            <label class="form-label">Active Hours End</label>
+            <input type="time" class="form-input" id="heartbeat-hours-end" placeholder="24:00">
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Forward Alerts To</label>
+          <select class="form-input" id="heartbeat-forward-to">
+            <option value="">Dashboard Only</option>
+            <option value="all">All Connected Channels</option>
+          </select>
+          <div class="form-hint">Send heartbeat alerts to a connected channel (WhatsApp, Telegram, etc.)</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label">Custom Prompt</label>
+          <textarea class="form-input" id="heartbeat-prompt" rows="3" placeholder="Read HEARTBEAT.md if it exists..."></textarea>
+          <div class="form-hint">What the AI is told each heartbeat tick. Leave empty for default.</div>
+        </div>
+
+        <div id="heartbeat-status" style="margin: 16px 0; padding: 12px; border-radius: 8px; background: var(--bg-tertiary);">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span id="heartbeat-indicator" style="width: 8px; height: 8px; border-radius: 50%; background: var(--text-muted);"></span>
+            <span id="heartbeat-status-text" style="color: var(--text-secondary); font-size: 13px;">Loading...</span>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top: 12px;">
+          <label class="form-label">📝 HEARTBEAT.md</label>
+          <textarea class="form-input" id="heartbeat-md-editor" rows="8" style="font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace; font-size: 13px; line-height: 1.5; resize: vertical;" placeholder="Loading HEARTBEAT.md..."></textarea>
+          <div class="form-hint">Tasks the AI checks each heartbeat tick. Edit and save directly from here — stored at <code>~/.openwhale/HEARTBEAT.md</code></div>
+        </div>
+
+        <button class="btn btn-primary" onclick="saveHeartbeatSettings()">Save Heartbeat Settings</button>
       </div>
     </div>
     
@@ -4086,6 +4172,7 @@ function bindEvents() {
   // Browser settings init (for settings page)
   if (state.view === 'settings') {
     initBrowserSettings();
+    initHeartbeatSettings();
   }
 }
 
@@ -5077,6 +5164,290 @@ window.checkBrowserOSStatus = async function () {
 window.initBrowserSettings = function () {
   setTimeout(checkBrowserOSStatus, 500);
 };
+
+// ============== HEARTBEAT SETTINGS ==============
+
+window.initHeartbeatSettings = async function () {
+  try {
+    const config = await api('/settings/heartbeat');
+    const enabledCheckbox = document.getElementById('heartbeat-enabled');
+    const intervalSelect = document.getElementById('heartbeat-interval');
+    const modelSelect = document.getElementById('heartbeat-model');
+    const hoursStart = document.getElementById('heartbeat-hours-start');
+    const hoursEnd = document.getElementById('heartbeat-hours-end');
+    const promptTextarea = document.getElementById('heartbeat-prompt');
+
+    if (enabledCheckbox) enabledCheckbox.checked = config.enabled || false;
+    if (intervalSelect && config.every) intervalSelect.value = config.every;
+    if (modelSelect && config.model) modelSelect.value = config.model;
+    if (hoursStart && config.activeHoursStart) hoursStart.value = config.activeHoursStart;
+    if (hoursEnd && config.activeHoursEnd) hoursEnd.value = config.activeHoursEnd;
+    if (promptTextarea && config.prompt) promptTextarea.value = config.prompt;
+
+    // Load forward-to dropdown with connected channels
+    await loadForwardToChannels(config.forwardTo || '');
+
+    // Update field visibility
+    const fields = document.getElementById('heartbeat-fields');
+    if (fields) fields.style.opacity = config.enabled ? '1' : '0.5';
+
+    // Load HEARTBEAT.md content into editor
+    await loadHeartbeatMd();
+
+    // Refresh status
+    await refreshHeartbeatStatus();
+  } catch (e) {
+    console.warn('[Heartbeat] Failed to load settings:', e);
+  }
+};
+
+window.saveHeartbeatSettings = async function () {
+  const enabled = document.getElementById('heartbeat-enabled')?.checked || false;
+  const every = document.getElementById('heartbeat-interval')?.value || '30m';
+  const model = document.getElementById('heartbeat-model')?.value || '';
+  const activeHoursStart = document.getElementById('heartbeat-hours-start')?.value || '';
+  const activeHoursEnd = document.getElementById('heartbeat-hours-end')?.value || '';
+  const prompt = document.getElementById('heartbeat-prompt')?.value || '';
+
+  const forwardTo = document.getElementById('heartbeat-forward-to')?.value || '';
+
+  try {
+    await api('/settings/heartbeat', {
+      method: 'POST',
+      body: JSON.stringify({ enabled, every, model, activeHoursStart, activeHoursEnd, prompt, forwardTo })
+    });
+
+    // Also save HEARTBEAT.md content if editor exists
+    const mdEditor = document.getElementById('heartbeat-md-editor');
+    if (mdEditor) {
+      await api('/settings/heartbeat/md', {
+        method: 'POST',
+        body: JSON.stringify({ content: mdEditor.value })
+      });
+    }
+
+    await showAlert('Heartbeat settings and HEARTBEAT.md saved!', '✅ Success');
+    await refreshHeartbeatStatus();
+  } catch (e) {
+    await showAlert('Failed to save: ' + e.message, '❌ Error');
+  }
+};
+
+window.toggleHeartbeat = function () {
+  const enabled = document.getElementById('heartbeat-enabled')?.checked || false;
+  const fields = document.getElementById('heartbeat-fields');
+  if (fields) fields.style.opacity = enabled ? '1' : '0.5';
+};
+
+async function loadHeartbeatMd() {
+  const editor = document.getElementById('heartbeat-md-editor');
+  if (!editor) return;
+  try {
+    const result = await api('/settings/heartbeat/md');
+    editor.value = result.content || '';
+  } catch {
+    editor.value = '';
+    editor.placeholder = 'Failed to load HEARTBEAT.md';
+  }
+}
+
+window.saveHeartbeatMd = async function () {
+  const editor = document.getElementById('heartbeat-md-editor');
+  if (!editor) return;
+  try {
+    await api('/settings/heartbeat/md', {
+      method: 'POST',
+      body: JSON.stringify({ content: editor.value })
+    });
+    await showAlert('HEARTBEAT.md saved!', '✅ Success');
+    await refreshHeartbeatStatus();
+  } catch (e) {
+    await showAlert('Failed to save HEARTBEAT.md: ' + e.message, '❌ Error');
+  }
+};
+
+async function refreshHeartbeatStatus() {
+  const indicator = document.getElementById('heartbeat-indicator');
+  const statusText = document.getElementById('heartbeat-status-text');
+  if (!indicator || !statusText) return;
+
+  try {
+    const status = await api('/settings/heartbeat/status');
+    if (status.running) {
+      indicator.style.background = '#22c55e';
+      let text = 'Running — every ' + status.every;
+      if (status.lastRunAt) {
+        const ago = timeSince(new Date(status.lastRunAt));
+        text += ' (last: ' + ago + ' ago';
+        if (status.lastResult) text += ', result: ' + status.lastResult;
+        text += ')';
+      }
+      if (status.heartbeatMdExists) text += ' • HEARTBEAT.md found';
+      statusText.textContent = text;
+    } else if (status.enabled) {
+      indicator.style.background = '#f59e0b';
+      statusText.textContent = 'Enabled but not running (save settings to start)';
+    } else {
+      indicator.style.background = 'var(--text-muted)';
+      statusText.textContent = 'Disabled';
+    }
+  } catch {
+    indicator.style.background = 'var(--text-muted)';
+    statusText.textContent = 'Unable to fetch status';
+  }
+}
+
+function timeSince(date) {
+  const seconds = Math.floor((Date.now() - date.getTime()) / 1000);
+  if (seconds < 60) return seconds + 's';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return minutes + 'm';
+  const hours = Math.floor(minutes / 60);
+  return hours + 'h';
+}
+
+// ============== FORWARD-TO CHANNEL DROPDOWN ==============
+
+async function loadForwardToChannels(currentValue) {
+  const select = document.getElementById('heartbeat-forward-to');
+  if (!select) return;
+
+  // Keep first two static options, remove any dynamic ones
+  while (select.options.length > 2) select.remove(2);
+
+  try {
+    const result = await api('/settings/heartbeat/channels');
+    if (result.channels && result.channels.length > 0) {
+      const separator = document.createElement('option');
+      separator.disabled = true;
+      separator.textContent = '── Connected Channels ──';
+      select.appendChild(separator);
+
+      for (const ch of result.channels) {
+        const opt = document.createElement('option');
+        opt.value = ch;
+        const labels = {
+          whatsapp: '📱 WhatsApp',
+          telegram: '✈️ Telegram',
+          discord: '🎮 Discord',
+          imessage: '💬 iMessage',
+          slack: '💼 Slack',
+          twitter: '🐦 Twitter'
+        };
+        opt.textContent = labels[ch] || ch;
+        select.appendChild(opt);
+      }
+    }
+  } catch (e) {
+    console.warn('[Heartbeat] Failed to load channels:', e);
+  }
+
+  // Set saved value
+  if (currentValue) select.value = currentValue;
+}
+
+// ============== TOAST NOTIFICATIONS ==============
+
+let toastContainer = null;
+
+function ensureToastContainer() {
+  if (toastContainer && document.body.contains(toastContainer)) return toastContainer;
+  toastContainer = document.createElement('div');
+  toastContainer.id = 'heartbeat-toast-container';
+  toastContainer.style.cssText = 'position: fixed; top: 16px; right: 16px; z-index: 100000; display: flex; flex-direction: column; gap: 8px; pointer-events: none;';
+  document.body.appendChild(toastContainer);
+  return toastContainer;
+}
+
+function showHeartbeatToast(alert) {
+  const container = ensureToastContainer();
+  const toast = document.createElement('div');
+  toast.style.cssText = `
+    pointer-events: auto;
+    max-width: 380px;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.95), rgba(220, 38, 38, 0.95));
+    color: white;
+    padding: 14px 18px;
+    border-radius: 12px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    font-size: 13px;
+    line-height: 1.5;
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255,255,255,0.15);
+    animation: slideIn 0.3s cubic-bezier(.4,0,.2,1);
+    cursor: pointer;
+    transition: opacity 0.3s, transform 0.3s;
+  `;
+
+  const forwarded = alert.forwardedTo && alert.forwardedTo.length > 0
+    ? ' → ' + alert.forwardedTo.join(', ')
+    : '';
+  const preview = alert.text.length > 150 ? alert.text.slice(0, 150) + '…' : alert.text;
+  toast.innerHTML = '<div style="font-weight: 600; margin-bottom: 4px;">💓 Heartbeat Alert' + forwarded + '</div>'
+    + '<div style="opacity: 0.9;">' + preview.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+
+  toast.onclick = () => {
+    toast.style.opacity = '0';
+    toast.style.transform = 'translateX(100px)';
+    setTimeout(() => toast.remove(), 300);
+  };
+
+  container.appendChild(toast);
+
+  // Auto-dismiss after 10s
+  setTimeout(() => {
+    if (toast.parentNode) {
+      toast.style.opacity = '0';
+      toast.style.transform = 'translateX(100px)';
+      setTimeout(() => toast.remove(), 300);
+    }
+  }, 10000);
+}
+
+// Add CSS animation
+if (!document.getElementById('heartbeat-toast-style')) {
+  const style = document.createElement('style');
+  style.id = 'heartbeat-toast-style';
+  style.textContent = '@keyframes slideIn { from { opacity: 0; transform: translateX(100px); } to { opacity: 1; transform: translateX(0); } }';
+  document.head.appendChild(style);
+}
+
+// ============== HEARTBEAT ALERT POLLING ==============
+
+let heartbeatAlertPollInterval = null;
+let lastHeartbeatAlertId = null;
+
+function startHeartbeatAlertPolling() {
+  // Only poll if not already running
+  if (heartbeatAlertPollInterval) return;
+
+  heartbeatAlertPollInterval = setInterval(async () => {
+    try {
+      const url = lastHeartbeatAlertId
+        ? '/settings/heartbeat/alerts?since=' + encodeURIComponent(lastHeartbeatAlertId)
+        : '/settings/heartbeat/alerts';
+      const result = await api(url);
+      if (result.alerts && result.alerts.length > 0) {
+        for (const alert of result.alerts) {
+          showHeartbeatToast(alert);
+          lastHeartbeatAlertId = alert.id;
+        }
+      }
+    } catch {
+      // Silently ignore polling errors
+    }
+  }, 15000); // Poll every 15 seconds
+}
+
+function stopHeartbeatAlertPolling() {
+  if (heartbeatAlertPollInterval) {
+    clearInterval(heartbeatAlertPollInterval);
+    heartbeatAlertPollInterval = null;
+  }
+}
+
+// Start polling whenever page is loaded
+startHeartbeatAlertPolling();
 
 window.resetSetup = async function () {
   const confirmed = await showConfirm('This will reset all configuration.', '⚠️ Reset Setup?');

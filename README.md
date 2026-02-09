@@ -197,6 +197,18 @@ OpenWhale remembers everything, even after restarts.
 
 ---
 
+### 💓 Heartbeat (Proactive Agent)
+The AI wakes up periodically to check on things — you don't have to ask.
+
+- **Configurable interval** — Every 5m, 15m, 30m, 1h, or 2h
+- **HEARTBEAT.md** — Drop tasks in `~/.openwhale/HEARTBEAT.md` and the AI acts on them
+- **Active hours** — Skip overnight ticks to save API costs
+- **Model override** — Use a cheaper model for heartbeat runs
+- **Smart suppression** — `HEARTBEAT_OK` replies are suppressed; only alerts surface
+- **Dashboard config** — Toggle, interval, prompt, and status from Settings
+
+---
+
 ### 🔒 Enterprise Security
 Production-ready security out of the box.
 
@@ -223,6 +235,7 @@ Production-ready security out of the box.
 | **Runs locally** | ✅ Your machine | ❌ Cloud only | ❌ Cloud only | ❌ Usually cloud |
 | **Open source** | ✅ MIT license | ❌ Closed | ❌ Closed | ❌ Varies |
 | **Persistent memory** | ✅ Vector search | ✅ Limited | ✅ Limited | ❌ Usually no |
+| **Proactive heartbeat** | ✅ Configurable | ❌ No | ❌ No | ❌ No |
 
 ---
 
@@ -663,6 +676,53 @@ Conversations are saved to JSONL transcripts, so you can:
 - Continue where you left off after restarts
 - Keep context across multiple messages
 - Review past conversations
+
+---
+
+## Heartbeat (Proactive Agent)
+
+OpenWhale can proactively wake up and check on things without you having to ask.
+
+### How It Works
+
+1. A `node-cron` scheduler fires at your chosen interval (default: every 30 minutes)
+2. The AI reads `~/.openwhale/HEARTBEAT.md` if it exists for task context
+3. It runs a full agent turn with tool access — can check inboxes, run commands, etc.
+4. If nothing needs attention, it replies `HEARTBEAT_OK` (suppressed, you won't see it)
+5. If something needs your attention, the alert appears in your dashboard chat
+
+### Setup
+
+From the Dashboard:
+1. Go to **Settings**
+2. Find the **💓 Heartbeat** card
+3. Check **Enable Heartbeat**
+4. Choose your interval, model, and active hours
+5. Click **Save Heartbeat Settings**
+
+### HEARTBEAT.md
+
+Create `~/.openwhale/HEARTBEAT.md` with tasks for the AI to monitor:
+
+```markdown
+# Heartbeat Tasks
+
+- [ ] Check if the staging server is still running
+- [ ] Look for new GitHub issues on my repo
+- [ ] Remind me about the meeting at 3pm
+```
+
+The AI reads this file every heartbeat tick and acts on it. If the file is empty or only has headers, the tick is skipped to save API calls.
+
+### Configuration Options
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| **Enabled** | Off | Toggle heartbeat on/off |
+| **Interval** | 30m | 5m, 10m, 15m, 30m, 1h, 2h |
+| **Model** | Default | Use a cheaper model to save costs |
+| **Active Hours** | Always | e.g., 08:00–24:00 to skip overnight |
+| **Custom Prompt** | (built-in) | Override the default heartbeat instructions |
 
 ---
 

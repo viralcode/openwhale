@@ -530,7 +530,7 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
     dashboard.get("/assets/main.js", (c) => {
         const js = readFileSync(join(__dirname, "main.js"), "utf-8");
-        return c.text(js, 200, { "Content-Type": "application/javascript" });
+        return c.text(js, 200, { "Content-Type": "application/javascript", "Cache-Control": "no-cache, no-store, must-revalidate" });
     });
 
     // ============== CANVAS / A2UI ==============
@@ -2485,6 +2485,116 @@ echo "Hello from ${name}"
         } catch (error) {
             console.error("[Browser Status API] Error:", error);
             return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // ============== HEARTBEAT SETTINGS ==============
+
+    // Auto-start heartbeat on server boot
+    import("../heartbeat/heartbeat.js").then(({ startHeartbeat }) => {
+        startHeartbeat();
+    }).catch(err => {
+        console.warn("[Heartbeat] Failed to auto-start:", err);
+    });
+
+    // Get heartbeat config
+    dashboard.get("/api/settings/heartbeat", async (c) => {
+        try {
+            const { getHeartbeatConfig, loadHeartbeatConfig } = await import("../heartbeat/heartbeat.js");
+            loadHeartbeatConfig();
+            const config = getHeartbeatConfig();
+            return c.json({ ok: true, ...config });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Save heartbeat config
+    dashboard.post("/api/settings/heartbeat", async (c) => {
+        try {
+            const body = await c.req.json() as Record<string, unknown>;
+            const { updateHeartbeatConfig } = await import("../heartbeat/heartbeat.js");
+            const config = updateHeartbeatConfig({
+                enabled: typeof body.enabled === "boolean" ? body.enabled : undefined,
+                every: typeof body.every === "string" ? body.every : undefined,
+                prompt: typeof body.prompt === "string" ? body.prompt : undefined,
+                activeHoursStart: typeof body.activeHoursStart === "string" ? body.activeHoursStart : undefined,
+                activeHoursEnd: typeof body.activeHoursEnd === "string" ? body.activeHoursEnd : undefined,
+                model: typeof body.model === "string" ? body.model : undefined,
+                forwardTo: typeof body.forwardTo === "string" ? body.forwardTo : undefined,
+            });
+            return c.json({ ok: true, ...config });
+        } catch (error) {
+            console.error("[Heartbeat Settings] Save error:", error);
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Get heartbeat runtime status
+    dashboard.get("/api/settings/heartbeat/status", async (c) => {
+        try {
+            const { getHeartbeatStatus } = await import("../heartbeat/heartbeat.js");
+            const status = getHeartbeatStatus();
+            return c.json({ ok: true, ...status });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Get HEARTBEAT.md content (for in-dashboard editor)
+    dashboard.get("/api/settings/heartbeat/md", async (c) => {
+        try {
+            const { getHeartbeatMdContent } = await import("../heartbeat/heartbeat.js");
+            const result = getHeartbeatMdContent();
+            return c.json({ ok: true, ...result });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Save HEARTBEAT.md content (from in-dashboard editor)
+    dashboard.post("/api/settings/heartbeat/md", async (c) => {
+        try {
+            const body = await c.req.json();
+            const { saveHeartbeatMdContent } = await import("../heartbeat/heartbeat.js");
+            saveHeartbeatMdContent(body.content || "");
+            return c.json({ ok: true });
+        } catch (error) {
+            return c.json({ ok: false, error: String(error) }, 500);
+        }
+    });
+
+    // Get connected channels for heartbeat forwarding dropdown
+    dashboard.get("/api/settings/heartbeat/channels", async (c) => {
+        try {
+            const connected: string[] = [];
+
+            // Check WhatsApp via real-time status
+            try {
+                const { isWhatsAppConnected } = await import("../channels/whatsapp-baileys.js");
+                if (isWhatsAppConnected()) connected.push("whatsapp");
+            } catch { /* WhatsApp module not available */ }
+
+            // Check other channels via channelConfigs
+            for (const ch of ["telegram", "discord", "imessage"] as const) {
+                if (channelConfigs.get(ch)?.connected) connected.push(ch);
+            }
+
+            return c.json({ ok: true, channels: connected });
+        } catch (error) {
+            return c.json({ ok: false, channels: [], error: String(error) }, 500);
+        }
+    });
+
+    // Get heartbeat alerts (for dashboard polling)
+    dashboard.get("/api/settings/heartbeat/alerts", async (c) => {
+        try {
+            const sinceId = c.req.query("since");
+            const { getNewHeartbeatAlerts } = await import("../heartbeat/heartbeat.js");
+            const alerts = getNewHeartbeatAlerts(sinceId || undefined);
+            return c.json({ ok: true, alerts });
+        } catch (error) {
+            return c.json({ ok: false, alerts: [], error: String(error) }, 500);
         }
     });
 
