@@ -33,6 +33,7 @@ import { sshTool } from "./ssh.js";
 import { dbQueryTool } from "./db-query.js";
 import { slidesTool } from "./slides.js";
 import { logsTool } from "./logs.js";
+import { codebaseTool } from "./codebase.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -74,6 +75,7 @@ toolRegistry.register(sshTool);
 toolRegistry.register(dbQueryTool);
 toolRegistry.register(slidesTool);
 toolRegistry.register(logsTool);
+toolRegistry.register(codebaseTool);
 
 export { toolRegistry } from "./base.js";
 export type { AgentTool, ToolCallContext, ToolResult, ToolRegistry } from "./base.js";
@@ -109,4 +111,5 @@ export { sshTool } from "./ssh.js";
 export { dbQueryTool } from "./db-query.js";
 export { slidesTool } from "./slides.js";
 export { logsTool } from "./logs.js";
+export { codebaseTool } from "./codebase.js";
 

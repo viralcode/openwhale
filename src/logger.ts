@@ -27,7 +27,8 @@ export type LogCategory =
     | "system"
     | "cron"
     | "extension"
-    | "auth";
+    | "auth"
+    | "codebase";
 
 export interface LogEntry {
     timestamp: string;
