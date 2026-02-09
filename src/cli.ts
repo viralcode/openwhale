@@ -431,12 +431,6 @@ async function handleDaemonCommand(subcommand?: string) {
         case "install":
             console.log(c("bold", "\n🔧 Installing OpenWhale Daemon\n"));
 
-            if (process.platform !== "darwin") {
-                console.log(c("yellow", "⚠️ Daemon auto-start currently only supported on macOS"));
-                console.log(c("dim", "Use 'openwhale daemon start' to run manually\n"));
-                return;
-            }
-
             try {
                 await installLaunchAgent();
                 console.log(c("green", "✅ Daemon installed and started!"));
@@ -498,23 +492,16 @@ async function handleDaemonCommand(subcommand?: string) {
                 console.log(c("dim", "○ Not running"));
             }
 
-            // Check LaunchAgent status (macOS)
-            if (process.platform === "darwin") {
-                const laStatus = getLaunchAgentStatus();
-                console.log(`\n${c("bold", "LaunchAgent (macOS):")}`);
-                console.log(`  Installed: ${laStatus.installed ? c("green", "yes") : c("dim", "no")}`);
-                console.log(`  Loaded: ${laStatus.loaded ? c("green", "yes") : c("dim", "no")}`);
-            }
+            // Show daemon status for current platform
+            const daemonInfo = getLaunchAgentStatus();
+            console.log(`\n${c("bold", `Daemon (${daemonInfo.platform}):`)}`);
+            console.log(`  Installed: ${daemonInfo.installed ? c("green", "yes") : c("dim", "no")}`);
+            console.log(`  Active: ${daemonInfo.loaded ? c("green", "yes") : c("dim", "no")}`);
             console.log();
             break;
 
         case "uninstall":
             console.log(c("bold", "\n🗑️ Uninstalling OpenWhale Daemon\n"));
-
-            if (process.platform !== "darwin") {
-                console.log(c("yellow", "Nothing to uninstall on this platform"));
-                return;
-            }
 
             try {
                 await uninstallLaunchAgent();
