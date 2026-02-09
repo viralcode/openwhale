@@ -9,6 +9,7 @@ import { processMessageWithAI } from "./shared-ai-processor.js";
 import { WebSocket } from "ws";
 import { registry } from "../providers/index.js";
 import { getCurrentModel } from "../sessions/session-service.js";
+import { logger } from "../logger.js";
 
 type MessageHandler = (message: IncomingMessage) => void;
 
@@ -51,7 +52,7 @@ export class DiscordAdapter implements ChannelAdapter {
 
         const data = await response.json() as { id: string; username: string };
         this.botUserId = data.id;
-        console.log(`[Discord] Bot verified: ${data.username} (${data.id})`);
+        logger.info("channel", `Discord connected`, { username: data.username, botId: data.id });
 
         // Connect to gateway
         await this.connectGateway();
@@ -63,7 +64,7 @@ export class DiscordAdapter implements ChannelAdapter {
             this.ws = new WebSocket(url);
 
             this.ws.on("open", () => {
-                console.log("[Discord] Gateway connected");
+                logger.debug("channel", "Discord gateway WebSocket opened");
             });
 
             this.ws.on("message", async (data: Buffer) => {
@@ -72,7 +73,7 @@ export class DiscordAdapter implements ChannelAdapter {
             });
 
             this.ws.on("close", (code) => {
-                console.log(`[Discord] Gateway closed: ${code}`);
+                logger.warn("channel", `Discord gateway closed`, { code, willReconnect: code !== 1000 });
                 this.connected = false;
                 if (this.heartbeatInterval) {
                     clearInterval(this.heartbeatInterval);
@@ -84,7 +85,7 @@ export class DiscordAdapter implements ChannelAdapter {
             });
 
             this.ws.on("error", (err) => {
-                console.error("[Discord] Gateway error:", err);
+                logger.error("channel", "Discord gateway error", { error: String(err) });
                 reject(err);
             });
         });
@@ -120,7 +121,7 @@ export class DiscordAdapter implements ChannelAdapter {
                     this.sessionId = d.session_id;
                     this.resumeGatewayUrl = d.resume_gateway_url;
                     this.connected = true;
-                    console.log(`[Discord] Ready - Session: ${this.sessionId}`);
+                    logger.info("channel", `Discord ready`, { sessionId: this.sessionId });
                     resolve();
                 }
                 break;
@@ -130,12 +131,12 @@ export class DiscordAdapter implements ChannelAdapter {
                 break;
 
             case 7: // Reconnect
-                console.log("[Discord] Reconnect requested");
+                logger.info("channel", "Discord reconnect requested by server");
                 this.ws?.close();
                 break;
 
             case 9: // Invalid session
-                console.log("[Discord] Invalid session, re-identifying...");
+                logger.warn("channel", "Discord invalid session, re-identifying");
                 this.sessionId = null;
                 setTimeout(() => {
                     this.ws?.send(JSON.stringify({
@@ -182,7 +183,7 @@ export class DiscordAdapter implements ChannelAdapter {
                 if (!content.includes(botMention)) return;
             }
 
-            console.log(`[Discord] Message from ${data.author.username}: "${content.slice(0, 50)}..."`);
+            logger.info("channel", `Discord message from ${data.author.username}`, { userId: data.author.id, username: data.author.username, channelId, guildId: data.guild_id || null, preview: content.slice(0, 80), isGuild });
 
             const incoming: IncomingMessage = {
                 id: data.id,
@@ -209,11 +210,11 @@ export class DiscordAdapter implements ChannelAdapter {
                 });
 
                 if (extResult.handled) {
-                    console.log(`[Discord] Message handled by extension(s)`);
-                    return; // Skip AI processing
+                    logger.info("channel", "Discord message handled by extension", { from: incoming.from, channelId });
+                    return;
                 }
             } catch (extErr) {
-                console.error("[Discord] Extension error:", extErr);
+                logger.error("channel", "Discord extension error", { error: String(extErr), from: incoming.from });
             }
             // =====================================
 
@@ -303,11 +304,11 @@ export class DiscordAdapter implements ChannelAdapter {
             }
 
             const data = await response.json() as { id: string };
-            console.log(`[Discord] Image sent to ${channelId}`);
+            logger.info("channel", `Discord image sent`, { channelId, sizeBytes: imageBuffer.length, hasCaption: !!caption });
             return { success: true, messageId: data.id };
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-            console.error(`[Discord] Failed to send image: ${error}`);
+            logger.error("channel", "Discord image send failed", { channelId, error });
             return { success: false, error };
         }
     }
@@ -339,11 +340,11 @@ export class DiscordAdapter implements ChannelAdapter {
             }
 
             const data = await response.json() as { id: string };
-            console.log(`[Discord] File sent to ${channelId}: ${fileName}`);
+            logger.info("channel", `Discord file sent`, { channelId, fileName, mimetype, sizeBytes: buffer.length });
             return { success: true, messageId: data.id };
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-            console.error(`[Discord] Failed to send file: ${error}`);
+            logger.error("channel", "Discord file send failed", { channelId, fileName, error });
             return { success: false, error };
         }
     }

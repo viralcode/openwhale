@@ -7,6 +7,7 @@ import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } fro
 import { processMessageWithAI } from "./shared-ai-processor.js";
 import { registry } from "../providers/index.js";
 import { getCurrentModel } from "../sessions/session-service.js";
+import { logger } from "../logger.js";
 
 type MessageHandler = (message: IncomingMessage) => void;
 
@@ -41,7 +42,7 @@ export class TelegramAdapter implements ChannelAdapter {
             throw new Error("Invalid Telegram bot token");
         }
 
-        console.log(`[Telegram] Bot connected: @${data.result?.username}`);
+        logger.info("channel", `Telegram connected`, { username: data.result?.username });
         this.connected = true;
 
         this.startPolling();
@@ -99,14 +100,14 @@ export class TelegramAdapter implements ChannelAdapter {
             const data = await response.json() as { ok: boolean; result?: { message_id: number }; description?: string };
 
             if (data.ok) {
-                console.log(`[Telegram] Photo sent to ${chatId}`);
+                logger.info("channel", `Telegram photo sent`, { chatId, sizeBytes: imageBuffer.length, hasCaption: !!caption });
                 return { success: true, messageId: String(data.result?.message_id) };
             } else {
                 return { success: false, error: data.description };
             }
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-            console.error(`[Telegram] Failed to send photo: ${error}`);
+            logger.error("channel", "Telegram photo send failed", { chatId, error });
             return { success: false, error };
         }
     }
@@ -129,14 +130,14 @@ export class TelegramAdapter implements ChannelAdapter {
             const data = await response.json() as { ok: boolean; result?: { message_id: number }; description?: string };
 
             if (data.ok) {
-                console.log(`[Telegram] Document sent to ${chatId}: ${fileName}`);
+                logger.info("channel", `Telegram document sent`, { chatId, fileName, mimetype, sizeBytes: buffer.length });
                 return { success: true, messageId: String(data.result?.message_id) };
             } else {
                 return { success: false, error: data.description };
             }
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-            console.error(`[Telegram] Failed to send document: ${error}`);
+            logger.error("channel", "Telegram document send failed", { chatId, fileName, error });
             return { success: false, error };
         }
     }
@@ -180,7 +181,7 @@ export class TelegramAdapter implements ChannelAdapter {
 
                             // Skip group messages for now
                             if (isGroup) {
-                                console.log("[Telegram] Skipping group message");
+                                logger.debug("channel", "Telegram skipping group message", { chatId, chatType: update.message.chat.type });
                                 continue;
                             }
 
@@ -209,17 +210,17 @@ export class TelegramAdapter implements ChannelAdapter {
                                 });
 
                                 if (extResult.handled) {
-                                    console.log(`[Telegram] Message handled by extension(s)`);
-                                    continue; // Skip AI processing
+                                    logger.info("channel", "Telegram message handled by extension", { from: incoming.from, chatId });
+                                    continue;
                                 }
                             } catch (extErr) {
-                                console.error("[Telegram] Extension error:", extErr);
+                                logger.error("channel", "Telegram extension error", { error: String(extErr), from: incoming.from });
                             }
                             // =====================================
 
                             // Process with AI if provider available
                             if (registry.getProvider(getCurrentModel())) {
-                                console.log(`[Telegram] Processing message from ${incoming.from}`);
+                                logger.info("channel", `Telegram message from ${incoming.from}`, { from: incoming.from, username: update.message?.from?.username, preview: incoming.content.slice(0, 80), chatId });
                                 await processMessageWithAI({
                                     channel: "telegram",
                                     from: incoming.from,
@@ -246,7 +247,7 @@ export class TelegramAdapter implements ChannelAdapter {
                 }
             } catch (err) {
                 if ((err as Error).name !== 'AbortError') {
-                    console.error("[Telegram] Polling error:", err);
+                    logger.error("channel", "Telegram polling error", { error: String(err) });
                 }
             }
 

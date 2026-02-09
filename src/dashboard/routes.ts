@@ -13,6 +13,7 @@ import { desc, sql, eq } from "drizzle-orm";
 import { readFileSync, existsSync } from "node:fs";
 import fs from "node:fs/promises";
 import { join, dirname } from "node:path";
+import { logger, logEmitter } from "../logger.js";
 import { fileURLToPath } from "node:url";
 import { execSync, exec } from "node:child_process";
 import { promisify } from "node:util";
@@ -167,6 +168,7 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
                 const model = config.selectedModel || configStore.get("defaultModel") as string || "";
                 setModel(model);
                 console.log(`[Dashboard] Set active model to ${model} (provider: ${type})`);
+                logger.info("provider", `Active model set to ${model}`, { provider: type });
                 break;
             }
         }
@@ -911,6 +913,7 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                     // Use the selected model for this provider, or a default
                     effectiveModel = config.selectedModel || configStore.get("defaultModel") as string;
                     console.log(`[Dashboard] Using enabled provider: ${type}, model: ${effectiveModel}`);
+                    logger.info("chat", `Chat using provider: ${type}, model: ${effectiveModel}`);
                     break;
                 }
             }
@@ -1582,6 +1585,7 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
         });
 
         console.log(`[Dashboard] Provider ${type} config updated: enabled=${enabled ?? existing.enabled}, selectedModel=${selectedModel || existing.selectedModel}`);
+        logger.info("provider", `Provider ${type} config updated`, { enabled: enabled ?? existing.enabled, selectedModel: selectedModel || existing.selectedModel });
 
         // Update env vars
         if (apiKey) {
@@ -2181,6 +2185,7 @@ echo "Hello from ${name}"
         for (const [key, value] of Object.entries(data)) {
             configStore.set(key, value);
             if (key === "ownerPhone") process.env.OWNER_PHONE = String(value);
+            if (key === "logFilePath") logger.setLogPath(String(value));
 
             // Persist to database using raw SQL
             try {
@@ -2190,12 +2195,108 @@ echo "Hello from ${name}"
             }
         }
 
-        console.log(`[Dashboard] Config saved, defaultModel: ${configStore.get("defaultModel")}`);
+        logger.info("dashboard", "Config saved", data);
         return c.json({ ok: true });
     });
 
     dashboard.get("/api/config", (c) => {
         return c.json(Object.fromEntries(configStore));
+    });
+    // ============== LOGS ==============
+
+    dashboard.get("/api/logs", async (c) => {
+        const page = parseInt(c.req.query("page") || "0");
+        const limit = Math.min(parseInt(c.req.query("limit") || "100"), 500);
+        const levelFilter = c.req.query("level");
+        const categoryFilter = c.req.query("category");
+        const startDate = c.req.query("startDate");
+        const endDate = c.req.query("endDate");
+        const search = c.req.query("search")?.toLowerCase();
+
+        const logPath = logger.getLogPath();
+        if (!existsSync(logPath)) {
+            return c.json({ entries: [], total: 0, page, logPath });
+        }
+
+        try {
+            const content = await fs.readFile(logPath, "utf-8");
+            const lines = content.trim().split("\n").filter(Boolean);
+
+            // Parse and filter
+            let entries: Array<Record<string, unknown>> = [];
+            for (const line of lines) {
+                try {
+                    const entry = JSON.parse(line);
+                    // Apply filters
+                    if (levelFilter && entry.level !== levelFilter) continue;
+                    if (categoryFilter && entry.category !== categoryFilter) continue;
+                    if (startDate && entry.timestamp < startDate) continue;
+                    if (endDate && entry.timestamp > endDate + "T23:59:59.999Z") continue;
+                    if (search && !entry.message?.toLowerCase().includes(search) && !JSON.stringify(entry.data || "").toLowerCase().includes(search)) continue;
+                    entries.push(entry);
+                } catch { /* skip malformed lines */ }
+            }
+
+            // Reverse for newest-first
+            entries.reverse();
+            const total = entries.length;
+
+            // Paginate
+            const start = page * limit;
+            entries = entries.slice(start, start + limit);
+
+            return c.json({ entries, total, page, logPath });
+        } catch (e) {
+            return c.json({ entries: [], total: 0, page, logPath, error: String(e) });
+        }
+    });
+
+    // ============== LOG STREAMING (SSE) ==============
+
+    dashboard.get("/api/logs/stream", async (c) => {
+        const encoder = new TextEncoder();
+        const stream = new ReadableStream({
+            start(controller) {
+                // Send initial heartbeat
+                controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event: "connected" })}\n\n`));
+
+                // Listen for new log entries
+                const onEntry = (entry: unknown) => {
+                    try {
+                        controller.enqueue(encoder.encode(`data: ${JSON.stringify(entry)}\n\n`));
+                    } catch {
+                        // Stream closed, clean up
+                        logEmitter.removeListener("entry", onEntry);
+                    }
+                };
+                logEmitter.on("entry", onEntry);
+
+                // Heartbeat every 30s to keep connection alive
+                const heartbeat = setInterval(() => {
+                    try {
+                        controller.enqueue(encoder.encode(`: heartbeat\n\n`));
+                    } catch {
+                        clearInterval(heartbeat);
+                        logEmitter.removeListener("entry", onEntry);
+                    }
+                }, 30000);
+
+                // Clean up on cancel
+                c.req.raw.signal.addEventListener("abort", () => {
+                    clearInterval(heartbeat);
+                    logEmitter.removeListener("entry", onEntry);
+                    try { controller.close(); } catch { /* already closed */ }
+                });
+            },
+        });
+
+        return new Response(stream, {
+            headers: {
+                "Content-Type": "text/event-stream",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        });
     });
 
     // ============== STATS ==============

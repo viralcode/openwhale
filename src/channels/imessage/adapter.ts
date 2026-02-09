@@ -13,6 +13,7 @@ import { exec } from "node:child_process";
 import { promisify } from "node:util";
 import { registry } from "../../providers/index.js";
 import { getCurrentModel } from "../../sessions/session-service.js";
+import { logger } from "../../logger.js";
 
 const execAsync = promisify(exec);
 
@@ -86,7 +87,7 @@ export class IMessageAdapter implements ChannelAdapter {
                 }
             },
             onError: (err) => {
-                console.error(`[iMessage] Client error: ${err.message}`);
+                logger.error("channel", `iMessage client error`, { error: err.message });
             },
         });
 
@@ -97,7 +98,7 @@ export class IMessageAdapter implements ChannelAdapter {
         // (in case notifications don't fire for all message types)
         this.startPolling();
 
-        console.log("[iMessage] ✓ Channel adapter connected");
+        logger.info("channel", "iMessage adapter connected");
     }
 
     async disconnect(): Promise<void> {
@@ -110,7 +111,7 @@ export class IMessageAdapter implements ChannelAdapter {
             this.client = null;
         }
         this.connected = false;
-        console.log("[iMessage] Channel adapter disconnected");
+        logger.info("channel", "iMessage adapter disconnected");
     }
 
     /**
@@ -130,7 +131,7 @@ export class IMessageAdapter implements ChannelAdapter {
             }
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-            console.error(`[iMessage] Send error: ${error}`);
+            logger.error("channel", "iMessage send error", { error, to: message.to });
             return { success: false, error };
         }
     }
@@ -184,7 +185,7 @@ export class IMessageAdapter implements ChannelAdapter {
             } catch (err) {
                 // Suppress polling errors to avoid log spam
                 if (this.connected) {
-                    console.error(`[iMessage] Polling error: ${err instanceof Error ? err.message : String(err)}`);
+                    logger.error("channel", "iMessage polling error", { error: err instanceof Error ? err.message : String(err) });
                 }
             }
         }, POLL_INTERVAL_MS);
@@ -215,7 +216,7 @@ export class IMessageAdapter implements ChannelAdapter {
             },
         };
 
-        console.log(`[iMessage] 📱 Message from ${msg.sender}: "${msg.text.slice(0, 50)}..."`);
+        logger.info("channel", `iMessage message from ${msg.sender}`, { sender: msg.sender, chatId: msg.chatId, preview: msg.text.slice(0, 60) });
 
         // ========== EXTENSION HOOK ==========
         // Extensions subscribed to "imessage" get ALL messages
@@ -228,17 +229,17 @@ export class IMessageAdapter implements ChannelAdapter {
             });
 
             if (extResult.handled) {
-                console.log("[iMessage] Message handled by extension(s)");
+                logger.info("channel", "iMessage message handled by extension", { from: incoming.from });
                 return;
             }
         } catch (extErr) {
-            console.error("[iMessage] Extension error:", extErr);
+            logger.error("channel", "iMessage extension error", { error: String(extErr), from: incoming.from });
         }
         // =====================================
 
         // Process with AI if provider is available
         if (registry.getProvider(getCurrentModel())) {
-            console.log(`[iMessage] Processing message from ${incoming.from}`);
+            logger.info("channel", `iMessage processing with AI`, { from: incoming.from });
             try {
                 await processMessageWithAI({
                     channel: "imessage",
@@ -263,7 +264,7 @@ export class IMessageAdapter implements ChannelAdapter {
                     isGroup,
                 });
             } catch (err) {
-                console.error(`[iMessage] AI processing error: ${err instanceof Error ? err.message : String(err)}`);
+                logger.error("channel", "iMessage AI processing error", { error: err instanceof Error ? err.message : String(err), from: incoming.from });
             }
         } else {
             // Fallback: notify registered handlers

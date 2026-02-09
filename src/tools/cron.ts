@@ -1,6 +1,7 @@
 import { z } from "zod";
 import cron, { type ScheduledTask } from "node-cron";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
+import { logger } from "../logger.js";
 
 /**
  * Get the system's local timezone (e.g. "America/New_York")
@@ -22,7 +23,7 @@ async function executeJobTask(job: { id: string; task: string; name?: string; ex
     const tz = getSystemTimezone();
     const localTime = new Date().toLocaleString("en-US", { timeZone: tz });
     console.log(`[Cron] ⏰ Job fired: ${job.name || job.id} at ${localTime} (${tz})`);
-    console.log(`[Cron] Task: ${job.task}`);
+    logger.info("cron", `Job fired: ${job.name || job.id}`, { jobId: job.id, task: job.task, time: localTime, tz });
 
     try {
         // Dynamically import to avoid circular dependencies
@@ -40,9 +41,10 @@ async function executeJobTask(job: { id: string; task: string; name?: string; ex
         });
 
         console.log(`[Cron] ✅ Task completed: ${job.name || job.id}`);
-        console.log(`[Cron] AI response: ${response.content?.slice(0, 200)}...`);
+        logger.info("cron", `Task completed: ${job.name || job.id}`, { response: response.content?.slice(0, 200) });
     } catch (err) {
         console.error(`[Cron] ❌ Task failed: ${job.name || job.id}`, err);
+        logger.error("cron", `Task failed: ${job.name || job.id}`, { error: String(err) });
     }
 }
 

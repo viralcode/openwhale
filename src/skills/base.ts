@@ -7,6 +7,7 @@
 
 import { z } from "zod";
 import type { ToolCallContext, ToolResult } from "../tools/base.js";
+import { logger } from "../logger.js";
 
 export interface SkillMetadata {
     name: string;
@@ -77,6 +78,7 @@ class SkillRegistry {
     register(skill: Skill): void {
         this.skills.set(skill.metadata.name, skill);
         console.log(`[Skills] Registered: ${skill.metadata.name}`);
+        logger.info("system", `Skill registered: ${skill.metadata.name}`);
     }
 
     /**
@@ -86,6 +88,7 @@ class SkillRegistry {
         const existed = this.skills.delete(name);
         if (existed) {
             console.log(`[Skills] Unregistered: ${name}`);
+            logger.info("system", `Skill unregistered: ${name}`);
         }
         return existed;
     }
@@ -126,6 +129,7 @@ class SkillRegistry {
                 await skill.initialize?.();
             } catch (err) {
                 console.error(`[Skills] Failed to initialize ${skill.metadata.name}:`, err);
+                logger.error("system", `Skill init failed: ${skill.metadata.name}`, { error: String(err) });
             }
         }
     }

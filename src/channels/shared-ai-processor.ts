@@ -28,6 +28,7 @@ import {
 import { getMemoryContext } from "../memory/memory-files.js";
 import { compactIfNeeded } from "../sessions/compaction.js";
 import { getCurrentModel } from "../sessions/session-service.js";
+import { logger } from "../logger.js";
 
 // Mime types for common file extensions
 const MIME_TYPES: Record<string, string> = {
@@ -80,13 +81,13 @@ export async function processMessageWithAI(options: ProcessMessageOptions): Prom
     const channelUpper = channel.charAt(0).toUpperCase() + channel.slice(1);
     const maxIterations = 100;
 
-    console.log(`[${channelUpper}] 📱 Processing message from ${from}: "${content.slice(0, 50)}..."`);
+    logger.info("chat", `${channelUpper} processing message from ${from}`, { channel, model, preview: content.slice(0, 50) });
 
     // Verify provider is available
     const provider = registry.getProvider(model);
     if (!provider) {
         const errMsg = `No AI provider available for model: ${model}`;
-        console.error(`[${channelUpper}] ${errMsg}`);
+        logger.error("provider", `No provider for ${channelUpper}`, { model });
         await sendText(`❌ ${errMsg}`);
         return { success: false, error: errMsg };
     }
@@ -114,7 +115,7 @@ export async function processMessageWithAI(options: ProcessMessageOptions): Prom
 
     // Add skill tools
     const skillTools = skillRegistry.getAllTools();
-    console.log(`[${channelUpper}] Skill tools available: ${skillTools.length}`);
+    logger.debug("tool", `${channelUpper} skill tools available`, { count: skillTools.length });
     for (const skillTool of skillTools) {
         tools.push({
             name: skillTool.name,
@@ -187,7 +188,7 @@ Current time: ${now.toLocaleString()}`;
     const sessionCtx = getSessionContext(channel, sessionType, from);
     const { session, history, isNewSession } = sessionCtx;
 
-    console.log(`[${channelUpper}] Session: ${session.sessionId} (new: ${isNewSession}, history: ${history.length} msgs)`);
+    logger.info("session", `${channelUpper} session`, { sessionId: session.sessionId, isNew: isNewSession, historyLen: history.length });
 
     // Handle slash commands
     const cmdResult = handleSlashCommand(content, session);
@@ -252,7 +253,7 @@ Current time: ${now.toLocaleString()}`;
                 stream: false,
             });
 
-            console.log(`[${channelUpper}]   ↳ AI iteration ${iterations}: content=${response.content?.length || 0} chars, toolCalls=${response.toolCalls?.length || 0}`);
+            logger.debug("chat", `${channelUpper} iteration ${iterations}`, { contentLen: response.content?.length || 0, toolCalls: response.toolCalls?.length || 0 });
 
             // No tool calls = final response
             if (!response.toolCalls || response.toolCalls.length === 0) {
@@ -274,7 +275,7 @@ Current time: ${now.toLocaleString()}`;
             for (const tc of response.toolCalls) {
                 const toolCallId = tc.id || randomUUID();
 
-                console.log(`[${channelUpper}]   🔧 Executing: ${tc.name} (iteration ${iterations}/${maxIterations})`);
+                logger.info("tool", `${channelUpper} executing tool: ${tc.name}`, { iteration: iterations });
                 recordToolUse(session.sessionId, tc.name, tc.arguments);
 
                 let result: string;
@@ -285,12 +286,11 @@ Current time: ${now.toLocaleString()}`;
                     if (tc.name === `${channel}_send_image`) {
                         if (lastScreenshotBase64) {
                             const imageBuffer = Buffer.from(lastScreenshotBase64, "base64");
-                            console.log(`[${channelUpper}]   📸 Sending image (${imageBuffer.length} bytes)`);
+                            logger.info("tool", `${channelUpper} image sent`, { sizeBytes: imageBuffer.length });
                             const args = tc.arguments as { caption?: string };
                             const sendResult = await sendImage(imageBuffer, args.caption || "Image from OpenWhale");
                             if (sendResult.success) {
                                 result = "Image sent successfully!";
-                                console.log(`[${channelUpper}]   ✅ Image sent!`);
                             } else {
                                 result = `Error: ${sendResult.error}`;
                                 isError = true;
@@ -310,13 +310,13 @@ Current time: ${now.toLocaleString()}`;
                             if ((tc.name === "screenshot" || tc.name === "camera_snap") && execResult.metadata?.base64) {
                                 lastScreenshotBase64 = execResult.metadata.base64 as string;
                                 const type = tc.name === "camera_snap" ? "Camera photo" : "Screenshot";
-                                console.log(`[${channelUpper}]   📸 ${type} captured`);
+                                logger.info("tool", `${channelUpper} ${type} captured`);
                                 result = `${type} captured! Now use ${channel}_send_image to send it.`;
                             } else if (tc.name === "browser" && execResult.metadata?.image) {
                                 const imageData = execResult.metadata.image as string;
                                 if (imageData.startsWith("data:image")) {
                                     lastScreenshotBase64 = imageData.split(",")[1];
-                                    console.log(`[${channelUpper}]   📸 Browser screenshot captured`);
+                                    logger.info("tool", `${channelUpper} browser screenshot captured`);
                                     result = `Browser screenshot captured! Now use ${channel}_send_image to send it.`;
                                 } else {
                                     result = (execResult.content || execResult.error || "").slice(0, 10000);
@@ -324,7 +324,7 @@ Current time: ${now.toLocaleString()}`;
                             } else {
                                 result = (execResult.content || execResult.error || "").slice(0, 10000);
                                 isError = !execResult.success;
-                                console.log(`[${channelUpper}]   ${execResult.success ? "✅" : "❌"} ${tc.name}: ${result.slice(0, 100)}...`);
+                                logger.info("tool", `${channelUpper} ${tc.name} ${execResult.success ? 'succeeded' : 'failed'}`, { preview: result.slice(0, 100) });
 
                                 // Auto-send created files to the channel
                                 if (sendDocument && execResult.metadata?.path) {
@@ -337,11 +337,11 @@ Current time: ${now.toLocaleString()}`;
                                             if (fileStat.size < 50 * 1024 * 1024) {
                                                 const fileBuffer = await readFile(filePath);
                                                 const fileName = basename(filePath);
-                                                console.log(`[${channelUpper}]   📎 Auto-sending file: ${fileName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
+                                                logger.info("tool", `${channelUpper} auto-sending file`, { fileName, sizeKB: (fileStat.size / 1024).toFixed(1) });
                                                 await sendDocument(fileBuffer, fileName, mime, `📎 ${fileName}`);
                                             }
                                         } catch (fileErr) {
-                                            console.log(`[${channelUpper}]   ⚠️ Could not auto-send file: ${fileErr instanceof Error ? fileErr.message : String(fileErr)}`);
+                                            logger.warn("tool", `${channelUpper} could not auto-send file`, { error: fileErr instanceof Error ? fileErr.message : String(fileErr) });
                                         }
                                     }
                                 }
@@ -353,7 +353,7 @@ Current time: ${now.toLocaleString()}`;
                                 const execResult = await skillTool.execute(tc.arguments as Record<string, unknown>, context);
                                 result = (execResult.content || execResult.error || "").slice(0, 10000);
                                 isError = !execResult.success;
-                                console.log(`[${channelUpper}]   ✅ ${tc.name} (skill): ${result.slice(0, 100)}...`);
+                                logger.info("tool", `${channelUpper} ${tc.name} (skill) ${execResult.success ? 'succeeded' : 'failed'}`, { preview: result.slice(0, 100) });
                             } else {
                                 result = `Unknown tool: ${tc.name}`;
                                 isError = true;
@@ -363,7 +363,7 @@ Current time: ${now.toLocaleString()}`;
                 } catch (err) {
                     result = err instanceof Error ? err.message : String(err);
                     isError = true;
-                    console.log(`[${channelUpper}]   ❌ ${tc.name}: ${result}`);
+                    logger.error("tool", `${channelUpper} tool error: ${tc.name}`, { error: result.slice(0, 200) });
                 }
 
                 // Record tool result to transcript
@@ -431,7 +431,7 @@ Current time: ${now.toLocaleString()}`;
         return { success: true, reply };
     } catch (error) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        console.error(`[${channelUpper}] AI error: ${errMsg}`);
+        logger.error("chat", `${channelUpper} AI error`, { error: errMsg, from });
         await sendText(`Error: ${errMsg.slice(0, 200)}`);
         return { success: false, error: errMsg };
     }

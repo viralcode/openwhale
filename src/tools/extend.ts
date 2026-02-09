@@ -9,6 +9,7 @@
 import { z } from "zod";
 import { spawn } from "node:child_process";
 import cron, { type ScheduledTask } from "node-cron";
+import { logger } from "../logger.js";
 import {
     writeFileSync,
     readFileSync,
@@ -112,6 +113,7 @@ export async function triggerChannelExtensions(
     }
 
     console.log(`[Extensions] Triggering ${extensions.length} extensions for ${channel} message from ${message.from}`);
+    logger.info("extension", `Triggering ${extensions.length} extensions for ${channel}`, { from: message.from });
 
     for (const ext of extensions) {
         try {
@@ -133,6 +135,7 @@ export async function triggerChannelExtensions(
 
             if (result.success) {
                 console.log(`[Extensions] ${ext.name} executed successfully`);
+                logger.info("extension", `${ext.name} executed successfully`);
 
                 // Check if extension wants to handle this (prevent normal AI processing)
                 if (result.output.includes("[HANDLED]")) {
@@ -142,10 +145,12 @@ export async function triggerChannelExtensions(
                 responses.push({ extension: ext.name, response: result.output });
             } else {
                 console.error(`[Extensions] ${ext.name} failed: ${result.error}`);
+                logger.error("extension", `${ext.name} execution failed`, { error: result.error });
                 responses.push({ extension: ext.name, error: result.error });
             }
         } catch (err) {
             console.error(`[Extensions] Error triggering ${ext.name}:`, err);
+            logger.error("extension", `Error triggering ${ext.name}`, { error: String(err) });
             responses.push({ extension: ext.name, error: String(err) });
         }
     }
@@ -502,6 +507,7 @@ function scheduleExtension(name: string, manifest: ExtensionManifest): void {
     // Validate cron expression
     if (!cron.validate(manifest.schedule)) {
         console.error(`[Extension] Invalid cron expression for ${name}: ${manifest.schedule}`);
+        logger.error("extension", `Invalid cron expression for ${name}`, { schedule: manifest.schedule });
         return;
     }
 
@@ -513,10 +519,12 @@ function scheduleExtension(name: string, manifest: ExtensionManifest): void {
         if (!currentManifest?.enabled) return;
 
         console.log(`[Extension] Running scheduled: ${name} (timezone: ${tz})`);
+        logger.info("extension", `Running scheduled extension: ${name}`, { tz });
         try {
             await executeExtension(name);
         } catch (err) {
             console.error(`[Extension] Scheduled run failed for ${name}:`, err);
+            logger.error("extension", `Scheduled run failed: ${name}`, { error: String(err) });
         }
     }, {
         timezone: tz,
@@ -524,6 +532,7 @@ function scheduleExtension(name: string, manifest: ExtensionManifest): void {
 
     scheduledJobs.set(name, task);
     console.log(`[Extension] Scheduled ${name} with cron "${manifest.schedule}" (timezone: ${tz})`);
+    logger.info("extension", `Scheduled ${name}`, { schedule: manifest.schedule, tz });
 }
 
 /**
@@ -615,9 +624,11 @@ export async function loadAllExtensions(): Promise<void> {
         }
 
         console.log(`[Extension] Loaded: ${entry.name}${manifest.schedule ? ` (scheduled: ${manifest.schedule})` : ""}`);
+        logger.info("extension", `Loaded: ${entry.name}`, { scheduled: manifest.schedule || null });
     }
 
     console.log(`[Extension] Loaded ${loadedExtensions.size} extensions`);
+    logger.info("extension", `All extensions loaded`, { count: loadedExtensions.size });
 }
 
 /**

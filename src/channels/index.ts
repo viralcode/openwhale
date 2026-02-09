@@ -20,6 +20,7 @@ import { createIMessageAdapter } from "./imessage/adapter.js";
 import { registry } from "../providers/index.js";
 import { getCurrentModel } from "../sessions/session-service.js";
 import { processMessageWithAI } from "./shared-ai-processor.js";
+import { logger } from "../logger.js";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function initializeChannels(_db?: any, _config?: any): Promise<void> {
@@ -33,9 +34,9 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         channelRegistry.register(telegram);
         try {
             await telegram.connect();
-            console.log("[Telegram] ✓ Connected with AI processing enabled");
+            logger.info("channel", "Telegram connected with AI processing");
         } catch (err) {
-            console.error("Failed to connect Telegram:", err);
+            logger.error("channel", "Telegram connection failed", { error: String(err) });
         }
     }
 
@@ -45,9 +46,9 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         channelRegistry.register(discord);
         try {
             await discord.connect();
-            console.log("[Discord] ✓ Connected with AI processing enabled");
+            logger.info("channel", "Discord connected with AI processing");
         } catch (err) {
-            console.error("Failed to connect Discord:", err);
+            logger.error("channel", "Discord connection failed", { error: String(err) });
         }
     }
 
@@ -58,7 +59,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         try {
             await slack.connect();
         } catch (err) {
-            console.error("Failed to connect Slack:", err);
+            logger.error("channel", "Slack connection failed", { error: String(err) });
         }
     }
 
@@ -68,9 +69,9 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         channelRegistry.register(twitter);
         try {
             await twitter.connect();
-            console.log("[Twitter] ✓ Connected with AI processing enabled");
+            logger.info("channel", "Twitter connected with AI processing");
         } catch (err) {
-            console.error("Failed to connect Twitter:", err);
+            logger.error("channel", "Twitter connection failed", { error: String(err) });
         }
     }
 
@@ -80,10 +81,10 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
         channelRegistry.register(imessage);
         try {
             await imessage.connect();
-            console.log("[iMessage] ✓ Connected with AI processing enabled");
+            logger.info("channel", "iMessage connected with AI processing");
         } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
-            console.log(`📱 iMessage not available: ${errMsg}`);
+            logger.warn("channel", "iMessage not available", { error: errMsg });
         }
     }
 
@@ -105,11 +106,11 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
 
         // Only auto-connect if we have saved credentials
         if (existsSync(credsFile)) {
-            console.log("🔗 Found WhatsApp session, auto-connecting...");
+            logger.info("channel", "WhatsApp auto-connecting from saved session");
 
             // Get owner number for filtering
             const ownerNumber = (process.env.WHATSAPP_OWNER_NUMBER || "").replace(/[^0-9]/g, "");
-            console.log(`[WhatsApp] Owner number configured: ${ownerNumber || "(not set)"}`);
+            logger.info("channel", "WhatsApp owner number", { owner: ownerNumber || "(not set)" });
 
             await initWhatsApp({
                 printQR: false,
@@ -133,11 +134,11 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                         return;
                     }
 
-                    console.log(`[WhatsApp] 📱 Message from ${fromRaw} (fromMe: ${isFromMe}, owner: ${isSameAsOwner}, group: ${isGroup}): "${msg.content.slice(0, 50)}..."`);
+                    logger.info("channel", `WhatsApp message from ${fromRaw}`, { fromMe: isFromMe, owner: isSameAsOwner, group: isGroup, preview: msg.content.slice(0, 50) });
 
                     // Skip group messages
                     if (isGroup) {
-                        console.log("[WhatsApp]   ↳ Skipping group message");
+                        logger.debug("channel", "WhatsApp skipping group message", { from: fromRaw });
                         markMessageProcessed(messageId, "inbound", fromRaw);
                         return;
                     }
@@ -153,22 +154,22 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                         });
 
                         if (extResult.handled) {
-                            console.log(`[WhatsApp]   ↳ Message handled by extension(s)`);
+                            logger.info("channel", "WhatsApp message handled by extension", { from: fromRaw });
                             markMessageProcessed(messageId, "inbound", fromRaw);
-                            return; // Extension handled it, skip AI processing
+                            return;
                         }
 
                         if (extResult.responses.length > 0) {
-                            console.log(`[WhatsApp]   ↳ ${extResult.responses.length} extension(s) processed message`);
+                            logger.info("channel", `WhatsApp ${extResult.responses.length} extension(s) processed message`, { from: fromRaw });
                         }
                     } catch (extErr) {
-                        console.error("[WhatsApp] Extension error:", extErr);
+                        logger.error("extension", "WhatsApp extension error", { error: String(extErr) });
                     }
                     // ================================================================
 
                     // Only process messages from owner if configured (extensions already ran above)
                     if (ownerNumber && !isSameAsOwner) {
-                        console.log(`[WhatsApp]   ↳ Skipping AI - not from owner (${ownerNumber})`);
+                        logger.debug("channel", "WhatsApp skipping AI, not from owner", { from: fromRaw, ownerNumber });
                         markMessageProcessed(messageId, "inbound", fromRaw);
                         return;
                     }
@@ -179,7 +180,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                     // Process with AI using the unified shared processor
                     const waModel = getCurrentModel();
                     if (registry.getProvider(waModel)) {
-                        console.log("[WhatsApp]   ↳ Processing with AI...");
+                        logger.info("channel", "WhatsApp processing with AI", { from: fromRaw, model: waModel });
                         try {
                             await processMessageWithAI({
                                 channel: "whatsapp",
@@ -209,21 +210,21 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                                 isGroup,
                             });
                         } catch (error: any) {
-                            console.error(`[WhatsApp] AI error: ${error.message}`);
+                            logger.error("chat", `WhatsApp AI processing error`, { error: error.message, from: fromRaw });
                             await sendWhatsAppMessage(fromRaw, `Error: ${error.message.slice(0, 100)}`);
                         }
                     }
                 },
                 onConnected: () => {
-                    console.log("[WhatsApp] ✓ Connected with AI processing enabled");
+                    logger.info("channel", "WhatsApp connected with AI processing");
                 },
             });
         } else {
-            console.log("📱 WhatsApp not configured yet - use dashboard to connect");
+            logger.info("channel", "WhatsApp not configured, use dashboard to connect");
         }
     } catch (err) {
-        console.error("WhatsApp initialization error:", err);
+        logger.error("channel", "WhatsApp initialization failed", { error: String(err) });
     }
 
-    console.log("Connected channels:", channelRegistry.listConnected());
+    logger.info("system", "All channels initialized", { connected: channelRegistry.listConnected() });
 }

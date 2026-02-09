@@ -9,6 +9,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
 import { createInterface, type Interface } from "node:readline";
 import { EventEmitter } from "node:events";
 import os from "node:os";
+import { logger } from "../../logger.js";
 
 export type IMessageRpcError = {
     code?: number;
@@ -129,7 +130,7 @@ export class IMessageClient extends EventEmitter {
             const lines = chunk.toString().split(/\r?\n/);
             for (const line of lines) {
                 if (line.trim()) {
-                    console.error(`[iMessage] ${line.trim()}`);
+                    logger.warn("channel", `iMessage RPC stderr`, { line: line.trim() });
                 }
             }
         });
@@ -151,7 +152,7 @@ export class IMessageClient extends EventEmitter {
             this.emit("close");
         });
 
-        console.log("[iMessage] RPC client started");
+        logger.info("channel", "iMessage RPC client started", { cliPath: this.cliPath });
     }
 
     /**
@@ -182,7 +183,7 @@ export class IMessageClient extends EventEmitter {
             }),
         ]);
 
-        console.log("[iMessage] RPC client stopped");
+        logger.info("channel", "iMessage RPC client stopped");
     }
 
     /**
@@ -263,7 +264,7 @@ export class IMessageClient extends EventEmitter {
         try {
             parsed = JSON.parse(line) as IMessageRpcResponse<unknown>;
         } catch (err) {
-            console.error(`[iMessage] Failed to parse: ${line}`);
+            logger.warn("channel", "iMessage RPC failed to parse response", { line: line.slice(0, 100) });
             return;
         }
 

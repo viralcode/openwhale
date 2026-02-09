@@ -10,6 +10,7 @@ import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } fro
 import { processMessageWithAI } from "./shared-ai-processor.js";
 import { registry } from "../providers/index.js";
 import { getCurrentModel } from "../sessions/session-service.js";
+import { logger } from "../logger.js";
 
 const execAsync = promisify(exec);
 
@@ -52,7 +53,9 @@ export class TwitterAdapter implements ChannelAdapter {
         // Check if bird CLI is available
         try {
             await execAsync("which bird");
+            logger.debug("channel", "Twitter: bird CLI found");
         } catch {
+            logger.error("channel", "Twitter: bird CLI not found", { hint: "Install with: npm install -g @steipete/bird" });
             throw new Error("bird CLI not found. Install with: npm install -g @steipete/bird");
         }
 
@@ -61,14 +64,16 @@ export class TwitterAdapter implements ChannelAdapter {
             const { stdout } = await execAsync("bird whoami");
             const match = stdout.match(/@([a-zA-Z0-9_]+)/);
             this.username = match ? match[1] : "unknown";
-            console.log(`[Twitter] Authenticated as @${this.username}`);
+            logger.info("channel", `Twitter connected as @${this.username}`, { username: this.username });
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
+            logger.error("channel", "Twitter authentication failed", { error });
             throw new Error(`Twitter authentication failed. Run 'bird check' to configure. Error: ${error}`);
         }
 
         this.connected = true;
         this.startPolling();
+        logger.info("channel", `Twitter polling started`, { pollIntervalMs: this.pollIntervalMs });
     }
 
     async disconnect(): Promise<void> {
@@ -100,7 +105,7 @@ export class TwitterAdapter implements ChannelAdapter {
             }
 
             const { stdout } = await execAsync(command);
-            console.log(`[Twitter] Tweet sent: ${message.content.slice(0, 50)}...`);
+            logger.info("channel", `Twitter tweet sent`, { preview: message.content.slice(0, 80), replyTo: message.replyTo || null, hasMedia: !!message.attachments?.length });
 
             // Try to parse the tweet ID from output
             try {
@@ -111,7 +116,7 @@ export class TwitterAdapter implements ChannelAdapter {
             }
         } catch (err) {
             const error = err instanceof Error ? err.message : String(err);
-            console.error(`[Twitter] Failed to send: ${error}`);
+            logger.error("channel", `Twitter send failed`, { error, preview: message.content.slice(0, 50) });
             return { success: false, error };
         }
     }
@@ -135,7 +140,7 @@ export class TwitterAdapter implements ChannelAdapter {
 
             try {
                 // Fetch mentions
-                const { stdout } = await execAsync("bird mentions -n 10 --json");
+                const { stdout } = await execAsync(`bird mentions -n 10 --json --user @${this.username}`);
                 const mentions: BirdMention[] = JSON.parse(stdout);
 
                 for (const mention of mentions) {
@@ -150,6 +155,7 @@ export class TwitterAdapter implements ChannelAdapter {
                     }
 
                     console.log(`[Twitter] New mention from @${mention.author.username}: ${mention.text.slice(0, 50)}...`);
+                    logger.info("channel", `Twitter mention from @${mention.author.username}`, { tweetId: mention.id, author: mention.author.username, authorName: mention.author.name, preview: mention.text.slice(0, 100), isReply: !!mention.in_reply_to_tweet_id });
 
                     const incoming: IncomingMessage = {
                         id: mention.id,
@@ -206,9 +212,9 @@ export class TwitterAdapter implements ChannelAdapter {
             } catch (err) {
                 // Don't spam logs if bird isn't configured
                 if ((err as Error).message?.includes("Cookie")) {
-                    console.error("[Twitter] Cookie authentication required. Run 'bird check' to configure.");
+                    logger.error("channel", "Twitter cookie authentication required", { hint: "Run 'bird check' to configure" });
                 } else {
-                    console.error("[Twitter] Polling error:", (err as Error).message);
+                    logger.error("channel", "Twitter polling error", { error: (err as Error).message });
                 }
             }
 

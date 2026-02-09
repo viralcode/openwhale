@@ -11,6 +11,7 @@ import {
     getLoadedExtensions,
     getExtensionsDir
 } from "./extend.js";
+import { logger } from "../logger.js";
 
 /**
  * Send notification through a channel
@@ -18,6 +19,7 @@ import {
  */
 async function sendNotification(channel: string, message: string): Promise<void> {
     console.log(`[Extension] Sending notification to ${channel}: ${message.slice(0, 50)}...`);
+    logger.info("extension", `Sending notification to ${channel}`, { preview: message.slice(0, 50) });
 
     if (channel === "whatsapp") {
         try {
@@ -40,11 +42,14 @@ async function sendNotification(channel: string, message: string): Promise<void>
 
             if (result.success) {
                 console.log(`[Extension] ✅ Sent to WhatsApp: ${message.slice(0, 50)}...`);
+                logger.info("extension", "WhatsApp notification sent", { preview: message.slice(0, 50) });
             } else {
                 console.error(`[Extension] ❌ WhatsApp send failed: ${result.error}`);
+                logger.error("extension", "WhatsApp notification failed", { error: result.error });
             }
         } catch (err) {
             console.error(`[Extension] Failed to send WhatsApp notification:`, err);
+            logger.error("extension", "WhatsApp notification error", { error: String(err) });
         }
     } else {
         // For other channels, log for now (can extend to Telegram, Discord, etc.)
@@ -58,6 +63,7 @@ async function sendNotification(channel: string, message: string): Promise<void>
  */
 export async function initializeExtensionLoader(): Promise<void> {
     console.log(`[Extension] Initializing extension loader...`);
+    logger.info("extension", "Initializing extension loader", { dir: getExtensionsDir() });
     console.log(`[Extension] Extensions directory: ${getExtensionsDir()}`);
 
     // Set up notification callback

@@ -3,6 +3,7 @@
  */
 
 import type { AIProvider } from "../providers/index.js";
+import { logger } from "../logger.js";
 
 export interface FailoverConfig {
     providers: string[];  // Ordered list of provider names
@@ -72,6 +73,7 @@ export function recordFailure(error: Error): boolean {
 function switchToNextProvider(): boolean {
     if (currentProviderIndex >= currentConfig.providers.length - 1) {
         console.error("[Failover] All providers exhausted!");
+        logger.error("provider", "All failover providers exhausted");
         return false;
     }
 
@@ -80,6 +82,7 @@ function switchToNextProvider(): boolean {
 
     const newProvider = currentConfig.providers[currentProviderIndex];
     console.log(`[Failover] Switching to provider: ${newProvider}`);
+    logger.warn("provider", `Failover: switching to ${newProvider}`, { index: currentProviderIndex });
 
     return true;
 }
@@ -98,6 +101,7 @@ export function resetToPrimary(): void {
     currentProviderIndex = 0;
     consecutiveFailures = 0;
     console.log(`[Failover] Reset to primary: ${currentConfig.providers[0]}`);
+    logger.info("provider", `Failover reset to primary: ${currentConfig.providers[0]}`);
 }
 
 /**
@@ -146,6 +150,7 @@ export async function withFailover<T>(
 
         if (!provider) {
             console.warn(`[Failover] Provider not found: ${providerName}`);
+            logger.warn("provider", `Failover: provider not found: ${providerName}`);
             switchToNextProvider();
             continue;
         }
@@ -157,6 +162,7 @@ export async function withFailover<T>(
         } catch (err) {
             lastError = err as Error;
             console.error(`[Failover] ${providerName} failed:`, lastError.message);
+            logger.error("provider", `Failover: ${providerName} failed`, { error: lastError.message });
 
             const switched = recordFailure(lastError);
             if (!switched) {

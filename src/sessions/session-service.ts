@@ -66,6 +66,7 @@ export interface ChatEvent {
 }
 
 import { db } from "../db/index.js";
+import { logger } from "../logger.js";
 
 // ============== SINGLETON STATE ==============
 
@@ -85,6 +86,11 @@ function getEffectiveModelFromDB(): string {
 }
 
 let currentModel = getEffectiveModelFromDB();
+if (currentModel) {
+    logger.info("session", `Initialized with model from DB: ${currentModel}`);
+} else {
+    logger.warn("session", "No model configured in DB — currentModel is empty");
+}
 
 // Dashboard-specific message store (with tool call info)
 // Uses in-memory cache + SQLite persistence
@@ -174,6 +180,7 @@ export function initializeProvider(_apiKey: string, model?: string): void {
 }
 
 export function setModel(model: string): void {
+    logger.info("session", `Model switched to: ${model}`);
     currentModel = model;
 }
 

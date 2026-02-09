@@ -1,5 +1,6 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } from "./base.js";
 import { randomBytes } from "node:crypto";
+import { logger } from "../logger.js";
 
 type MessageHandler = (message: IncomingMessage) => void;
 
@@ -21,10 +22,11 @@ export class WebAdapter implements ChannelAdapter {
 
     async connect(): Promise<void> {
         this.connected = true;
-        console.log("Web adapter ready");
+        logger.info("channel", "Web adapter ready");
     }
 
     async disconnect(): Promise<void> {
+        logger.info("channel", "Web adapter disconnected", { clientCount: this.clients.size });
         this.connected = false;
         this.clients.clear();
     }
@@ -58,10 +60,12 @@ export class WebAdapter implements ChannelAdapter {
     // Called when a web client connects
     registerClient(clientId: string, sendFn: (data: string) => void): void {
         this.clients.set(clientId, { id: clientId, send: sendFn });
+        logger.info("channel", `Web client connected`, { clientId, totalClients: this.clients.size });
     }
 
     unregisterClient(clientId: string): void {
         this.clients.delete(clientId);
+        logger.info("channel", `Web client disconnected`, { clientId, totalClients: this.clients.size });
     }
 
     // Called when receiving a message from a web client

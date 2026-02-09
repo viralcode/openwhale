@@ -20,6 +20,7 @@ import { toolRegistry } from "./tools/index.js";
 import { registerAllSkills, skillRegistry } from "./skills/index.js";
 import { apiRateLimiter, authRateLimiter } from "./security/rate-limit.js";
 import { initializeExtensionLoader } from "./tools/extension-loader.js";
+import { logger as fileLogger } from "./logger.js";
 
 const log = createLogger("main");
 
@@ -128,6 +129,7 @@ async function main() {
 
 main().catch((err) => {
     console.error("Fatal error:", err);
+    fileLogger.error("system", "Fatal startup error", { error: String(err) });
     process.exit(1);
 });
 

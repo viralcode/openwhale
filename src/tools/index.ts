@@ -32,6 +32,7 @@ import { dockerTool } from "./docker.js";
 import { sshTool } from "./ssh.js";
 import { dbQueryTool } from "./db-query.js";
 import { slidesTool } from "./slides.js";
+import { logsTool } from "./logs.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -72,6 +73,7 @@ toolRegistry.register(dockerTool);
 toolRegistry.register(sshTool);
 toolRegistry.register(dbQueryTool);
 toolRegistry.register(slidesTool);
+toolRegistry.register(logsTool);
 
 export { toolRegistry } from "./base.js";
 export type { AgentTool, ToolCallContext, ToolResult, ToolRegistry } from "./base.js";
@@ -106,4 +108,5 @@ export { dockerTool } from "./docker.js";
 export { sshTool } from "./ssh.js";
 export { dbQueryTool } from "./db-query.js";
 export { slidesTool } from "./slides.js";
+export { logsTool } from "./logs.js";
 

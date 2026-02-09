@@ -25,6 +25,7 @@ import { googleTasksSkill } from "../integrations/google/tasks.js";
 import { loadAllMarkdownSkills } from "./markdown-loader.js";
 
 import { skillRegistry } from "./base.js";
+import { logger } from "../logger.js";
 
 /**
  * Register all available skills
@@ -59,12 +60,15 @@ export async function registerAllSkills(): Promise<void> {
         }
         if (markdownSkills.length > 0) {
             console.log(`[Skills] Loaded ${markdownSkills.length} markdown skills`);
+            logger.info("system", `Loaded ${markdownSkills.length} markdown skills`);
         }
     } catch (err) {
         console.error("[Skills] Failed to load markdown skills:", err);
+        logger.error("system", "Failed to load markdown skills", { error: String(err) });
     }
 
     console.log(`[Skills] Registered ${skillRegistry.list().length} skills`);
+    logger.info("system", `Registered ${skillRegistry.list().length} skills`);
 }
 
 /**

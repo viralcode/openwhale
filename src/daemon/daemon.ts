@@ -21,6 +21,7 @@ import { registry } from "../providers/index.js";
 import { getCurrentModel } from "../sessions/session-service.js";
 import { isMessageProcessed, markMessageProcessed } from "../db/message-dedupe.js";
 import { isCommand, processCommand } from "./chat-commands.js";
+import { logger } from "../logger.js";
 
 export type DaemonConfig = {
     socketPath: string;
@@ -116,6 +117,7 @@ export class OpenWhaleDaemon extends EventEmitter {
             const provider = registry.getProvider(getCurrentModel());
             if (provider) {
                 console.log("[DAEMON] ✓ AI provider available via registry");
+                logger.info("system", "AI provider available via registry");
             }
         }
 
@@ -126,6 +128,7 @@ export class OpenWhaleDaemon extends EventEmitter {
             this.socketServer!.on("error", reject);
         });
         console.log(`[DAEMON] ✓ IPC socket: ${this.config.socketPath}`);
+        logger.info("system", `IPC socket listening`, { path: this.config.socketPath });
 
         // Start Dashboard HTTP server
         if (this.config.enableDashboard) {
@@ -151,6 +154,7 @@ export class OpenWhaleDaemon extends EventEmitter {
         });
 
         console.log(`[DAEMON] ✓ Started (PID: ${process.pid})`);
+        logger.info("system", `Daemon started`, { pid: process.pid });
         this.emit("started");
     }
 
@@ -166,8 +170,10 @@ export class OpenWhaleDaemon extends EventEmitter {
         try {
             await startServer(this.config.httpPort);
             console.log(`[DAEMON] ✓ Dashboard: http://localhost:${this.config.httpPort}`);
+            logger.info("dashboard", `Dashboard started`, { port: this.config.httpPort });
         } catch (err) {
             console.error("[DAEMON] Dashboard failed to start:", err);
+            logger.error("dashboard", "Dashboard failed to start", { error: String(err) });
         }
     }
 
@@ -176,6 +182,7 @@ export class OpenWhaleDaemon extends EventEmitter {
      */
     private async startWhatsApp(): Promise<void> {
         console.log("[DAEMON] Connecting WhatsApp...");
+        logger.info("channel", "Connecting WhatsApp");
 
         // Get owner number (strip non-digits)
         const ownerNumber = (process.env.WHATSAPP_OWNER_NUMBER || "").replace(/[^0-9]/g, "");
@@ -212,6 +219,7 @@ export class OpenWhaleDaemon extends EventEmitter {
                 }
 
                 console.log(`[DAEMON] 📱 Message from ${fromRaw} (fromMe: ${isFromMe}, owner: ${isSameAsOwner}, group: ${isGroup}): "${msg.content.slice(0, 50)}..."`);
+                logger.info("channel", `WhatsApp message from ${fromRaw}`, { fromMe: isFromMe, owner: isSameAsOwner, group: isGroup });
 
                 // Skip group messages
                 if (isGroup) {
@@ -265,6 +273,7 @@ export class OpenWhaleDaemon extends EventEmitter {
             },
             onConnected: () => {
                 console.log("[DAEMON] ✓ WhatsApp connected");
+                logger.info("channel", "WhatsApp connected");
             },
         });
     }
@@ -412,6 +421,7 @@ export class OpenWhaleDaemon extends EventEmitter {
 
     async stop(): Promise<void> {
         console.log("[DAEMON] Stopping...");
+        logger.info("system", "Daemon stopping");
 
         for (const handler of this.shutdownHandlers) {
             try { await handler(); } catch (err) { console.error("[DAEMON] Shutdown error:", err); }
@@ -435,6 +445,7 @@ export class OpenWhaleDaemon extends EventEmitter {
 
         logAuditEvent({ type: "auth_event", result: "success", reason: "Daemon stopped" });
         console.log("[DAEMON] Stopped");
+        logger.info("system", "Daemon stopped");
         this.emit("stopped");
     }
 

@@ -11,6 +11,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import { createSkill, type Skill, type SkillTool } from "./base.js";
 import type { ToolResult } from "../tools/base.js";
+import { logger } from "../logger.js";
 
 const execAsync = promisify(exec);
 
@@ -240,6 +241,7 @@ export function loadMarkdownSkill(filePath: string): ParsedMarkdownSkill | null 
         };
     } catch (err) {
         console.error(`[MarkdownSkill] Failed to load ${filePath}:`, err);
+        logger.error("system", `Failed to load markdown skill: ${filePath}`, { error: String(err) });
         return null;
     }
 }
@@ -378,9 +380,11 @@ export async function loadAllMarkdownSkills(): Promise<Skill[]> {
     const userSkillsDir = path.join(homeDir, ".openwhale", "skills");
 
     console.log(`[MarkdownSkill] Loading skills from ${userSkillsDir}`);
+    logger.info("system", `Loading markdown skills from ${userSkillsDir}`);
 
     const parsedSkills = loadMarkdownSkillsFromDir(userSkillsDir);
     console.log(`[MarkdownSkill] Found ${parsedSkills.length} markdown skills`);
+    logger.info("system", `Found ${parsedSkills.length} markdown skills`);
 
     const skills: Skill[] = [];
     for (const parsed of parsedSkills) {
@@ -431,5 +435,6 @@ export async function reloadMarkdownSkills(): Promise<Skill[]> {
     }
 
     console.log(`[MarkdownSkill] Hot-reloaded ${skills.length} markdown skills`);
+    logger.info("system", `Hot-reloaded ${skills.length} markdown skills`);
     return skills;
 }

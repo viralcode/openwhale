@@ -8,6 +8,7 @@ import { registry } from "./base.js";
 import { createAnthropicProvider } from "./anthropic.js";
 import { createOpenAIProvider, createDeepSeekProvider, createGroqProvider, createTogetherProvider, createOllamaProvider, createQwenProvider } from "./openai-compatible.js";
 import { createGoogleProvider } from "./google.js";
+import { logger } from "../logger.js";
 
 export function initializeProviders(): void {
     // Anthropic
@@ -15,6 +16,7 @@ export function initializeProviders(): void {
     if (anthropic) {
         registry.register("anthropic", anthropic);
         console.log("✓ Anthropic provider registered");
+        logger.info("provider", "Anthropic provider registered");
     }
 
     // OpenAI
@@ -22,6 +24,7 @@ export function initializeProviders(): void {
     if (openai) {
         registry.register("openai", openai);
         console.log("✓ OpenAI provider registered");
+        logger.info("provider", "OpenAI provider registered");
     }
 
     // Google/Gemini
@@ -29,6 +32,7 @@ export function initializeProviders(): void {
     if (google) {
         registry.register("google", google);
         console.log("✓ Google/Gemini provider registered");
+        logger.info("provider", "Google/Gemini provider registered");
     }
 
     // DeepSeek
@@ -36,6 +40,7 @@ export function initializeProviders(): void {
     if (deepseek) {
         registry.register("deepseek", deepseek);
         console.log("✓ DeepSeek provider registered");
+        logger.info("provider", "DeepSeek provider registered");
     }
 
     // Groq
@@ -43,6 +48,7 @@ export function initializeProviders(): void {
     if (groq) {
         registry.register("groq", groq);
         console.log("✓ Groq provider registered");
+        logger.info("provider", "Groq provider registered");
     }
 
     // Together AI
@@ -50,6 +56,7 @@ export function initializeProviders(): void {
     if (together) {
         registry.register("together", together);
         console.log("✓ Together AI provider registered");
+        logger.info("provider", "Together AI provider registered");
     }
 
     // Ollama (local)
@@ -57,6 +64,7 @@ export function initializeProviders(): void {
     if (ollama) {
         registry.register("ollama", ollama);
         console.log("✓ Ollama provider registered");
+        logger.info("provider", "Ollama provider registered");
     }
 
     // Qwen (Alibaba DashScope)
@@ -64,10 +72,12 @@ export function initializeProviders(): void {
     if (qwen) {
         registry.register("qwen", qwen);
         console.log("✓ Qwen provider registered");
+        logger.info("provider", "Qwen provider registered");
     }
 
     // Set fallback order
     registry.setFallbackOrder(["anthropic", "openai", "google", "qwen", "deepseek", "groq", "together", "ollama"]);
 
     console.log(`Providers initialized: ${registry.listProviders().length} available`);
+    logger.info("provider", `Providers initialized: ${registry.listProviders().length} available`, { providers: registry.listProviders() });
 }

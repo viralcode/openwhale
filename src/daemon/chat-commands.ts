@@ -13,6 +13,7 @@
  */
 
 import { getCurrentModel } from "../sessions/session-service.js";
+import { logger } from "../logger.js";
 
 export interface SessionSettings {
     thinkingLevel: "off" | "low" | "medium" | "high";
@@ -58,6 +59,7 @@ export function resetSession(userId: string): void {
         messageCount: 0,
         sessionStart: new Date(),
     });
+    logger.info("chat", `Session reset for user ${userId}`);
 }
 
 /**

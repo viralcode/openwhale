@@ -18,6 +18,7 @@ import { join } from "node:path";
 import qrcode from "qrcode-terminal";
 import pino from "pino";
 import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } from "./base.js";
+import { logger as owLogger } from "../logger.js";
 
 // Suppress most Baileys logs
 const logger = pino({ level: "silent" });
@@ -50,12 +51,12 @@ export async function initWhatsApp(options: {
     onMessage?: (msg: IncomingMessage) => void;
 } = {}): Promise<WASocket | null> {
     if (isConnecting) {
-        console.log("[WhatsApp] Already connecting...");
+        owLogger.debug("channel", "WhatsApp already connecting, skipping");
         return null;
     }
 
     if (waSocket && isConnected) {
-        console.log("[WhatsApp] Already connected");
+        owLogger.debug("channel", "WhatsApp already connected");
         return waSocket;
     }
 
@@ -72,7 +73,7 @@ export async function initWhatsApp(options: {
         const { state, saveCreds } = await useMultiFileAuthState(AUTH_DIR);
         const { version } = await fetchLatestBaileysVersion();
 
-        console.log("[WhatsApp] Connecting with Baileys version", version.join("."));
+        owLogger.info("channel", "WhatsApp connecting", { baileysVersion: version.join(".") });
 
         // Create socket
         waSocket = makeWASocket({
@@ -105,6 +106,7 @@ export async function initWhatsApp(options: {
                     console.log("\n📱 Scan this QR code in WhatsApp (Linked Devices):\n");
                     qrcode.generate(qr, { small: true });
                     qrDisplayed = true;
+                    owLogger.info("channel", "WhatsApp QR code displayed for scanning");
                 }
             }
 
@@ -113,6 +115,7 @@ export async function initWhatsApp(options: {
                 isConnected = true;
                 isConnecting = false;
                 currentQRCode = null; // Clear QR when connected
+                owLogger.info("channel", "WhatsApp connected successfully");
                 console.log("\n✅ WhatsApp connected successfully!");
                 options.onConnected?.();
             }
@@ -124,15 +127,16 @@ export async function initWhatsApp(options: {
                     ? "Logged out"
                     : `Disconnected (code: ${reason})`;
 
-                console.log(`[WhatsApp] ${reasonText}`);
+                owLogger.warn("channel", `WhatsApp ${reasonText}`, { reason, willReconnect: reason !== DisconnectReason.loggedOut });
                 options.onDisconnected?.(reasonText);
 
                 // Reconnect unless logged out
                 if (reason !== DisconnectReason.loggedOut) {
-                    console.log("[WhatsApp] Reconnecting...");
+                    owLogger.info("channel", "WhatsApp reconnecting");
                     isConnecting = false;
                     initWhatsApp(options);
                 } else {
+                    owLogger.warn("channel", "WhatsApp logged out, re-authentication needed", { hint: "Run: openwhale whatsapp login" });
                     console.log("[WhatsApp] Please re-authenticate by running: openwhale whatsapp login");
                     waSocket = null;
                 }
@@ -157,7 +161,7 @@ export async function initWhatsApp(options: {
 
                     // Use SQLite to check if already processed (prevents infinite loops)
                     if (isMessageProcessed(messageId)) {
-                        console.log(`[WhatsApp] Skipping already processed message: ${messageId}`);
+                        owLogger.debug("channel", "WhatsApp skipping already processed message", { messageId });
                         continue;
                     }
 
@@ -166,7 +170,7 @@ export async function initWhatsApp(options: {
                         ? msg.messageTimestamp
                         : Number(msg.messageTimestamp) || Date.now() / 1000;
 
-                    console.log(`[WhatsApp] Message received - from: ${from}, fromMe: ${msg.key.fromMe}, text: "${text.slice(0, 30)}..."`);
+                    owLogger.info("channel", `WhatsApp message received`, { from, fromMe: msg.key.fromMe, messageId, preview: text.slice(0, 60), pushName: msg.pushName || null });
 
                     // Save incoming message to database (marks as processed)
                     markMessageProcessed(messageId, msg.key.fromMe ? "outbound" : "inbound", from, {
@@ -194,7 +198,7 @@ export async function initWhatsApp(options: {
 
         return waSocket;
     } catch (error: any) {
-        console.error("[WhatsApp] Connection error:", error.message);
+        owLogger.error("channel", "WhatsApp connection error", { error: error.message });
         isConnecting = false;
         return null;
     }
@@ -231,16 +235,16 @@ export async function sendWhatsAppMessage(
 
         // Debug: log what type of message we're sending
         const hasImage = 'image' in payload;
-        console.log(`[WhatsApp] Sending message to ${jid}, type: ${hasImage ? 'IMAGE' : 'TEXT'}`);
+        owLogger.info("channel", `WhatsApp sending ${hasImage ? 'image' : 'text'} message`, { to: jid, type: hasImage ? 'IMAGE' : 'TEXT' });
         if (hasImage) {
             const imgPayload = payload as { image: Buffer; caption?: string };
-            console.log(`[WhatsApp]   Image buffer size: ${imgPayload.image?.length || 0} bytes`);
+            owLogger.debug("channel", "WhatsApp image payload", { sizeBytes: imgPayload.image?.length || 0 });
         }
 
         const result = await waSocket.sendMessage(jid, payload);
         const messageId = result?.key?.id;
 
-        console.log(`[WhatsApp] Message sent successfully, ID: ${messageId}`);
+        owLogger.info("channel", "WhatsApp message sent", { messageId, to: jid });
 
         // CRITICAL: Mark outbound message as processed IMMEDIATELY
         // This prevents the loop when WhatsApp echoes it back to us
@@ -250,7 +254,7 @@ export async function sendWhatsAppMessage(
                 to: to.replace(/[^0-9]/g, ""),
                 content: msgContent,
             });
-            console.log(`[WhatsApp] Saved outbound message: ${messageId}`);
+            owLogger.debug("channel", "WhatsApp outbound message saved", { messageId, to: to.replace(/[^0-9]/g, "") });
         }
 
         return {
@@ -258,8 +262,7 @@ export async function sendWhatsAppMessage(
             messageId: messageId || "unknown"
         };
     } catch (error: any) {
-        console.error(`[WhatsApp] Send error: ${error.message}`);
-        console.error(error.stack);
+        owLogger.error("channel", "WhatsApp send error", { error: error.message, to, stack: error.stack?.split("\n").slice(0, 3).join(" | ") });
         return {
             success: false,
             error: error.message

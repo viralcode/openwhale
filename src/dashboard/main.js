@@ -156,7 +156,16 @@ let state = {
   isListening: false,
   isSpeaking: false,
   voiceRecognition: null,
-  voiceAudio: null
+  voiceAudio: null,
+  // Logs page
+  logs: [],
+  logsTotal: 0,
+  logsPage: 0,
+  logsLogPath: '',
+  logsLoading: false,
+  logsFilter: { level: '', category: '', startDate: '', endDate: '', search: '' },
+  logsStreamActive: false,
+  logsEventSource: null,
 };
 
 // ============================================
@@ -459,6 +468,9 @@ async function checkSetupStatus() {
 }
 
 async function loadData() {
+  // Disconnect log stream when leaving logs page
+  if (state.view !== 'logs') disconnectLogStream();
+
   switch (state.view) {
     case 'chat':
       await loadMessages();
@@ -482,6 +494,10 @@ async function loadData() {
     case 'settings':
       await loadProviders();
       await loadUsers();
+      break;
+    case 'logs':
+      await loadLogs();
+      connectLogStream();
       break;
     case 'overview':
       await loadStats();
@@ -580,6 +596,131 @@ async function loadUsers() {
   } catch (e) {
     console.error('Failed to load users:', e);
   }
+}
+
+async function loadLogs() {
+  state.logsLoading = true;
+  try {
+    const f = state.logsFilter;
+    const params = new URLSearchParams();
+    params.set('page', String(state.logsPage));
+    params.set('limit', '100');
+    if (f.level) params.set('level', f.level);
+    if (f.category) params.set('category', f.category);
+    if (f.startDate) params.set('startDate', f.startDate);
+    if (f.endDate) params.set('endDate', f.endDate);
+    if (f.search) params.set('search', f.search);
+
+    const data = await api('/logs?' + params.toString());
+    state.logs = data.entries || [];
+    state.logsTotal = data.total || 0;
+    state.logsLogPath = data.logPath || '';
+  } catch (e) {
+    console.error('Failed to load logs:', e);
+    state.logs = [];
+  }
+  state.logsLoading = false;
+}
+
+// Real-time log streaming
+function connectLogStream() {
+  disconnectLogStream();
+  try {
+    const es = new EventSource('/dashboard/api/logs/stream');
+    state.logsEventSource = es;
+
+    es.onmessage = (event) => {
+      try {
+        const entry = JSON.parse(event.data);
+        // Skip the initial "connected" message
+        if (entry.event === 'connected') {
+          state.logsStreamActive = true;
+          updateLiveIndicator();
+          return;
+        }
+        // Only prepend if we're on the logs page and on page 0 (latest)
+        if (state.view === 'logs' && state.logsPage === 0 && entry.timestamp) {
+          state.logs.unshift(entry);
+          state.logsTotal++;
+          // Limit displayed entries to 100
+          if (state.logs.length > 100) state.logs.pop();
+          // Update the table without full re-render
+          prependLogEntry(entry);
+        }
+      } catch { /* skip non-JSON */ }
+    };
+
+    es.onerror = () => {
+      state.logsStreamActive = false;
+      updateLiveIndicator();
+      // Auto-reconnect after 3s
+      setTimeout(() => {
+        if (state.view === 'logs') connectLogStream();
+      }, 3000);
+    };
+  } catch (e) {
+    console.error('Failed to connect log stream:', e);
+  }
+}
+
+function disconnectLogStream() {
+  if (state.logsEventSource) {
+    state.logsEventSource.close();
+    state.logsEventSource = null;
+  }
+  state.logsStreamActive = false;
+}
+
+function updateLiveIndicator() {
+  const el = document.getElementById('live-indicator');
+  if (el) {
+    el.style.display = state.logsStreamActive ? 'inline-flex' : 'none';
+  }
+}
+
+function prependLogEntry(entry) {
+  const tbody = document.querySelector('#logs-tbody');
+  if (!tbody) return;
+
+  const levelColors = { DEBUG: '#6b7280', INFO: '#3b82f6', WARN: '#f59e0b', ERROR: '#ef4444' };
+  const categoryIcons = { chat: 'messageSquare', channel: 'radio', provider: 'bot', tool: 'zap', session: 'settings', dashboard: 'layoutDashboard', system: 'globe', cron: 'clock', extension: 'puzzle', auth: 'shield' };
+
+  const ts = new Date(entry.timestamp);
+  const timeStr = ts.toLocaleDateString() + ' ' + ts.toLocaleTimeString();
+  const levelColor = levelColors[entry.level] || '#6b7280';
+  const catIcon = categoryIcons[entry.category] || 'fileText';
+  const hasData = entry.data && Object.keys(entry.data).length > 0;
+
+  const tr = document.createElement('tr');
+  tr.style.cssText = 'border-bottom: 1px solid var(--border-color); animation: logFadeIn 0.3s ease;';
+  tr.innerHTML = `
+    <td style="padding: 8px 12px; color: var(--text-muted); font-family: monospace; font-size: 12px; white-space: nowrap;">${timeStr}</td>
+    <td style="padding: 8px; text-align: center;">
+      <span style="display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: white; background: ${levelColor};">${entry.level}</span>
+    </td>
+    <td style="padding: 8px; color: var(--text-secondary);">
+      <span style="display: flex; align-items: center; gap: 4px;">${icon(catIcon, 14)} ${entry.category}</span>
+    </td>
+    <td style="padding: 8px 12px; color: var(--text-primary); word-break: break-word;">
+      ${entry.message}
+      ${hasData ? '<span style="color: var(--text-muted); font-size: 11px; margin-left: 6px;">▸ details</span>' : ''}
+    </td>
+  `;
+
+  // Flash effect
+  tr.style.background = 'rgba(59, 130, 246, 0.08)';
+  setTimeout(() => { tr.style.background = 'transparent'; tr.style.transition = 'background 1s'; }, 100);
+
+  tbody.insertBefore(tr, tbody.firstChild);
+
+  // Remove excess rows
+  while (tbody.children.length > 100) {
+    tbody.removeChild(tbody.lastChild);
+  }
+
+  // Update entry count
+  const countEl = document.getElementById('log-entry-count');
+  if (countEl) countEl.textContent = `${state.logsTotal.toLocaleString()} entries`;
 }
 
 // Chat Functions
@@ -1979,6 +2120,7 @@ function renderSidebar() {
     { id: 'skills', iconName: 'sparkles', label: 'Skills' },
     { id: 'tools', iconName: 'zap', label: 'Tools' },
     { id: 'extensions', iconName: 'puzzle', label: 'Extensions' },
+    { id: 'logs', iconName: 'fileText', label: 'Logs' },
     { id: 'settings', iconName: 'settings', label: 'Settings' },
   ];
 
@@ -2044,6 +2186,7 @@ function renderContent() {
     case 'skills': return renderSkills();
     case 'tools': return renderTools();
     case 'extensions': return renderExtensions();
+    case 'logs': return renderLogs();
     case 'settings': return renderSettings();
     default: return renderChat();
   }
@@ -3204,6 +3347,153 @@ function renderExtensions() {
   `;
 }
 
+function renderLogs() {
+  const f = state.logsFilter;
+  const totalPages = Math.ceil(state.logsTotal / 100);
+  const levelColors = { DEBUG: '#6b7280', INFO: '#3b82f6', WARN: '#f59e0b', ERROR: '#ef4444' };
+  const categoryIcons = { chat: 'messageSquare', channel: 'radio', provider: 'bot', tool: 'zap', session: 'settings', dashboard: 'layoutDashboard', system: 'globe', cron: 'clock', extension: 'puzzle', auth: 'shield' };
+
+  return `
+    <div class="page-header" style="margin-bottom: 20px;">
+      <h2 style="font-size: 20px; font-weight: 600;">System Logs</h2>
+      <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">
+        ${state.logsLogPath ? `Log file: <code style="background: var(--bg-tertiary); padding: 2px 6px; border-radius: 4px; font-size: 12px;">${state.logsLogPath}</code>` : 'No log file configured'}
+        ${state.logsTotal > 0 ? ` · <span id="log-entry-count">${state.logsTotal.toLocaleString()} entries</span>` : ''}
+        <span id="live-indicator" style="display: ${state.logsStreamActive ? 'inline-flex' : 'none'}; align-items: center; gap: 5px; margin-left: 10px; padding: 3px 10px; border-radius: 12px; background: rgba(34, 197, 94, 0.12); color: #22c55e; font-size: 12px; font-weight: 600;">
+          <span style="width: 7px; height: 7px; border-radius: 50%; background: #22c55e; animation: livePulse 1.5s ease-in-out infinite;"></span>
+          Live
+        </span>
+      </p>
+    </div>
+
+    <!-- Filter Bar -->
+    <div class="card" style="margin-bottom: 16px;">
+      <div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end;">
+        <div style="flex: 1; min-width: 180px;">
+          <label class="form-label" style="font-size: 12px;">Search</label>
+          <input type="text" class="form-input" placeholder="Search messages..." id="log-search" value="${f.search}" onkeydown="if(event.key==='Enter')applyLogFilters()">
+        </div>
+        <div style="min-width: 120px;">
+          <label class="form-label" style="font-size: 12px;">Level</label>
+          <select class="form-input" id="log-level" onchange="applyLogFilters()">
+            <option value="">All Levels</option>
+            <option value="DEBUG" ${f.level === 'DEBUG' ? 'selected' : ''}>Debug</option>
+            <option value="INFO" ${f.level === 'INFO' ? 'selected' : ''}>Info</option>
+            <option value="WARN" ${f.level === 'WARN' ? 'selected' : ''}>Warn</option>
+            <option value="ERROR" ${f.level === 'ERROR' ? 'selected' : ''}>Error</option>
+          </select>
+        </div>
+        <div style="min-width: 140px;">
+          <label class="form-label" style="font-size: 12px;">Category</label>
+          <select class="form-input" id="log-category" onchange="applyLogFilters()">
+            <option value="">All Categories</option>
+            <option value="chat" ${f.category === 'chat' ? 'selected' : ''}>Chat</option>
+            <option value="channel" ${f.category === 'channel' ? 'selected' : ''}>Channel</option>
+            <option value="provider" ${f.category === 'provider' ? 'selected' : ''}>Provider</option>
+            <option value="tool" ${f.category === 'tool' ? 'selected' : ''}>Tool</option>
+            <option value="session" ${f.category === 'session' ? 'selected' : ''}>Session</option>
+            <option value="dashboard" ${f.category === 'dashboard' ? 'selected' : ''}>Dashboard</option>
+            <option value="system" ${f.category === 'system' ? 'selected' : ''}>System</option>
+            <option value="cron" ${f.category === 'cron' ? 'selected' : ''}>Cron</option>
+            <option value="extension" ${f.category === 'extension' ? 'selected' : ''}>Extension</option>
+            <option value="auth" ${f.category === 'auth' ? 'selected' : ''}>Auth</option>
+          </select>
+        </div>
+        <div style="min-width: 140px;">
+          <label class="form-label" style="font-size: 12px;">Start Date</label>
+          <input type="date" class="form-input" id="log-start-date" value="${f.startDate}" onchange="applyLogFilters()">
+        </div>
+        <div style="min-width: 140px;">
+          <label class="form-label" style="font-size: 12px;">End Date</label>
+          <input type="date" class="form-input" id="log-end-date" value="${f.endDate}" onchange="applyLogFilters()">
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary btn-sm" onclick="applyLogFilters()" style="height: 36px;">
+            ${icon('search', 14)} Search
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="clearLogFilters()" style="height: 36px;">
+            Clear
+          </button>
+          <button class="btn btn-ghost btn-sm" onclick="refreshLogs()" style="height: 36px;" title="Refresh">
+            ${icon('refresh', 14)}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Log Entries -->
+    <div class="card" style="padding: 0; overflow: hidden;">
+      ${state.logsLoading ? `
+        <div style="text-align: center; padding: 40px; color: var(--text-muted);">Loading logs...</div>
+      ` : state.logs.length === 0 ? `
+        <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+          ${icon('fileText', 32)}<br><br>
+          No log entries found${f.search || f.level || f.category || f.startDate || f.endDate ? ' matching your filters' : ''}
+        </div>
+      ` : `
+        <div style="overflow-x: auto;">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+            <thead>
+              <tr style="background: var(--bg-tertiary); border-bottom: 1px solid var(--border-color);">
+                <th style="padding: 10px 12px; text-align: left; font-weight: 600; color: var(--text-secondary); width: 170px;">Timestamp</th>
+                <th style="padding: 10px 8px; text-align: center; font-weight: 600; color: var(--text-secondary); width: 70px;">Level</th>
+                <th style="padding: 10px 8px; text-align: left; font-weight: 600; color: var(--text-secondary); width: 100px;">Category</th>
+                <th style="padding: 10px 12px; text-align: left; font-weight: 600; color: var(--text-secondary);">Message</th>
+              </tr>
+            </thead>
+            <tbody id="logs-tbody">
+              ${state.logs.map((entry, i) => {
+    const ts = new Date(entry.timestamp);
+    const timeStr = ts.toLocaleDateString() + ' ' + ts.toLocaleTimeString();
+    const levelColor = levelColors[entry.level] || '#6b7280';
+    const catIcon = categoryIcons[entry.category] || 'fileText';
+    const hasData = entry.data && Object.keys(entry.data).length > 0;
+    return `
+                  <tr style="border-bottom: 1px solid var(--border-color); transition: background 0.15s;"
+                      onmouseover="this.style.background='var(--bg-tertiary)'" onmouseout="this.style.background='transparent'"
+                      ${hasData ? `onclick="toggleLogDetail(${i})" style="cursor: pointer; border-bottom: 1px solid var(--border-color);"` : ''}>
+                    <td style="padding: 8px 12px; color: var(--text-muted); font-family: monospace; font-size: 12px; white-space: nowrap;">${timeStr}</td>
+                    <td style="padding: 8px; text-align: center;">
+                      <span style="display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; color: white; background: ${levelColor};">${entry.level}</span>
+                    </td>
+                    <td style="padding: 8px; color: var(--text-secondary);">
+                      <span style="display: flex; align-items: center; gap: 4px;">${icon(catIcon, 14)} ${entry.category}</span>
+                    </td>
+                    <td style="padding: 8px 12px; color: var(--text-primary); word-break: break-word;">
+                      ${entry.message}
+                      ${hasData ? '<span style="color: var(--text-muted); font-size: 11px; margin-left: 6px;">▸ details</span>' : ''}
+                    </td>
+                  </tr>
+                  ${hasData ? `
+                  <tr id="log-detail-${i}" style="display: none;">
+                    <td colspan="4" style="padding: 8px 12px 12px 12px; background: var(--bg-tertiary);">
+                      <pre style="margin: 0; padding: 10px; background: var(--bg-primary); border-radius: 6px; font-size: 12px; overflow-x: auto; color: var(--text-secondary); border: 1px solid var(--border-color);">${JSON.stringify(entry.data, null, 2)}</pre>
+                    </td>
+                  </tr>
+                  ` : ''}
+                `;
+  }).join('')}
+            </tbody>
+          </table>
+        </div>
+      `}
+    </div>
+
+    <!-- Pagination -->
+    ${totalPages > 1 ? `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 16px; padding: 0 4px;">
+        <span style="color: var(--text-muted); font-size: 13px;">
+          Page ${state.logsPage + 1} of ${totalPages}
+        </span>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-ghost btn-sm" onclick="changeLogPage(-1)" ${state.logsPage <= 0 ? 'disabled' : ''}>← Previous</button>
+          <button class="btn btn-ghost btn-sm" onclick="changeLogPage(1)" ${state.logsPage >= totalPages - 1 ? 'disabled' : ''}>Next →</button>
+        </div>
+      </div>
+    ` : ''}
+  `;
+}
+
 function renderSettings() {
   const isAdmin = state.user?.role === 'admin';
 
@@ -3250,6 +3540,21 @@ function renderSettings() {
       </div>
       
       <button class="btn btn-primary" onclick="saveSettings()">Save Settings</button>
+    </div>
+    
+    <!-- Logging Settings -->
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Logging</h3>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Log File Path</label>
+        <input type="text" class="form-input" placeholder="data/openwhale.log" id="log-file-path" value="${state.config?.logFilePath || ''}">
+        <div class="form-hint">Absolute or relative path for the log file. Leave empty for default (data/openwhale.log)</div>
+      </div>
+      
+      <button class="btn btn-secondary" onclick="saveLogSettings()">Save Log Settings</button>
     </div>
     
     <!-- Browser Automation Settings -->
@@ -4649,6 +4954,56 @@ window.saveSettings = async function () {
     await showAlert('Settings saved!', '✅ Success');
   } catch (e) {
     await showAlert('Failed to save: ' + e.message, '❌ Error');
+  }
+};
+
+window.saveLogSettings = async function () {
+  const logPath = document.getElementById('log-file-path')?.value;
+  try {
+    await api('/config', {
+      method: 'POST',
+      body: JSON.stringify({ logFilePath: logPath })
+    });
+    state.config.logFilePath = logPath;
+    await showAlert('Log settings saved!', '✅ Success');
+  } catch (e) {
+    await showAlert('Failed to save: ' + e.message, '❌ Error');
+  }
+};
+
+window.applyLogFilters = async function () {
+  state.logsFilter.search = document.getElementById('log-search')?.value || '';
+  state.logsFilter.level = document.getElementById('log-level')?.value || '';
+  state.logsFilter.category = document.getElementById('log-category')?.value || '';
+  state.logsFilter.startDate = document.getElementById('log-start-date')?.value || '';
+  state.logsFilter.endDate = document.getElementById('log-end-date')?.value || '';
+  state.logsPage = 0;
+  await loadLogs();
+  render();
+};
+
+window.clearLogFilters = async function () {
+  state.logsFilter = { level: '', category: '', startDate: '', endDate: '', search: '' };
+  state.logsPage = 0;
+  await loadLogs();
+  render();
+};
+
+window.refreshLogs = async function () {
+  await loadLogs();
+  render();
+};
+
+window.changeLogPage = async function (delta) {
+  state.logsPage = Math.max(0, state.logsPage + delta);
+  await loadLogs();
+  render();
+};
+
+window.toggleLogDetail = function (index) {
+  const row = document.getElementById('log-detail-' + index);
+  if (row) {
+    row.style.display = row.style.display === 'none' ? 'table-row' : 'none';
   }
 };
 

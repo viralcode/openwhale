@@ -1,4 +1,5 @@
 import type { ChannelAdapter, IncomingMessage, OutgoingMessage, SendResult } from "./base.js";
+import { logger } from "../logger.js";
 
 type MessageHandler = (message: IncomingMessage) => void;
 
@@ -34,6 +35,7 @@ export class SlackAdapter implements ChannelAdapter {
         }
 
         console.log(`Slack bot connected: ${data.user}`);
+        logger.info("channel", `Slack connected`, { user: data.user });
         this.connected = true;
     }
 
@@ -103,11 +105,11 @@ export class SlackAdapter implements ChannelAdapter {
                 });
 
                 if (extResult.handled) {
-                    console.log(`[Slack] Message handled by extension(s)`);
+                    logger.info("channel", `Slack message handled by extension`, { from: incoming.from, channel: event.channel });
                     return; // Skip normal processing
                 }
             } catch (extErr) {
-                console.error("[Slack] Extension error:", extErr);
+                logger.error("channel", "Slack extension error", { error: String(extErr), from: incoming.from });
             }
             // =====================================
 
