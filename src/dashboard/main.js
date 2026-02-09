@@ -5382,9 +5382,18 @@ function showHeartbeatToast(alert) {
   const forwarded = alert.forwardedTo && alert.forwardedTo.length > 0
     ? ' → ' + alert.forwardedTo.join(', ')
     : '';
-  const preview = alert.text.length > 150 ? alert.text.slice(0, 150) + '…' : alert.text;
+  // Simple markdown to HTML for toast
+  const formatMd = (text) => {
+    return text
+      .replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.+?)\*/g, '<em>$1</em>')
+      .replace(/^[-•] (.+)$/gm, '• $1')
+      .replace(/\n/g, '<br>');
+  };
+  const preview = alert.text.length > 300 ? alert.text.slice(0, 300) + '…' : alert.text;
   toast.innerHTML = '<div style="font-weight: 600; margin-bottom: 4px;">💓 Heartbeat Alert' + forwarded + '</div>'
-    + '<div style="opacity: 0.9;">' + preview.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>';
+    + '<div style="opacity: 0.9;">' + formatMd(preview) + '</div>';
 
   toast.onclick = () => {
     toast.style.opacity = '0';

@@ -76,7 +76,12 @@ export interface ProcessResult {
  * Uses the SAME engine as the web chat (session-service.ts)
  */
 export async function processMessageWithAI(options: ProcessMessageOptions): Promise<ProcessResult> {
-    const { channel, from, content, sendText, sendImage, sendDocument, isGroup = false } = options;
+    const { channel, from, content, sendImage, sendDocument, isGroup = false } = options;
+
+    // Wrap sendText to auto-convert markdown to each channel's native formatting
+    const rawSendText = options.sendText;
+    const sendText = (text: string) => rawSendText(formatMarkdownForChannel(text, channel));
+
     const model = options.model || getCurrentModel();
     const channelUpper = channel.charAt(0).toUpperCase() + channel.slice(1);
     const maxIterations = 100;
@@ -434,5 +439,48 @@ Current time: ${now.toLocaleString()}`;
         logger.error("chat", `${channelUpper} AI error`, { error: errMsg, from });
         await sendText(`Error: ${errMsg.slice(0, 200)}`);
         return { success: false, error: errMsg };
+    }
+}
+
+/**
+ * Convert standard markdown to each channel's native formatting.
+ *
+ * WhatsApp:  *bold*  _italic_  ~strikethrough~  ```code```
+ * Telegram:  *bold*  _italic_  (Markdown v1 parse_mode)
+ * Discord:   **bold**  *italic*  ~~strikethrough~~  (standard markdown — pass through)
+ * iMessage:  plain text (no formatting support)
+ */
+function formatMarkdownForChannel(text: string, channel: string): string {
+    switch (channel) {
+        case "whatsapp":
+            return text
+                // **bold** → *bold* (WhatsApp bold)
+                .replace(/\*\*(.+?)\*\*/g, "*$1*")
+                // ~~strike~~ → ~strike~ (WhatsApp strikethrough)
+                .replace(/~~(.+?)~~/g, "~$1~");
+
+        case "telegram":
+            return text
+                // **bold** → *bold* (Telegram Markdown v1 bold)
+                .replace(/\*\*(.+?)\*\*/g, "*$1*")
+                // ~~strike~~ not in Markdown v1 — strip
+                .replace(/~~(.+?)~~/g, "$1");
+
+        case "discord":
+            // Discord natively supports standard markdown — pass through
+            return text;
+
+        case "imessage":
+            // iMessage: strip all markdown formatting to plain text
+            return text
+                .replace(/\*\*(.+?)\*\*/g, "$1")
+                .replace(/\*(.+?)\*/g, "$1")
+                .replace(/_(.+?)_/g, "$1")
+                .replace(/~~(.+?)~~/g, "$1")
+                .replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, ""))
+                .replace(/`(.+?)`/g, "$1");
+
+        default:
+            return text;
     }
 }

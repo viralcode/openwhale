@@ -465,7 +465,6 @@ async function forwardAlertToChannels(text: string, forwardTo: string): Promise<
 
     const forwardedTo: string[] = [];
     const alertPrefix = "💓 Heartbeat Alert:\n\n";
-    const messageText = alertPrefix + text;
 
     // Determine which channels to try
     const targetChannels = forwardTo === "all"
@@ -474,6 +473,8 @@ async function forwardAlertToChannels(text: string, forwardTo: string): Promise<
 
     for (const channel of targetChannels) {
         try {
+            const formatted = formatForChannel(text, channel);
+            const messageText = alertPrefix + formatted;
             const sent = await sendToChannel(channel, messageText);
             if (sent) {
                 forwardedTo.push(channel);
@@ -485,6 +486,50 @@ async function forwardAlertToChannels(text: string, forwardTo: string): Promise<
     }
 
     return forwardedTo;
+}
+
+/**
+ * Convert standard markdown to each channel's native formatting.
+ *
+ * WhatsApp:  *bold*  _italic_  ~strikethrough~  ```code```
+ * Telegram:  *bold*  _italic_  (Markdown v1 mode)
+ * Discord:   **bold**  *italic*  ~~strikethrough~~  (standard markdown)
+ * iMessage:  plain text (no formatting support)
+ */
+function formatForChannel(text: string, channel: string): string {
+    switch (channel) {
+        case "whatsapp":
+            return text
+                // Convert **bold** → *bold* (WhatsApp bold)
+                .replace(/\*\*(.+?)\*\*/g, "*$1*")
+                // Convert remaining markdown _italic_ stays as _italic_ (WhatsApp italic)
+                // Convert ~~strike~~ → ~strike~ (WhatsApp strikethrough)
+                .replace(/~~(.+?)~~/g, "~$1~");
+
+        case "telegram":
+            return text
+                // Telegram Markdown v1: *bold*, _italic_
+                .replace(/\*\*(.+?)\*\*/g, "*$1*")
+                // ~~strike~~ not supported in Markdown v1, strip it
+                .replace(/~~(.+?)~~/g, "$1");
+
+        case "discord":
+            // Discord natively supports standard markdown — pass through
+            return text;
+
+        case "imessage":
+            // iMessage doesn't support any text formatting — strip all markdown
+            return text
+                .replace(/\*\*(.+?)\*\*/g, "$1")
+                .replace(/\*(.+?)\*/g, "$1")
+                .replace(/_(.+?)_/g, "$1")
+                .replace(/~~(.+?)~~/g, "$1")
+                .replace(/```[\s\S]*?```/g, (m) => m.replace(/```/g, ""))
+                .replace(/`(.+?)`/g, "$1");
+
+        default:
+            return text;
+    }
 }
 
 async function sendToChannel(channel: string, text: string): Promise<boolean> {
