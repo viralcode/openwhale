@@ -169,6 +169,52 @@ actor OpenWhaleClient {
         return resp?.alerts
     }
 
+    // MARK: - Chat History (matches dashboard's loadMessages / clearChat)
+
+    struct ChatHistoryResponse: Codable {
+        struct HistoryMessage: Codable {
+            let id: String?
+            let role: String
+            let content: String
+            let createdAt: String?
+            let toolCalls: [HistoryToolCall]?
+        }
+        struct HistoryToolCall: Codable {
+            let name: String?
+            let status: String?
+            let arguments: AnyCodable? // We just need the name/status
+        }
+        let messages: [HistoryMessage]?
+    }
+
+    /// Wrapper for dynamic JSON values in tool call arguments
+    struct AnyCodable: Codable {
+        let value: Any
+        init(from decoder: Decoder) throws {
+            let container = try decoder.singleValueContainer()
+            if let dict = try? container.decode([String: String].self) {
+                value = dict
+            } else if let str = try? container.decode(String.self) {
+                value = str
+            } else {
+                value = ""
+            }
+        }
+        func encode(to encoder: Encoder) throws {
+            var container = encoder.singleValueContainer()
+            try container.encode("")
+        }
+    }
+
+    func getChatHistory() async -> [ChatHistoryResponse.HistoryMessage] {
+        let resp: ChatHistoryResponse? = await get("/dashboard/api/chat/history")
+        return resp?.messages ?? []
+    }
+
+    func clearChatHistory() async -> Bool {
+        return await delete("/dashboard/api/chat/history")
+    }
+
     // MARK: - Chat (SSE Streaming with Tool Calls)
 
     enum ChatEvent {
@@ -178,6 +224,9 @@ actor OpenWhaleClient {
         case content(text: String)
         case done(fullContent: String)
         case error(message: String)
+        case planCreated(title: String, steps: [[String: Any]])
+        case planStepUpdate(stepId: Int, status: String, notes: String?)
+        case planCompleted
     }
 
     func sendChatStream(_ message: String, onEvent: @escaping @Sendable (ChatEvent) -> Void) async {
@@ -261,9 +310,19 @@ actor OpenWhaleClient {
                     let msg = eventData["message"] as? String ?? "Unknown error"
                     onEvent(.error(message: msg))
 
-                case "plan_created", "plan_step_update", "plan_completed":
-                    // Plan events — ignore for now (could add plan UI later)
-                    break
+                case "plan_created":
+                    let title = eventData["title"] as? String ?? "Plan"
+                    let steps = eventData["steps"] as? [[String: Any]] ?? []
+                    onEvent(.planCreated(title: title, steps: steps))
+
+                case "plan_step_update":
+                    let stepId = eventData["stepId"] as? Int ?? 0
+                    let status = eventData["status"] as? String ?? "pending"
+                    let notes = eventData["notes"] as? String
+                    onEvent(.planStepUpdate(stepId: stepId, status: status, notes: notes))
+
+                case "plan_completed":
+                    onEvent(.planCompleted)
 
                 default:
                     break
@@ -528,6 +587,20 @@ actor OpenWhaleClient {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = jsonData
+        do {
+            let (_, response) = try await session.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse,
+                  (200...299).contains(httpResponse.statusCode) else { return false }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func delete(_ path: String) async -> Bool {
+        guard let url = URL(string: "\(baseURL)\(path)") else { return false }
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
         do {
             let (_, response) = try await session.data(for: request)
             guard let httpResponse = response as? HTTPURLResponse,

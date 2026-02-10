@@ -18,6 +18,8 @@ class AppState: ObservableObject {
     @Published var chatInput = ""
     @Published var chatMessages: [ChatMessage] = []
     @Published var isSending = false
+    @Published var activePlan: ActivePlan? = nil
+    @Published var workingLabel = ""
     @Published var healthTimestamp = ""
 
     // Dashboard-level data
@@ -67,19 +69,37 @@ class AppState: ObservableObject {
         let kind: ChatStepKind
         var content: String
         let toolName: String?
+        let toolArgs: String?   // JSON string of tool arguments (for file path extraction)
         let toolStatus: String?
         let timestamp = Date()
 
-        init(kind: ChatStepKind, content: String, toolName: String? = nil, toolStatus: String? = nil) {
+        init(kind: ChatStepKind, content: String, toolName: String? = nil, toolArgs: String? = nil, toolStatus: String? = nil) {
             self.kind = kind
             self.content = content
             self.toolName = toolName
+            self.toolArgs = toolArgs
             self.toolStatus = toolStatus
         }
     }
 
+    struct PlanStep: Identifiable {
+        let id: Int
+        let title: String
+        var status: String  // pending, in_progress, completed, skipped
+        var notes: String?
+        var expanded: Bool = false
+        var toolCalls: [ChatMessage] = []
+    }
+
+    struct ActivePlan {
+        var title: String
+        var steps: [PlanStep]
+        var completed: Bool = false
+    }
+
     init() {
         startPolling()
+        Task { await loadChatHistory() }
     }
 
     func startPolling() {
@@ -175,57 +195,63 @@ class AppState: ObservableObject {
         chatMessages.append(ChatMessage(kind: .user, content: text))
         chatInput = ""
         isSending = true
+        activePlan = nil
+        workingLabel = "Thinking..."
 
-        // Track streaming state — mirrors dashboard's streamingSteps/streamingContent
         var pendingContent = ""
         var gotDone = false
-        // Track the index of the current "thinking" step so we can UPDATE it instead of adding duplicates
         var currentThinkingIdx: Int? = nil
 
         await client.sendChatStream(text) { [weak self] event in
             Task { @MainActor in
                 guard let self = self else { return }
                 switch event {
-                case .toolStart(let name, _):
-                    // Remove current thinking indicator (replaces it with the tool step)
+                case .toolStart(let name, let args):
                     if let tIdx = currentThinkingIdx, tIdx < self.chatMessages.count {
                         self.chatMessages.remove(at: tIdx)
                         currentThinkingIdx = nil
                     }
-                    self.chatMessages.append(ChatMessage(kind: .toolStart, content: "Running \(name)...", toolName: name))
+                    let msg = ChatMessage(kind: .toolStart, content: "Running \(name)...", toolName: name, toolArgs: args)
+                    self.chatMessages.append(msg)
+                    // Attach to active plan step
+                    if self.activePlan != nil {
+                        if let activeIdx = self.activePlan!.steps.firstIndex(where: { $0.status == "in_progress" }) {
+                            self.activePlan!.steps[activeIdx].toolCalls.append(msg)
+                        }
+                    }
+                    // Update working label
+                    self.workingLabel = "Running: \(name)"
 
-                case .toolEnd(let name, _, let result):
-                    // Find and replace the matching toolStart with a toolEnd
+                case .toolEnd(let name, let status, let result):
                     if let startIdx = self.chatMessages.lastIndex(where: { $0.kind == .toolStart && $0.toolName == name }) {
                         let preview = (result ?? "").prefix(500)
-                        self.chatMessages[startIdx] = ChatMessage(kind: .toolEnd, content: "\(name) completed", toolName: name, toolStatus: String(preview))
+                        let originalArgs = self.chatMessages[startIdx].toolArgs
+                        self.chatMessages[startIdx] = ChatMessage(kind: .toolEnd, content: "\(name) \(status ?? "completed")", toolName: name, toolArgs: originalArgs, toolStatus: String(preview))
                     } else {
                         let preview = (result ?? "").prefix(500)
-                        self.chatMessages.append(ChatMessage(kind: .toolEnd, content: "\(name) completed", toolName: name, toolStatus: String(preview)))
+                        self.chatMessages.append(ChatMessage(kind: .toolEnd, content: "\(name) \(status ?? "completed")", toolName: name, toolStatus: String(preview)))
                     }
+                    self.workingLabel = "Processing..."
 
                 case .thinking(let text):
-                    // Update existing thinking step or create one
                     if let tIdx = currentThinkingIdx, tIdx < self.chatMessages.count {
                         self.chatMessages[tIdx] = ChatMessage(kind: .thinking, content: text)
                     } else {
                         self.chatMessages.append(ChatMessage(kind: .thinking, content: text))
                         currentThinkingIdx = self.chatMessages.count - 1
                     }
+                    self.workingLabel = "Thinking..."
 
                 case .content(let text):
-                    // Buffer content — dashboard does NOT show content until done
-                    // (mid-stream content happens between tool iterations)
                     pendingContent += text
+                    self.workingLabel = "Generating response..."
 
                 case .done(let fullContent):
                     gotDone = true
-                    // Remove any remaining thinking indicator
                     if let tIdx = currentThinkingIdx, tIdx < self.chatMessages.count {
                         self.chatMessages.remove(at: tIdx)
                         currentThinkingIdx = nil
                     }
-                    // Create the final assistant message
                     let finalText = fullContent.isEmpty ? pendingContent : fullContent
                     if !finalText.isEmpty {
                         self.chatMessages.append(ChatMessage(kind: .assistant, content: finalText))
@@ -233,17 +259,77 @@ class AppState: ObservableObject {
 
                 case .error(let message):
                     self.chatMessages.append(ChatMessage(kind: .error, content: message))
+
+                case .planCreated(let title, let steps):
+                    self.activePlan = ActivePlan(
+                        title: title,
+                        steps: steps.enumerated().map { idx, s in
+                            PlanStep(
+                                id: s["id"] as? Int ?? idx,
+                                title: s["title"] as? String ?? "Step \(idx + 1)",
+                                status: s["status"] as? String ?? "pending"
+                            )
+                        }
+                    )
+
+                case .planStepUpdate(let stepId, let status, let notes):
+                    if var plan = self.activePlan {
+                        if let idx = plan.steps.firstIndex(where: { $0.id == stepId }) {
+                            plan.steps[idx].status = status
+                            if let n = notes { plan.steps[idx].notes = n }
+                        }
+                        self.activePlan = plan
+                    }
+
+                case .planCompleted:
+                    if var plan = self.activePlan {
+                        plan.completed = true
+                        plan.steps = plan.steps.map { var s = $0; if s.status != "skipped" { s.status = "completed" }; return s }
+                        self.activePlan = plan
+                    }
                 }
             }
         }
 
-        // Stream closed — ensure we have a response
         if !gotDone && !pendingContent.isEmpty {
             chatMessages.append(ChatMessage(kind: .assistant, content: pendingContent))
         } else if !gotDone && pendingContent.isEmpty {
             chatMessages.append(ChatMessage(kind: .error, content: "No response received"))
         }
         isSending = false
+        workingLabel = ""
+    }
+
+    /// Load chat history from server — matches dashboard's loadMessages()
+    func loadChatHistory() async {
+        let history = await client.getChatHistory()
+        var msgs: [ChatMessage] = []
+        for hMsg in history {
+            if hMsg.role == "user" {
+                msgs.append(ChatMessage(kind: .user, content: hMsg.content))
+            } else if hMsg.role == "assistant" {
+                // Add tool calls first (if any)
+                if let toolCalls = hMsg.toolCalls {
+                    for tc in toolCalls {
+                        let name = tc.name ?? "unknown"
+                        let status = tc.status ?? "completed"
+                        msgs.append(ChatMessage(kind: .toolEnd, content: "\(name) \(status)", toolName: name, toolStatus: status))
+                    }
+                }
+                // Then add the content
+                if !hMsg.content.isEmpty {
+                    msgs.append(ChatMessage(kind: .assistant, content: hMsg.content))
+                }
+            }
+        }
+        chatMessages = msgs
+    }
+
+    /// Clear chat on server AND locally — matches dashboard's clearChat()
+    func clearChatHistory() async {
+        let _ = await client.clearChatHistory()
+        chatMessages.removeAll()
+        activePlan = nil
     }
 
     func openDashboard() {
