@@ -189,10 +189,15 @@ struct ChatPage: View {
         }
         flushTools()
         
-        // Insert plan widget after the first user message if active
+        // Insert plan widget after the LAST user message (which triggered the plan)
         if appState.activePlan != nil {
-            // Find position after the first tool group or after user message
-            let insertIdx = items.count
+            var insertIdx = 0
+            for (idx, item) in items.enumerated() {
+                if case .userMessage(_) = item.kind {
+                    insertIdx = idx + 1
+                }
+            }
+            // Insert right after last user message — tool groups and results go below
             items.insert(ChatItem(kind: .planWidget), at: insertIdx)
         }
         
@@ -245,17 +250,27 @@ struct ChatPage: View {
                     .foregroundColor(.white)
                     .lineLimit(1...5)
                     .onSubmit {
-                        Task { await appState.sendMessage() }
+                        appState.currentSendTask = Task { await appState.sendMessage() }
                     }
             }
 
             if appState.isSending {
-                ProgressView()
-                    .scaleEffect(0.7)
-                    .frame(width: 28, height: 28)
+                // Stop button
+                Button {
+                    appState.stopChat()
+                } label: {
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 14))
+                        .foregroundColor(.red)
+                        .frame(width: 28, height: 28)
+                        .background(Color.red.opacity(0.15))
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help("Stop generating")
             } else {
                 Button {
-                    Task { await appState.sendMessage() }
+                    appState.currentSendTask = Task { await appState.sendMessage() }
                 } label: {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 24))
@@ -1020,7 +1035,7 @@ struct MarkdownText: View {
             if remaining.hasPrefix("**"),
                let endRange = remaining.dropFirst(2).range(of: "**") {
                 let bold = remaining[remaining.index(remaining.startIndex, offsetBy: 2)..<endRange.lowerBound]
-                result = result + Text(String(bold)).bold()
+                result = result + Text(String(bold)).bold().foregroundColor(.owTextPrimary)
                 remaining = remaining[endRange.upperBound...]
                 continue
             }

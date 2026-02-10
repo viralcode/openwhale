@@ -1061,6 +1061,9 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
         setModel(effectiveModel);
 
+        // Create AbortController so client disconnect stops processing
+        const abortController = new AbortController();
+
         const encoder = new TextEncoder();
         const stream = new ReadableStream({
             start(controller) {
@@ -1068,13 +1071,15 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                     try {
                         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ event, data })}\n\n`));
                     } catch {
-                        // Stream may be closed
+                        // Stream may be closed — trigger abort
+                        abortController.abort();
                     }
                 };
 
                 processSessionMessageStream("dashboard", message, {
                     model: effectiveModel,
                     emit,
+                    abortSignal: abortController.signal,
                 }).then(() => {
                     try { controller.close(); } catch { }
                 }).catch((err) => {
@@ -1083,6 +1088,10 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                         controller.close();
                     } catch { }
                 });
+            },
+            cancel() {
+                // Client disconnected — abort the processing loop
+                abortController.abort();
             },
         });
 

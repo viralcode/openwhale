@@ -561,9 +561,10 @@ export async function processMessageStream(
         model?: string;
         maxIterations?: number;
         emit: (event: string, data: unknown) => void;
+        abortSignal?: AbortSignal;
     }
 ): Promise<ChatMessage> {
-    const { model = currentModel, maxIterations = 25, emit } = options;
+    const { model = currentModel, maxIterations = 25, emit, abortSignal } = options;
 
     const provider = registry.getProvider(model);
     if (!provider) {
@@ -704,6 +705,13 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
         let finalContent = "";
 
         while (iterations < maxIterations) {
+            // Check if client aborted
+            if (abortSignal?.aborted) {
+                finalContent = finalContent || "(Stopped by user)";
+                emit("stopped", { reason: "User stopped the generation" });
+                break;
+            }
+
             iterations++;
 
             emit("thinking", { iteration: iterations, maxIterations });
@@ -755,6 +763,14 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
                 });
 
                 try {
+                    // Check abort before each tool execution
+                    if (abortSignal?.aborted) {
+                        toolInfo.result = "Stopped by user";
+                        toolInfo.status = "error";
+                        emit("tool_end", { id: toolInfo.id, name: tc.name, result: toolInfo.result, status: "error" });
+                        break;
+                    }
+
                     console.log(`[SessionService] 🔧 Executing: ${tc.name} (iteration ${iterations}/${maxIterations})`);
                     recordToolUse(session.sessionId, tc.name, tc.arguments);
 

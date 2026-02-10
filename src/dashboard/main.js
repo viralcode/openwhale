@@ -100,6 +100,7 @@ const ICONS = {
   server: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="8" x="2" y="2" rx="2" ry="2"/><rect width="20" height="8" x="2" y="14" rx="2" ry="2"/><line x1="6" x2="6.01" y1="6" y2="6"/><line x1="6" x2="6.01" y1="18" y2="18"/></svg>',
   databaseZap: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 12 22"/><path d="M21 5v6"/><path d="M3 12A9 3 0 0 0 14.59 14.87"/><path d="M21 15l-2.5 5H19l-2.5-5"/></svg>',
   presentation: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>',
+  square: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
 };
 
 // Icon helper function
@@ -723,9 +724,49 @@ function prependLogEntry(entry) {
   if (countEl) countEl.textContent = `${state.logsTotal.toLocaleString()} entries`;
 }
 
+// Directly update the send button appearance based on isSending state
+function updateSendButton() {
+  const sendBtn = document.getElementById('send-btn');
+  if (!sendBtn) return;
+  if (state.isSending) {
+    sendBtn.className = 'send-btn stop-mode';
+    sendBtn.title = 'Stop generating';
+    sendBtn.innerHTML = icon('square', 16);
+    sendBtn.disabled = false;
+    sendBtn.removeAttribute('onclick');
+    sendBtn.onclick = () => stopChat();
+  } else {
+    sendBtn.className = 'send-btn';
+    sendBtn.title = 'Send message';
+    sendBtn.innerHTML = icon('arrowUp', 20);
+    sendBtn.disabled = false;
+    sendBtn.removeAttribute('onclick');
+    sendBtn.onclick = () => {
+      const chatInput = document.getElementById('chat-input');
+      if (chatInput && chatInput.value.trim()) {
+        sendMessage(chatInput.value);
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+      }
+    };
+  }
+}
+
 // Chat Functions
 async function sendMessage(content) {
-  if (!content.trim() || state.isSending) return;
+  if (!content || !content.trim()) return;
+
+  // If already sending, abort the current stream first
+  if (state.isSending && state.currentAbort) {
+    state.currentAbort.abort();
+    state.currentAbort = null;
+    // Finalize the current streaming state
+    state.isSending = false;
+    state.streamingSteps = [];
+    state.streamingContent = '';
+    state.streamingDone = false;
+    state.activePlan = null;
+  }
 
   state.messages.push({
     id: Date.now().toString(),
@@ -740,6 +781,13 @@ async function sendMessage(content) {
   state.streamingContent = '';
   state.streamingDone = false;
   state.activePlan = null;
+
+  // Create abort controller for this stream
+  const abortController = new AbortController();
+  state.currentAbort = abortController;
+
+  // Immediately swap the send button to stop mode
+  updateSendButton();
   updateChatMessages();
   scrollToBottom();
 
@@ -750,7 +798,8 @@ async function sendMessage(content) {
       body: JSON.stringify({
         message: content.trim(),
         model: state.currentModel
-      })
+      }),
+      signal: abortController.signal
     });
 
     if (!response.ok) {
@@ -787,21 +836,33 @@ async function sendMessage(content) {
     }
 
   } catch (e) {
-    state.messages.push({
-      id: Date.now().toString(),
-      role: 'system',
-      content: `Error: ${e.message}`,
-      createdAt: new Date().toISOString()
-    });
+    // Don't show error for user-initiated aborts
+    if (e.name !== 'AbortError') {
+      state.messages.push({
+        id: Date.now().toString(),
+        role: 'system',
+        content: `Error: ${e.message}`,
+        createdAt: new Date().toISOString()
+      });
+    }
   }
 
   state.isSending = false;
+  state.currentAbort = null;
   state.streamingSteps = [];
   state.streamingContent = '';
   state.streamingDone = false;
   state.activePlan = null;
+  updateSendButton();
   updateChatMessages();
   scrollToBottom();
+}
+
+function stopChat() {
+  if (state.currentAbort) {
+    state.currentAbort.abort();
+    state.currentAbort = null;
+  }
 }
 
 // ============================================
@@ -1098,6 +1159,11 @@ function handleStreamEvent(event, data) {
         type: 'error',
         message: data.message,
       });
+      break;
+
+    case 'stopped':
+      // User stopped the generation — silently handle
+      state.streamingDone = true;
       break;
 
     case 'plan_created':
@@ -1555,10 +1621,29 @@ function updateChatMessages() {
 
   messagesInner.innerHTML = messagesHtml;
 
-  // Update send button state
+  // Update send button to show stop or send icon
   const sendBtn = document.getElementById('send-btn');
   if (sendBtn) {
-    sendBtn.disabled = state.isSending;
+    if (state.isSending) {
+      sendBtn.className = 'send-btn stop-mode';
+      sendBtn.title = 'Stop generating';
+      sendBtn.onclick = () => stopChat();
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = icon('square', 16);
+    } else {
+      sendBtn.className = 'send-btn';
+      sendBtn.title = 'Send message';
+      sendBtn.onclick = () => {
+        const chatInput = document.getElementById('chat-input');
+        if (chatInput) {
+          sendMessage(chatInput.value);
+          chatInput.value = '';
+          chatInput.style.height = 'auto';
+        }
+      };
+      sendBtn.disabled = false;
+      sendBtn.innerHTML = icon('arrowUp', 20);
+    }
   }
 }
 
@@ -2233,8 +2318,10 @@ function renderChat() {
             title="${state.voiceMode ? 'Stop voice mode' : 'Talk to OpenWhale'}">
             ${state.voiceMode ? icon('mic', 18) : icon('mic', 18)}
           </button>
-          <button class="send-btn" id="send-btn" onclick="sendMessage()" ${state.isSending ? 'disabled' : ''}>
-            ${icon('arrowUp', 20)}
+          <button class="send-btn ${state.isSending ? 'stop-mode' : ''}" id="send-btn" 
+            onclick="${state.isSending ? 'stopChat()' : 'sendMessage()'}" 
+            title="${state.isSending ? 'Stop generating' : 'Send message'}">
+            ${state.isSending ? icon('square', 16) : icon('arrowUp', 20)}
           </button>
         </div>
       </div>
@@ -4155,9 +4242,13 @@ function bindEvents() {
 
   if (sendBtn) {
     sendBtn.addEventListener('click', () => {
-      sendMessage(chatInput.value);
-      chatInput.value = '';
-      chatInput.style.height = 'auto';
+      if (state.isSending) {
+        stopChat();
+      } else {
+        sendMessage(chatInput.value);
+        chatInput.value = '';
+        chatInput.style.height = 'auto';
+      }
     });
   }
 

@@ -33,6 +33,7 @@ class AppState: ObservableObject {
 
     let client = OpenWhaleClient()
     private var pollTimer: Timer?
+    var currentSendTask: Task<Void, Never>? = nil
 
     struct HeartbeatStatus {
         var enabled = false
@@ -189,9 +190,25 @@ class AppState: ObservableObject {
         }
     }
 
+    func stopChat() {
+        currentSendTask?.cancel()
+        currentSendTask = nil
+        isSending = false
+        workingLabel = ""
+    }
+
     func sendMessage() async {
         let text = chatInput.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
+
+        // If already sending, cancel the current task first
+        if isSending {
+            currentSendTask?.cancel()
+            currentSendTask = nil
+            isSending = false
+            workingLabel = ""
+        }
+
         chatMessages.append(ChatMessage(kind: .user, content: text))
         chatInput = ""
         isSending = true
