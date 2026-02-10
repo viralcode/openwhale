@@ -102,17 +102,20 @@ struct InstallerView: View {
                     .foregroundColor(.owTextPrimary)
 
                 ForEach([
-                    "✅ Check and install required software",
-                    "📥 Clone the OpenWhale repository",
-                    "📦 Install Node.js dependencies",
-                    "🚀 Start the OpenWhale server",
-                    "🤖 Configure AI providers (OpenAI, Anthropic, etc.)",
-                    "💬 Set up messaging channels (WhatsApp, Telegram)",
-                    "🔧 Connect external services (GitHub, Weather, etc.)"
+                    "Check and install required software",
+                    "Clone and install OpenWhale on your Mac",
+                    "Configure AI providers (OpenAI, Anthropic, etc.)",
+                    "Set up messaging channels (WhatsApp, Telegram, Discord)",
+                    "Connect external services (GitHub, Spotify, etc.)"
                 ], id: \.self) { item in
-                    Text(item)
-                        .font(.owBody)
-                        .foregroundColor(.owTextSecondary)
+                    HStack(spacing: 8) {
+                        Circle()
+                            .fill(Color.owPrimary.opacity(0.3))
+                            .frame(width: 6, height: 6)
+                        Text(item)
+                            .font(.owBody)
+                            .foregroundColor(.owTextSecondary)
+                    }
                 }
             }
             .padding(16)
