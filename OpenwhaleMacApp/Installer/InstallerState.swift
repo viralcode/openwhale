@@ -419,17 +419,45 @@ class InstallerState: ObservableObject {
     func saveProviders() async {
         await MainActor.run { isProcessing = true; errorMessage = "" }
 
-        var providers: [String: [String: Any]] = [:]
-        if !anthropicKey.isEmpty { providers["anthropic"] = ["apiKey": anthropicKey, "enabled": true, "selectedModel": "claude-sonnet-4-20250514"] }
-        if !openaiKey.isEmpty { providers["openai"] = ["apiKey": openaiKey, "enabled": true, "selectedModel": "gpt-4o"] }
-        if !googleKey.isEmpty { providers["google"] = ["apiKey": googleKey, "enabled": true, "selectedModel": "gemini-2.0-flash"] }
-        if !deepseekKey.isEmpty { providers["deepseek"] = ["apiKey": deepseekKey, "enabled": true, "selectedModel": "deepseek-chat"] }
-        if !ollamaUrl.isEmpty { providers["ollama"] = ["baseUrl": ollamaUrl, "enabled": true, "selectedModel": "llama3.2"] }
-
-        let body: [String: Any] = ["providers": providers]
+        // Use the same endpoint as the dashboard UI: /api/providers/:type/config
+        // This properly registers the provider with the runtime registry
+        let providerData: [(type: String, key: String, model: String)] = [
+            ("anthropic", anthropicKey, "claude-sonnet-4-20250514"),
+            ("openai", openaiKey, "gpt-4o"),
+            ("google", googleKey, "gemini-2.0-flash"),
+            ("deepseek", deepseekKey, "deepseek-chat")
+        ]
 
         do {
-            try await apiPost("/setup/step/2", body: body)
+            for (type, key, model) in providerData {
+                guard !key.isEmpty else { continue }
+                let body: [String: Any] = [
+                    "apiKey": key,
+                    "enabled": true,
+                    "selectedModel": model
+                ]
+                try await apiPost("/providers/\(type)/config", body: body)
+            }
+
+            // Also handle Ollama (uses baseUrl, not apiKey)
+            if !ollamaUrl.isEmpty {
+                let body: [String: Any] = [
+                    "baseUrl": ollamaUrl,
+                    "enabled": true,
+                    "selectedModel": "llama3.2"
+                ]
+                try await apiPost("/providers/ollama/config", body: body)
+            }
+
+            // Also call setup step to mark the wizard step as complete
+            var providers: [String: [String: Any]] = [:]
+            if !anthropicKey.isEmpty { providers["anthropic"] = ["apiKey": anthropicKey, "enabled": true, "selectedModel": "claude-sonnet-4-20250514"] }
+            if !openaiKey.isEmpty { providers["openai"] = ["apiKey": openaiKey, "enabled": true, "selectedModel": "gpt-4o"] }
+            if !googleKey.isEmpty { providers["google"] = ["apiKey": googleKey, "enabled": true, "selectedModel": "gemini-2.0-flash"] }
+            if !deepseekKey.isEmpty { providers["deepseek"] = ["apiKey": deepseekKey, "enabled": true, "selectedModel": "deepseek-chat"] }
+            if !ollamaUrl.isEmpty { providers["ollama"] = ["baseUrl": ollamaUrl, "enabled": true, "selectedModel": "llama3.2"] }
+            try await apiPost("/setup/step/2", body: ["providers": providers])
+
             await MainActor.run { isProcessing = false }
         } catch {
             await MainActor.run {
