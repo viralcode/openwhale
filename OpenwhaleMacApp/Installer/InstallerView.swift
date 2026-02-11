@@ -5,7 +5,7 @@ struct InstallerView: View {
 
     let stepNames = [
         "Welcome", "Prerequisites", "Clone Repo", "Install Deps",
-        "Start Server", "AI Providers", "Channels", "Skills", "Complete"
+        "Start Server", "AI Providers", "Channels", "Skills", "Install App", "Complete"
     ]
 
     var body: some View {
@@ -84,7 +84,8 @@ struct InstallerView: View {
         case 5: providersStep
         case 6: channelsStep
         case 7: skillsStep
-        case 8: completeStep
+        case 8: installAppStep
+        case 9: completeStep
         default: welcomeStep
         }
     }
@@ -761,6 +762,81 @@ struct InstallerView: View {
 
     // MARK: - Step 8: Complete
 
+    // MARK: - Step 8: Install App
+
+    private var installAppStep: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            sectionTitle("Install OpenWhale App")
+            sectionDesc("Building and installing the OpenWhale menu bar app to Applications.")
+
+            VStack(alignment: .leading, spacing: 12) {
+                if state.menubarAppInstalled {
+                    HStack(spacing: 8) {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundColor(.owGreen)
+                            .font(.system(size: 16))
+                        Text("OpenWhale.app installed to /Applications")
+                            .font(.owBody)
+                            .foregroundColor(.owGreen)
+                    }
+                } else if state.isProcessing {
+                    HStack(spacing: 8) {
+                        ProgressView()
+                            .scaleEffect(0.7)
+                        Text(state.menubarBuildProgress)
+                            .font(.owCaption)
+                            .foregroundColor(.owTextSecondary)
+                            .lineLimit(2)
+                    }
+                } else {
+                    Text("Click \"Install App\" to build and install the OpenWhale menu bar app.")
+                        .font(.owBody)
+                        .foregroundColor(.owTextSecondary)
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.owSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+
+            if !state.menubarAppInstalled && !state.isProcessing {
+                Button {
+                    Task { await state.buildAndInstallMenubarApp() }
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "hammer.fill")
+                            .font(.system(size: 11))
+                        Text("Install App")
+                            .font(.owBodyMedium)
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+                    .background(Color.owPrimary)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                }
+                .buttonStyle(.plain)
+            }
+
+            if !state.errorMessage.isEmpty {
+                errorBar(state.errorMessage)
+            }
+
+            Spacer()
+
+            navButtons(
+                backAction: { state.currentStep = 7 },
+                nextAction: {
+                    Task { await state.completeSetup() }
+                    state.currentStep = 9
+                },
+                nextLabel: state.menubarAppInstalled ? "Finish →" : "Skip →"
+            )
+        }
+    }
+
+    // MARK: - Step 9: Complete
+
     private var completeStep: some View {
         VStack(spacing: 20) {
             Spacer()
@@ -771,7 +847,7 @@ struct InstallerView: View {
                 .font(.owLargeTitle)
                 .foregroundColor(.owTextPrimary)
 
-            Text("OpenWhale is ready to use. Start chatting or open the dashboard.")
+            Text("OpenWhale is ready to use.")
                 .font(.owBody)
                 .foregroundColor(.owTextSecondary)
                 .multilineTextAlignment(.center)
@@ -781,7 +857,7 @@ struct InstallerView: View {
                     state.openApp()
                 } label: {
                     HStack(spacing: 6) {
-                        Text("💬")
+                        Text("🐋")
                         Text("Open OpenWhale")
                             .font(.owBodyMedium)
                     }

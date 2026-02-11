@@ -59,7 +59,11 @@ class InstallerState: ObservableObject {
     @Published var notionKey: String = ""
     @Published var googleCredsJSON: String = ""
 
-    let totalSteps = 9
+    // Step 8: Install App
+    @Published var menubarBuildProgress: String = ""
+    @Published var menubarAppInstalled: Bool = false
+
+    let totalSteps = 10
     let repoURL = "https://github.com/viralcode/openwhale.git"
 
     init() {
@@ -625,15 +629,94 @@ class InstallerState: ObservableObject {
         }
     }
 
+    // MARK: - Step 8: Build & Install Menubar App
+
+    func buildAndInstallMenubarApp() async {
+        await MainActor.run {
+            isProcessing = true
+            menubarBuildProgress = "Building OpenWhale menu bar app..."
+            errorMessage = ""
+        }
+
+        let macAppDir = "\(installPath)/OpenwhaleMacApp"
+        let buildDir = "\(macAppDir)/.build"
+        let appBundle = "\(buildDir)/OpenWhale.app"
+        let contents = "\(appBundle)/Contents"
+        let macOS = "\(contents)/MacOS"
+
+        // Step 1: Build with SwiftPM
+        await MainActor.run { menubarBuildProgress = "Compiling (this may take a minute)..." }
+        let buildResult = await runShellAsync("/bin/bash -l -c 'cd \"\(macAppDir)\" && swift build -c release 2>&1'") { line in
+            Task { @MainActor in
+                self.menubarBuildProgress = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+        }
+
+        if buildResult != 0 {
+            await MainActor.run {
+                isProcessing = false
+                errorMessage = "Failed to build menubar app. Check that Xcode CLI tools are installed."
+            }
+            return
+        }
+
+        // Step 2: Create app bundle
+        await MainActor.run { menubarBuildProgress = "Creating app bundle..." }
+
+        let fm = FileManager.default
+        try? fm.removeItem(atPath: appBundle)
+        try? fm.createDirectory(atPath: macOS, withIntermediateDirectories: true)
+        try? fm.createDirectory(atPath: "\(contents)/Resources", withIntermediateDirectories: true)
+
+        // Copy binary
+        let binaryPath = "\(buildDir)/release/OpenWhaleMenuBar"
+        if fm.fileExists(atPath: binaryPath) {
+            try? fm.copyItem(atPath: binaryPath, toPath: "\(macOS)/OpenWhaleMenuBar")
+        }
+
+        // Copy Info.plist
+        let plistPath = "\(macAppDir)/Info.plist"
+        if fm.fileExists(atPath: plistPath) {
+            try? fm.copyItem(atPath: plistPath, toPath: "\(contents)/Info.plist")
+        }
+
+        // Copy icon
+        let iconPath = "\(macAppDir)/AppIcon.icns"
+        if fm.fileExists(atPath: iconPath) {
+            try? fm.copyItem(atPath: iconPath, toPath: "\(contents)/Resources/AppIcon.icns")
+        }
+
+        // Codesign (ad-hoc)
+        let _ = runShell("codesign --force --sign - \"\(appBundle)\" 2>/dev/null")
+
+        // Step 3: Copy to /Applications
+        await MainActor.run { menubarBuildProgress = "Installing to Applications..." }
+        let destApp = "/Applications/OpenWhale.app"
+        try? fm.removeItem(atPath: destApp)
+        do {
+            try fm.copyItem(atPath: appBundle, toPath: destApp)
+            await MainActor.run {
+                menubarAppInstalled = true
+                menubarBuildProgress = "✅ OpenWhale.app installed to Applications!"
+                isProcessing = false
+            }
+        } catch {
+            await MainActor.run {
+                isProcessing = false
+                errorMessage = "Failed to copy to Applications: \(error.localizedDescription)"
+            }
+        }
+    }
+
     func openApp() {
-        // Build and launch the main OpenWhale Mac app
-        let appPath = "\(installPath)/OpenwhaleMacApp/.build/OpenWhale.app"
+        let appPath = "/Applications/OpenWhale.app"
         if FileManager.default.fileExists(atPath: appPath) {
             NSWorkspace.shared.open(URL(fileURLWithPath: appPath))
         } else {
-            // Open dashboard in browser
-            if let url = URL(string: "http://localhost:7777/dashboard") {
-                NSWorkspace.shared.open(url)
+            // Fallback: try from build dir
+            let buildPath = "\(installPath)/OpenwhaleMacApp/.build/OpenWhale.app"
+            if FileManager.default.fileExists(atPath: buildPath) {
+                NSWorkspace.shared.open(URL(fileURLWithPath: buildPath))
             }
         }
     }

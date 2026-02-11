@@ -7,7 +7,8 @@ let package = Package(
     targets: [
         .executableTarget(
             name: "OpenWhaleMenuBar",
-            path: "."
+            path: ".",
+            exclude: ["Installer", "build.sh", "Info.plist", "AppIcon.icns"]
         )
     ]
 )
