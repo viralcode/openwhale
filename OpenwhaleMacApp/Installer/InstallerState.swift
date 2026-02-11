@@ -73,6 +73,11 @@ class InstallerState: ObservableObject {
 
     // MARK: - Shell Helpers
 
+    /// Wraps a command to source the user's shell profile first, ensuring npm/node/brew are on PATH.
+    private func profiledCommand(_ command: String) -> String {
+        return "source ~/.zprofile 2>/dev/null; source ~/.zshrc 2>/dev/null; \(command)"
+    }
+
     @discardableResult
     func runShell(_ command: String) -> (output: String, exitCode: Int32) {
         let task = Process()
@@ -80,7 +85,7 @@ class InstallerState: ObservableObject {
         task.standardOutput = pipe
         task.standardError = pipe
         task.launchPath = "/bin/zsh"
-        task.arguments = ["-c", command]
+        task.arguments = ["-l", "-c", command]
         task.launch()
         task.waitUntilExit()
         let data = pipe.fileHandleForReading.readDataToEndOfFile()
@@ -96,7 +101,7 @@ class InstallerState: ObservableObject {
                 task.standardOutput = pipe
                 task.standardError = pipe
                 task.launchPath = "/bin/zsh"
-                task.arguments = ["-c", command]
+                task.arguments = ["-l", "-c", command]
 
                 pipe.fileHandleForReading.readabilityHandler = { handle in
                     let data = handle.availableData
@@ -274,6 +279,17 @@ class InstallerState: ObservableObject {
         await MainActor.run {
             isProcessing = false
             if code == 0 {
+                // Create .env from .env.example if it doesn't exist
+                let envPath = "\(installPath)/.env"
+                if !FileManager.default.fileExists(atPath: envPath) {
+                    let examplePath = "\(installPath)/.env.example"
+                    if FileManager.default.fileExists(atPath: examplePath) {
+                        // Generate a random JWT secret
+                        let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                        let jwtSecret = String((0..<40).map { _ in chars.randomElement()! })
+                        let _ = runShell("cp \"\(examplePath)\" \"\(envPath)\" && sed -i '' 's/change-me-to-something-random-at-least-32-chars/\(jwtSecret)/' \"\(envPath)\"")
+                    }
+                }
                 npmProgress = "✅ Dependencies installed!"
             } else {
                 errorMessage = "npm install failed. Check the log output."
@@ -283,33 +299,68 @@ class InstallerState: ObservableObject {
 
     // MARK: - Step 4: Start Server
 
+    @Published var serverLog: String = ""
+
     func startServer() async {
         await MainActor.run {
             isProcessing = true
             errorMessage = ""
             serverCheckAttempts = 0
+            serverRunning = false
+            serverLog = ""
         }
 
-        // Check if already running
-        if await isServerRunning() {
-            await MainActor.run {
-                serverRunning = true
-                isProcessing = false
+        // Kill any stale server process from a previous run
+        let _ = runShell("lsof -ti :7777 | xargs kill -9 2>/dev/null; pkill -f 'npm run dev' 2>/dev/null")
+        try? await Task.sleep(nanoseconds: 1_000_000_000)
+
+        // Make sure .env exists
+        let envPath = "\(installPath)/.env"
+        if !FileManager.default.fileExists(atPath: envPath) {
+            let examplePath = "\(installPath)/.env.example"
+            if FileManager.default.fileExists(atPath: examplePath) {
+                let chars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+                let jwtSecret = String((0..<40).map { _ in chars.randomElement()! })
+                let _ = runShell("cp \"\(examplePath)\" \"\(envPath)\" && sed -i '' 's/change-me-to-something-random-at-least-32-chars/\(jwtSecret)/' \"\(envPath)\"")
             }
-            return
         }
 
-        // Start server in background
-        DispatchQueue.global(qos: .userInitiated).async {
+        // Start server in background with full shell environment, capturing output
+        let installDir = self.installPath
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let task = Process()
+            let pipe = Pipe()
             task.launchPath = "/bin/zsh"
-            task.arguments = ["-c", "cd \"\(self.installPath)\" && npm run dev"]
-            task.standardOutput = FileHandle.nullDevice
-            task.standardError = FileHandle.nullDevice
-            task.launch()
+            // Use -l (login shell) so .zprofile/.zshrc are sourced — npm/node will be on PATH
+            task.arguments = ["-l", "-c", "cd \"\(installDir)\" && npm run dev 2>&1"]
+            task.standardOutput = pipe
+            task.standardError = pipe
+
+            pipe.fileHandleForReading.readabilityHandler = { handle in
+                let data = handle.availableData
+                if !data.isEmpty, let str = String(data: data, encoding: .utf8) {
+                    DispatchQueue.main.async {
+                        guard let self = self else { return }
+                        // Keep last 2000 chars of server log
+                        self.serverLog += str
+                        if self.serverLog.count > 2000 {
+                            self.serverLog = String(self.serverLog.suffix(2000))
+                        }
+                    }
+                }
+            }
+
+            do {
+                try task.run()
+            } catch {
+                DispatchQueue.main.async {
+                    self?.errorMessage = "Failed to launch server process: \(error.localizedDescription)"
+                    self?.isProcessing = false
+                }
+            }
         }
 
-        // Poll until server responds
+        // Poll until server actually responds to HTTP requests
         for attempt in 1...30 {
             await MainActor.run { serverCheckAttempts = attempt }
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
@@ -324,14 +375,17 @@ class InstallerState: ObservableObject {
 
         await MainActor.run {
             isProcessing = false
-            errorMessage = "Server failed to start within 60 seconds."
+            errorMessage = "Server failed to start within 60 seconds. Check the log below."
         }
     }
 
     func isServerRunning() async -> Bool {
         guard let url = URL(string: "\(apiBase)/setup/status") else { return false }
+        // Use a short timeout to avoid hanging
+        var request = URLRequest(url: url)
+        request.timeoutInterval = 3
         do {
-            let (_, response) = try await URLSession.shared.data(from: url)
+            let (_, response) = try await URLSession.shared.data(for: request)
             return (response as? HTTPURLResponse)?.statusCode == 200
         } catch {
             return false

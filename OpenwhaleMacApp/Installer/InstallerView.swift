@@ -410,6 +410,26 @@ struct InstallerView: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12))
             }
 
+            // Live server log output
+            if !state.serverLog.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Server Output")
+                        .font(.owCaption)
+                        .foregroundColor(.owTextTertiary)
+                    ScrollView {
+                        Text(state.serverLog.suffix(1500))
+                            .font(.system(size: 10, design: .monospaced))
+                            .foregroundColor(.owTextTertiary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    }
+                    .frame(maxHeight: 120)
+                }
+                .padding(10)
+                .background(Color.owSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+            }
+
             if !state.errorMessage.isEmpty { errorBar(state.errorMessage) }
 
             Spacer()
@@ -428,13 +448,6 @@ struct InstallerView: View {
                 nextLabel: state.serverRunning ? "Continue →" : "Start Server →",
                 nextDisabled: state.isProcessing
             )
-        }
-        .onAppear {
-            Task {
-                if await state.isServerRunning() {
-                    await MainActor.run { state.serverRunning = true }
-                }
-            }
         }
     }
 
