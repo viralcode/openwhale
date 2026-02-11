@@ -331,8 +331,8 @@ class InstallerState: ObservableObject {
             let task = Process()
             let pipe = Pipe()
             task.launchPath = "/bin/zsh"
-            // Use -l (login shell) so .zprofile/.zshrc are sourced — npm/node will be on PATH
-            task.arguments = ["-l", "-c", "cd \"\(installDir)\" && npm run dev 2>&1"]
+            // Use npx tsx directly (not npm run dev which uses tsx watch and silently restarts crashes)
+            task.arguments = ["-l", "-c", "cd \"\(installDir)\" && npx tsx src/index.ts 2>&1"]
             task.standardOutput = pipe
             task.standardError = pipe
 
@@ -365,6 +365,8 @@ class InstallerState: ObservableObject {
             await MainActor.run { serverCheckAttempts = attempt }
             try? await Task.sleep(nanoseconds: 2_000_000_000) // 2 seconds
             if await isServerRunning() {
+                // Ensure the DB has the admin user and required columns
+                await ensureDashboardAdmin()
                 await MainActor.run {
                     serverRunning = true
                     isProcessing = false
@@ -392,7 +394,27 @@ class InstallerState: ObservableObject {
         }
     }
 
-    // MARK: - Step 5: AI Providers
+    /// Ensure the dashboard_users table has the last_login_at column and a default admin user.
+    /// This covers the case where the server's own ensureDefaultAdmin() fails due to schema mismatch.
+    func ensureDashboardAdmin() async {
+        let dbPath = "\(installPath)/data/openwhale.db"
+        guard FileManager.default.fileExists(atPath: dbPath) else { return }
+
+        // Add last_login_at column if missing (ALTER TABLE is a no-op error if it already exists)
+        let _ = runShell("sqlite3 \"\(dbPath)\" \"ALTER TABLE dashboard_users ADD COLUMN last_login_at INTEGER;\" 2>/dev/null")
+
+        // Check if any users exist
+        let check = runShell("sqlite3 \"\(dbPath)\" \"SELECT COUNT(*) FROM dashboard_users;\" 2>/dev/null")
+        let count = Int(check.output) ?? 0
+
+        if count == 0 {
+            // Insert default admin user: admin/admin (SHA-256 hash of "admin")
+            let hash = runShell("echo -n 'admin' | shasum -a 256 | awk '{print $1}'")
+            let uuid = UUID().uuidString
+            let timestamp = Int(Date().timeIntervalSince1970)
+            let _ = runShell("sqlite3 \"\(dbPath)\" \"INSERT INTO dashboard_users (id, username, password_hash, role, created_at) VALUES ('\(uuid)', 'admin', '\(hash.output)', 'admin', \(timestamp));\"")
+        }
+    }
 
     func saveProviders() async {
         await MainActor.run { isProcessing = true; errorMessage = "" }

@@ -336,6 +336,12 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
                 )
             `);
 
+            // Migration: add last_login_at if table was created before this column existed
+            // ALTER TABLE ADD COLUMN is a no-op error if column already exists — safe to run every time
+            try {
+                await db.run(sql`ALTER TABLE dashboard_users ADD COLUMN last_login_at INTEGER`);
+            } catch { /* column already exists */ }
+
             // Create auth_sessions table if not exists
             await db.run(sql`
                 CREATE TABLE IF NOT EXISTS auth_sessions (
