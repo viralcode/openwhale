@@ -420,11 +420,11 @@ class InstallerState: ObservableObject {
         await MainActor.run { isProcessing = true; errorMessage = "" }
 
         var providers: [String: [String: Any]] = [:]
-        if !anthropicKey.isEmpty { providers["anthropic"] = ["apiKey": anthropicKey, "enabled": true] }
-        if !openaiKey.isEmpty { providers["openai"] = ["apiKey": openaiKey, "enabled": true] }
-        if !googleKey.isEmpty { providers["google"] = ["apiKey": googleKey, "enabled": true] }
-        if !deepseekKey.isEmpty { providers["deepseek"] = ["apiKey": deepseekKey, "enabled": true] }
-        if !ollamaUrl.isEmpty { providers["ollama"] = ["baseUrl": ollamaUrl, "enabled": true] }
+        if !anthropicKey.isEmpty { providers["anthropic"] = ["apiKey": anthropicKey, "enabled": true, "selectedModel": "claude-sonnet-4-20250514"] }
+        if !openaiKey.isEmpty { providers["openai"] = ["apiKey": openaiKey, "enabled": true, "selectedModel": "gpt-4o"] }
+        if !googleKey.isEmpty { providers["google"] = ["apiKey": googleKey, "enabled": true, "selectedModel": "gemini-2.0-flash"] }
+        if !deepseekKey.isEmpty { providers["deepseek"] = ["apiKey": deepseekKey, "enabled": true, "selectedModel": "deepseek-chat"] }
+        if !ollamaUrl.isEmpty { providers["ollama"] = ["baseUrl": ollamaUrl, "enabled": true, "selectedModel": "llama3.2"] }
 
         let body: [String: Any] = ["providers": providers]
 

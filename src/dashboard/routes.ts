@@ -163,9 +163,16 @@ export async function loadConfigsFromDB(db: DrizzleDB) {
 
         // Sync the session-service's currentModel with the enabled provider
         // so channels (WhatsApp, Telegram, etc.) use the correct provider
+        const defaultModels: Record<string, string> = {
+            anthropic: "claude-sonnet-4-20250514",
+            openai: "gpt-4o",
+            google: "gemini-2.0-flash",
+            deepseek: "deepseek-chat",
+            ollama: "llama3.2"
+        };
         for (const [type, config] of providerConfigs.entries()) {
             if (config.enabled && config.apiKey) {
-                const model = config.selectedModel || configStore.get("defaultModel") as string || "";
+                const model = config.selectedModel || configStore.get("defaultModel") as string || defaultModels[type] || "";
                 setModel(model);
                 console.log(`[Dashboard] Set active model to ${model} (provider: ${type})`);
                 logger.info("provider", `Active model set to ${model}`, { provider: type });
@@ -776,13 +783,20 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
         // Process step data
         if (data.providers) {
+            const defaultModels: Record<string, string> = {
+                anthropic: "claude-sonnet-4-20250514",
+                openai: "gpt-4o",
+                google: "gemini-2.0-flash",
+                deepseek: "deepseek-chat",
+                ollama: "llama3.2"
+            };
             for (const [type, config] of Object.entries(data.providers)) {
                 const cfg = config as { apiKey?: string; enabled?: boolean };
                 if (cfg.apiKey) {
                     providerConfigs.set(type, {
                         enabled: cfg.enabled ?? true,
                         apiKey: cfg.apiKey,
-                        selectedModel: (config as any).selectedModel
+                        selectedModel: (config as any).selectedModel || defaultModels[type]
                     });
                     // Also set environment variable for immediate use
                     if (type === "anthropic") process.env.ANTHROPIC_API_KEY = cfg.apiKey;
@@ -792,6 +806,16 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
 
                     // Persist to database
                     await saveProviderToDB(db, type, providerConfigs.get(type)!);
+                }
+            }
+
+            // Activate the first enabled provider's model immediately
+            for (const [type, config] of providerConfigs.entries()) {
+                if (config.enabled && config.apiKey) {
+                    const model = config.selectedModel || defaultModels[type] || "";
+                    setModel(model);
+                    console.log(`[Dashboard] Setup: activated model ${model} (provider: ${type})`);
+                    break;
                 }
             }
         }
@@ -916,8 +940,15 @@ export function createDashboardRoutes(db: DrizzleDB, _config: OpenWhaleConfig) {
             // Check which provider is enabled in providerConfigs
             for (const [type, config] of providerConfigs.entries()) {
                 if (config.enabled && config.apiKey) {
-                    // Use the selected model for this provider, or a default
-                    effectiveModel = config.selectedModel || configStore.get("defaultModel") as string;
+                    // Use the selected model for this provider, or a sensible default
+                    const defaultModels: Record<string, string> = {
+                        anthropic: "claude-sonnet-4-20250514",
+                        openai: "gpt-4o",
+                        google: "gemini-2.0-flash",
+                        deepseek: "deepseek-chat",
+                        ollama: "llama3.2"
+                    };
+                    effectiveModel = config.selectedModel || configStore.get("defaultModel") as string || defaultModels[type] || "";
                     console.log(`[Dashboard] Using enabled provider: ${type}, model: ${effectiveModel}`);
                     logger.info("chat", `Chat using provider: ${type}, model: ${effectiveModel}`);
                     break;
