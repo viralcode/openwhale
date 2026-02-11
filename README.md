@@ -421,6 +421,16 @@ cp -R .build/OpenWhale.app /Applications/
 
 > 💡 **Tip:** The app auto-connects to the local OpenWhale server. Make sure the server is running (`npm run dev`) before launching.
 
+### Installer
+
+A guided SwiftUI installer that sets up everything automatically — clones the repo, installs dependencies, starts the server, configures providers/channels/skills, and installs the menu bar app.
+
+```bash
+cd OpenwhaleMacApp/Installer
+bash build.sh
+open .build/OpenWhaleInstaller.app
+```
+
 ---
 
 ## Connecting Channels
