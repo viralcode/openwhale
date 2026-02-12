@@ -106,6 +106,27 @@ Advisory file locks prevent agents from stepping on each other:
 - Automatic expiry (configurable TTL)
 - Dashboard shows all active locks in real-time
 
+#### 🤝 Inter-Agent Communication
+Agents spawned in a fan-out **can talk to each other** during execution:
+- **Shared Context** — Agents write findings to a coordination namespace and read what siblings shared
+- **Direct Messaging** — Agents can send messages to sibling sessions via `sessions_send`
+- **Session Discovery** — Each agent knows its siblings' session keys and task descriptions
+- **Organic Collaboration** — Agents decide when to communicate; they're not forced to
+
+```
+┌──────────────┐    shared_context_write    ┌──────────────┐
+│  Research    │ ──────────────────────────► │  Shared      │
+│  Agent A     │                            │  Context     │
+│  (TypeScript)│ ◄────────────────────────── │  Namespace   │
+└──────────────┘    shared_context_read      └──────┬───────┘
+                                                    │
+┌──────────────┐    shared_context_read       ┌─────▼────────┐
+│  Research    │ ◄──────────────────────────── │  Shared      │
+│  Agent B     │                              │  Context     │
+│  (Rust)      │ ──────────────────────────►  │  Namespace   │
+└──────────────┘    shared_context_write       └──────────────┘
+```
+
 #### Auto-Detection
 You don't need to explicitly ask for fan-out. The AI automatically detects patterns like:
 - *"Do X and also Y"* → Fans out to separate agents
@@ -117,6 +138,31 @@ Monitor everything from the **Agents → Coordination** panel:
 - **Coordinated Tasks** — See all fan-out tasks with COMPLETED/PARTIAL status
 - **Shared Contexts** — Browse namespaces and entry counts
 - **Active Locks** — View locked files with owner and purpose
+
+---
+
+### 🔗 A2A Protocol (Agent-to-Agent)
+
+OpenWhale implements the [Google Agent2Agent (A2A) protocol](https://a2a-protocol.org), enabling interoperability with other A2A-compliant agents from frameworks like LangGraph, CrewAI, and AutoGen.
+
+| Feature | Details |
+|---------|--------|
+| **Agent Card** | `GET /.well-known/agent.json` — Public discovery of capabilities and skills |
+| **JSON-RPC Endpoint** | `POST /a2a` — Send messages, stream responses, manage tasks |
+| **Streaming** | Server-Sent Events (SSE) for real-time task updates |
+| **Task Lifecycle** | Create, monitor, and cancel tasks via standard A2A methods |
+| **Auto-populated Skills** | Agent Card skills are dynamically generated from registered tools |
+
+```bash
+# Discover OpenWhale's capabilities
+curl http://localhost:7777/.well-known/agent.json
+
+# Send a task via A2A protocol
+curl -X POST http://localhost:7777/a2a \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"SendMessage","params":{"message":{"role":"user","parts":[{"text":"Hello from another agent"}]}}}'
+```
 
 ---
 
@@ -1072,7 +1118,7 @@ curl -X POST http://localhost:7777/api/agent/chat/completions \
 
 ```
 src/
-├── agents/      # Multi-agent orchestration (coordinator, shared-context, conflict-resolver)
+├── agents/      # Multi-agent orchestration, inter-agent comms, A2A protocol (coordinator, a2a-server)
 ├── auth/        # JWT, API keys, sessions
 ├── channels/    # WhatsApp, Telegram, Discord, Slack adapters
 ├── cli.ts       # Interactive terminal interface
