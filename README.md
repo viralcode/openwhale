@@ -5,16 +5,17 @@
 <h1 align="center">OpenWhale</h1>
 
 <p align="center">
-  <strong>Self-Extensible AI Assistant 🐋</strong>
+  <strong>Multi-Agent AI Operating System 🐋</strong>
 </p>
 
 <p align="center">
-  Built for folks who want their AI to actually <em>do things</em> — not just chat.
+  Deploy autonomous AI agent swarms that coordinate, communicate, and conquer complex tasks in parallel.
 </p>
 
 <p align="center">
-  <strong>🚧 Active Development</strong> — This project is being actively built. Expect frequent updates!<br/>
-  <strong>🐢 Long-Running Tasks</strong> — Handles complex, multi-step tasks that run for hours<br/>
+  <strong>🤖 Multi-Agent Orchestration</strong> — Fan-out tasks to parallel agents with shared memory and file locks<br/>
+  <strong>🐢 Long-Horizon Reasoning</strong> — Handles complex, multi-step tasks that run for hours<br/>
+  <strong>🧠 Self-Extensible</strong> — Creates its own tools, skills, and automations on the fly<br/>
   <strong>🌐 OpenWhale Website</strong> — https://viralcode.github.io/openwhale<br/>
   <strong>☁️ OpenWhale Hosting</strong> — Managed hosting coming soon
 </p>
@@ -30,9 +31,9 @@
 
 ## What is OpenWhale?
 
-OpenWhale is a **self-extensible AI assistant** that doesn't just chat — it takes action. Connect it to multiple AI models, let it talk on your behalf through WhatsApp/Telegram/Discord/Twitter/iMessage, browse the web with real browser automation, execute code, manage your calendar, send emails, and basically do whatever you need it to do.
+OpenWhale is a **multi-agent AI operating system** that doesn't just chat — it deploys autonomous agent swarms. Fan-out complex work to multiple AI agents running in parallel, coordinate them with shared memory and file locks, and collect results automatically. Connect it to 8 AI providers, let it talk on your behalf through WhatsApp/Telegram/Discord/Twitter/iMessage, browse the web with real browser automation, execute code, manage your calendar, send emails, and basically do whatever you need it to do.
 
-Think of it as **Claude, GPT-4, or DeepSeek with arms and legs**.
+Think of it as **an AI workforce, not just an AI assistant**.
 
 <p align="center">
   <img src="images/mainpage.png" alt="OpenWhale Dashboard" width="800" />
@@ -64,6 +65,58 @@ Switch between any major AI model on the fly. One assistant, unlimited model cho
 
 ### 🐢 Long-Horizon Reasoning
 Capable of handling long-running, complex tasks with multi-step reasoning. It plans, executes, and verifies its own work, autonomously overcoming errors and obstacles.
+
+---
+
+### 🤖 Multi-Agent Coordination
+
+OpenWhale can deploy **multiple AI agents in parallel** to tackle complex tasks faster. It automatically detects when fan-out is beneficial.
+
+#### Fan-Out / Fan-In
+Split work across specialized agents that run simultaneously:
+
+```
+You: "Research quantum computing and write a Python sorting algorithm"
+
+┌─────────────────────────────────────┐
+│         OpenWhale Orchestrator      │
+│    Detects 2 independent tasks      │
+└──────────┬──────────┬───────────────┘
+           │          │
+     ┌─────▼──┐  ┌────▼───┐
+     │Research│  │ Coder  │    ← Running in parallel
+     │ Agent  │  │ Agent  │
+     └─────┬──┘  └────┬───┘
+           │          │
+     ┌─────▼──────────▼───────────────┐
+     │    Results synthesized back     │
+     │    into a single response       │
+     └────────────────────────────────┘
+```
+
+#### Shared Contexts (Inter-Agent Memory)
+Agents share data through a **namespaced key-value store**:
+- Agent A writes research findings → Agent B reads and builds on them
+- All data persists in SQLite across restarts
+- Namespace isolation keeps different projects separate
+
+#### Active Locks (Conflict Prevention)
+Advisory file locks prevent agents from stepping on each other:
+- Lock files before modifying → prevents concurrent write conflicts
+- Automatic expiry (configurable TTL)
+- Dashboard shows all active locks in real-time
+
+#### Auto-Detection
+You don't need to explicitly ask for fan-out. The AI automatically detects patterns like:
+- *"Do X and also Y"* → Fans out to separate agents
+- *"Research A, then code B"* → Parallel researcher + coder
+- *"Compare X vs Y"* → Parallel research, then synthesis
+
+#### Coordination Dashboard
+Monitor everything from the **Agents → Coordination** panel:
+- **Coordinated Tasks** — See all fan-out tasks with COMPLETED/PARTIAL status
+- **Shared Contexts** — Browse namespaces and entry counts
+- **Active Locks** — View locked files with owner and purpose
 
 ---
 
@@ -225,6 +278,7 @@ Production-ready security out of the box.
 
 | Feature | OpenWhale | ChatGPT | Claude | Typical Chatbot |
 |---------|-----------|---------|--------|-----------------|
+| **Multi-agent orchestration** | ✅ Fan-out/fan-in with shared memory | ❌ No | ❌ No | ❌ No |
 | **Multi-model support** | ✅ 8 providers | ❌ GPT only | ❌ Claude only | ❌ Single model |
 | **Run shell commands** | ✅ Full access | ❌ No | ❌ No | ❌ No |
 | **Browser automation** | ✅ Playwright + BrowserOS | ❌ Limited | ✅ Limited | ❌ No |
@@ -1018,20 +1072,20 @@ curl -X POST http://localhost:7777/api/agent/chat/completions \
 
 ```
 src/
-├── agents/      # Multi-agent routing and orchestration
+├── agents/      # Multi-agent orchestration (coordinator, shared-context, conflict-resolver)
 ├── auth/        # JWT, API keys, sessions
 ├── channels/    # WhatsApp, Telegram, Discord, Slack adapters
 ├── cli.ts       # Interactive terminal interface
 ├── daemon/      # Background service (launchd on macOS)
-├── dashboard/   # Web admin panel
+├── dashboard/   # Web admin panel + coordination dashboard
 ├── db/          # SQLite/PostgreSQL with Drizzle ORM
 ├── gateway/     # Hono-based HTTP API
 ├── integrations/# Google APIs (Calendar, Gmail, Drive, Tasks)
 ├── providers/   # Anthropic, OpenAI, Google, Groq, Ollama
 ├── security/    # Rate limiting, RBAC, audit logs, sandboxing
-├── sessions/    # Persistent conversation history
+├── sessions/    # Persistent conversations + fan-out auto-detection
 ├── skills/      # GitHub, Notion, Spotify, Weather, Apple, etc.
-└── tools/       # File, browser, code execution, screenshots
+└── tools/       # File, browser, code execution, screenshots, agent coordination
 ```
 
 ---
