@@ -5,28 +5,29 @@
 <h1 align="center">OpenWhale</h1>
 
 <p align="center">
-  <strong>Multi-Agent AI Operating System 🐋</strong>
+  <strong>The AI that doesn't just talk. It works. 🐋</strong>
 </p>
 
 <p align="center">
-  Deploy autonomous AI agent swarms that coordinate, communicate, and conquer complex tasks in parallel.
+  Deploys agent swarms, clears your inbox, sends emails, manages your calendar, browses the web, writes code, and runs your life.<br/>
+  All from WhatsApp, Telegram, Discord, or any chat app you already use.
 </p>
 
 <p align="center">
-  <strong>🤖 Multi-Agent Orchestration</strong> — Fan-out tasks to parallel agents with shared memory and file locks<br/>
-  <strong>🐢 Long-Horizon Reasoning</strong> — Handles complex, multi-step tasks that run for hours<br/>
+  <strong>🤖 Multi-Agent Swarms</strong> — Fan-out tasks to parallel agents with shared memory — not one bot, an army<br/>
   <strong>🧠 Self-Extensible</strong> — Creates its own tools, skills, and automations on the fly<br/>
-  <strong>🌐 OpenWhale Website</strong> — https://viralcode.github.io/openwhale<br/>
-  <strong>☁️ OpenWhale Hosting</strong> — Managed hosting coming soon
+  <strong>🔒 Runs on Your Machine</strong> — Your data never leaves your computer. Private by default<br/>
+  <strong>🌐 Website</strong> — <a href="https://viralcode.github.io/openwhale">viralcode.github.io/openwhale</a><br/>
+  <strong>☁️ Managed Hosting</strong> — Coming soon
 </p>
 
 ---
 
 ## What is OpenWhale?
 
-OpenWhale is a **multi-agent AI operating system** that doesn't just chat — it deploys autonomous agent swarms. Fan-out complex work to multiple AI agents running in parallel, coordinate them with shared memory and file locks, and collect results automatically. Connect it to 8 AI providers, let it talk on your behalf through WhatsApp/Telegram/Discord/Twitter/iMessage, browse the web with real browser automation, execute code, manage your calendar, send emails, and basically do whatever you need it to do.
+Other AI assistants chat. OpenWhale **does**. It deploys autonomous agent swarms that fan-out complex work to multiple AI agents running in parallel, coordinate them with shared memory and file locks, and collect results automatically. Connect it to 8 AI providers, let it talk on your behalf through WhatsApp/Telegram/Discord/Twitter/iMessage, browse the web with real browser automation, execute code, manage your calendar, send emails — and basically run your digital life.
 
-Think of it as **an AI workforce, not just an AI assistant**.
+**An AI workforce, not just an AI assistant.** One agent is nice. A coordinated swarm is unstoppable.
 
 <p align="center">
   <img src="images/mainpage.png" alt="OpenWhale Dashboard" width="800" />
