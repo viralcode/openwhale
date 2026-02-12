@@ -127,11 +127,22 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                     const isFromMe = msg.metadata?.fromMe === true;
                     const isGroup = fromRaw.includes("@g.us") || fromRaw.includes("-");
 
-                    // Skip bot's outbound messages (but allow owner's messages even if fromMe)
-                    const isSameAsOwner = ownerNumber && fromDigits.includes(ownerNumber);
-                    if (isFromMe && !isSameAsOwner) {
-                        markMessageProcessed(messageId, "outbound", fromRaw);
-                        return;
+                    // Determine if this is an owner message
+                    // fromMe=true means the message is from the connected WhatsApp account (the owner).
+                    // We can't match fromMe messages by phone number because WhatsApp may use
+                    // LID (Linked Identity) JIDs instead of phone numbers for linked devices.
+                    // Bot echo loops are prevented by the dedup mechanism (sendWhatsAppMessage
+                    // pre-marks outbound message IDs before they echo back).
+                    const isSameAsOwner = isFromMe || (ownerNumber ? fromDigits.includes(ownerNumber) : false);
+
+                    // Skip bot's outbound messages (echoes from messages the bot sent)
+                    if (isFromMe) {
+                        const { isMessageProcessed: isDupe } = await import("../db/message-dedupe.js");
+                        if (isDupe(messageId)) {
+                            logger.debug("channel", "WhatsApp skipping bot echo", { messageId });
+                            return;
+                        }
+                        logger.info("channel", "WhatsApp owner message (fromMe)", { messageId, preview: msg.content.slice(0, 50) });
                     }
 
                     logger.info("channel", `WhatsApp message from ${fromRaw}`, { fromMe: isFromMe, owner: isSameAsOwner, group: isGroup, preview: msg.content.slice(0, 50) });
