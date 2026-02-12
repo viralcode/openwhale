@@ -131,17 +131,12 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                     // fromMe=true means the message is from the connected WhatsApp account (the owner).
                     // We can't match fromMe messages by phone number because WhatsApp may use
                     // LID (Linked Identity) JIDs instead of phone numbers for linked devices.
-                    // Bot echo loops are prevented by the dedup mechanism (sendWhatsAppMessage
-                    // pre-marks outbound message IDs before they echo back).
+                    // Bot echoes are already filtered by the Baileys layer (whatsapp-baileys.ts)
+                    // which checks isMessageProcessed() BEFORE calling onMessage, and
+                    // sendWhatsAppMessage() pre-marks outbound IDs so they get caught there.
                     const isSameAsOwner = isFromMe || (ownerNumber ? fromDigits.includes(ownerNumber) : false);
 
-                    // Skip bot's outbound messages (echoes from messages the bot sent)
                     if (isFromMe) {
-                        const { isMessageProcessed: isDupe } = await import("../db/message-dedupe.js");
-                        if (isDupe(messageId)) {
-                            logger.debug("channel", "WhatsApp skipping bot echo", { messageId });
-                            return;
-                        }
                         logger.info("channel", "WhatsApp owner message (fromMe)", { messageId, preview: msg.content.slice(0, 50) });
                     }
 
