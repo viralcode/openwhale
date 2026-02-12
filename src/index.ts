@@ -11,6 +11,7 @@ import { createAuthRoutes } from "./gateway/routes/auth.js";
 import { createAgentRoutes } from "./gateway/routes/agent.js";
 import { createProviderRoutes } from "./gateway/routes/providers.js";
 import { createAdminRoutes } from "./gateway/routes/admin.js";
+import { createA2ARoutes } from "./gateway/routes/a2a.js";
 import { createDashboardRoutes, loadConfigsFromDB } from "./dashboard/routes.js";
 import { loadConfig } from "./config/loader.js";
 import { createLogger } from "./utils/logger.js";
@@ -100,6 +101,13 @@ async function main() {
 
     // Serve dashboard static files
     app.use("/dashboard/assets/*", serveStatic({ root: "./src/dashboard" }));
+
+    // A2A Protocol routes
+    const a2aRoutes = createA2ARoutes(db, config);
+    // Agent Card discovery (public — no auth)
+    app.get("/.well-known/agent.json", (c) => a2aRoutes.fetch(c.req.raw));
+    // JSON-RPC endpoint (authenticated)
+    app.post("/a2a", authMiddleware(db, config), (c) => a2aRoutes.fetch(c.req.raw));
 
     // OpenAI-compatible endpoint
     app.post("/v1/chat/completions", authMiddleware(db, config), async (c) => {

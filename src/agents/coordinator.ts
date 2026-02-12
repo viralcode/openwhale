@@ -66,6 +66,10 @@ export async function startAgentWork(
     task: string,
     agentId: string,
     model?: string,
+    coordinationContext?: {
+        coordinationId: string;
+        siblings: Array<{ agentId: string; sessionKey: string; label?: string; task: string }>;
+    },
 ): Promise<void> {
     try {
         // Dynamic import to avoid circular dependencies
@@ -73,6 +77,31 @@ export async function startAgentWork(
 
         console.log(`[Coordinator] 🚀 Starting real AI work for agent "${agentId}" (run: ${runId.slice(0, 8)})`);
 
+        // Build the task with coordination context if siblings exist
+        let fullTask = task;
+        if (coordinationContext && coordinationContext.siblings.length > 0) {
+            const siblingList = coordinationContext.siblings
+                .map(s => `  - Agent "${s.agentId}" (session: ${s.sessionKey})${s.label ? ` — ${s.label}` : ""}: ${s.task.slice(0, 100)}`)
+                .join("\n");
+
+            fullTask = `${task}
+
+---
+**🤝 Inter-Agent Coordination**
+You are part of a multi-agent team working in parallel. Here are your sibling agents:
+${siblingList}
+
+**Coordination namespace**: \`${coordinationContext.coordinationId}\`
+
+You can communicate with your siblings if needed:
+- **Send a message**: Use the \`sessions_send\` tool with a sibling's session key
+- **Share data**: Use \`shared_context_write\` with namespace "${coordinationContext.coordinationId}" to share findings
+- **Read shared data**: Use \`shared_context_read\` with namespace "${coordinationContext.coordinationId}" to read what others shared
+- **Check who's active**: Use \`sessions_list\` to see active sessions
+
+You don't HAVE to communicate — only do so if your task would genuinely benefit from collaboration or if you have findings relevant to another agent's work.
+---`;
+        }
         // Emit progress event
         subagentEvents.emit("event", {
             type: "run_progress",
@@ -80,12 +109,14 @@ export async function startAgentWork(
             message: `Starting AI execution for task: ${task.slice(0, 80)}...`,
         });
 
-        const result = await processMessage(childSessionKey, task, {
+        const result = await processMessage(childSessionKey, fullTask, {
             model: model || undefined,
             maxIterations: 15,
             abortSignal: getAbortSignal(runId),
-            // Prevent sub-agents from recursively spawning more agents
-            excludeTools: ["sessions_fanout", "sessions_spawn", "sessions_list", "sessions_stop"],
+            // Only prevent sub-agents from recursively spawning more agents
+            // Allow communication tools (sessions_send, sessions_list, sessions_history, shared_context_*)
+            // so agents can talk to each other during fan-out execution
+            excludeTools: ["sessions_fanout", "sessions_spawn"],
             onToolStart: (toolInfo) => {
                 console.log(`[Coordinator] 🔧 Agent "${agentId}" calling: ${toolInfo.name}`);
                 subagentEvents.emit("event", {
@@ -149,7 +180,8 @@ export function fanOut(params: {
     const coordinationId = randomUUID();
     const runIds: string[] = [];
 
-    // Register all sub-agent runs
+    // Register all sub-agent runs first (to collect session keys for sibling info)
+    const registrations: Array<{ task: FanOutTask; runId: string; childSessionKey: string; model: string | undefined }> = [];
     for (const task of params.tasks) {
         // Check spawn permission
         if (!canAgentSpawn(params.sourceAgentId, task.agentId)) {
@@ -169,17 +201,39 @@ export function fanOut(params: {
         });
 
         runIds.push(run.runId);
+        registrations.push({
+            task,
+            runId: run.runId,
+            childSessionKey: run.childSessionKey,
+            model: task.model || agentConfig.model,
+        });
+    }
 
-        // Mark as running and start real AI work (fire-and-forget)
-        updateRunStatus(run.runId, "running");
+    // Now start all agents with coordination context (sibling awareness)
+    for (const reg of registrations) {
+        // Build sibling list (all agents except current one)
+        const siblings = registrations
+            .filter(r => r.runId !== reg.runId)
+            .map(r => ({
+                agentId: r.task.agentId,
+                sessionKey: r.childSessionKey,
+                label: r.task.label,
+                task: r.task.task,
+            }));
+
+        updateRunStatus(reg.runId, "running");
         startAgentWork(
-            run.runId,
-            run.childSessionKey,
-            task.task,
-            task.agentId,
-            task.model || agentConfig.model,
+            reg.runId,
+            reg.childSessionKey,
+            reg.task.task,
+            reg.task.agentId,
+            reg.model,
+            {
+                coordinationId,
+                siblings,
+            },
         ).catch(err => {
-            console.error(`[Coordinator] Unhandled error in agent "${task.agentId}":`, err);
+            console.error(`[Coordinator] Unhandled error in agent "${reg.task.agentId}":`, err);
         });
     }
 
