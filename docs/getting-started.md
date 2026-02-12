@@ -16,6 +16,8 @@ Get OpenWhale up and running in under 5 minutes.
 npm install -g pnpm
 ```
 
+> 🪟 **Windows users:** See the dedicated **[Windows Installation Guide](windows-setup.md)** for step-by-step instructions, prerequisites, and Windows-specific troubleshooting.
+
 ---
 
 ## Quick Start

@@ -48,6 +48,8 @@ pnpm run dev
 Open **http://localhost:7777/dashboard** → add your API keys → start chatting.
 
 > 📖 **[Full Getting Started Guide →](docs/getting-started.md)**
+>
+> 🪟 **On Windows?** See the **[Windows Installation Guide →](docs/windows-setup.md)** for step-by-step setup with PowerShell.
 
 ---
 
@@ -273,6 +275,7 @@ Native SwiftUI menu bar app with quick chat, status monitoring, and channel cont
 | **[macOS App](docs/macos-app.md)** | Native menu bar app |
 | **[API](docs/api.md)** | REST API reference and OpenAI-compatible endpoints |
 | **[Security](docs/security.md)** | Authentication, rate limiting, audit, sandboxing |
+| **[Windows Setup](docs/windows-setup.md)** | Installing & running on Windows 10/11 |
 | **[Configuration](docs/configuration.md)** | Full .env reference |
 | **[CLI](docs/cli.md)** | CLI commands and npm scripts |
 | **[Troubleshooting](docs/troubleshooting.md)** | Common issues and fixes |
