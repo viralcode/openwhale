@@ -1,4 +1,5 @@
 // AI Provider abstraction layer
+import { logger } from "../logger.js";
 
 export type Message = {
     role: "user" | "assistant" | "system" | "tool";
@@ -124,7 +125,20 @@ export class ProviderRegistry {
         if (!provider) {
             throw new Error(`No provider available for model: ${request.model}`);
         }
-        return provider.complete(request);
+        const startTime = Date.now();
+        try {
+            const response = await provider.complete(request);
+            const elapsed = Date.now() - startTime;
+            logger.info("provider", `${provider.name} completed in ${elapsed}ms`, { model: request.model, inputTokens: response.inputTokens, outputTokens: response.outputTokens, toolCalls: response.toolCalls?.length ?? 0 });
+            return response;
+        } catch (error: any) {
+            const elapsed = Date.now() - startTime;
+            const status = error?.status || error?.statusCode || 'unknown';
+            const code = error?.code || error?.error?.code || 'unknown';
+            const errMsg = error?.message || String(error);
+            logger.error("provider", `${provider.name} FAILED after ${elapsed}ms`, { model: request.model, status, code, error: errMsg.slice(0, 500) });
+            throw error;
+        }
     }
 
     async *stream(request: CompletionRequest): AsyncGenerator<StreamEvent> {

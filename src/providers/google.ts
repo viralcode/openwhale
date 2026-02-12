@@ -1,5 +1,6 @@
 // Google/Gemini Provider - using @google/generative-ai SDK
 import type { AIProvider, CompletionRequest, CompletionResponse, StreamEvent } from "./base.js";
+import { logger } from "../logger.js";
 
 export class GoogleProvider implements AIProvider {
     name = "Google AI";
@@ -66,6 +67,8 @@ export class GoogleProvider implements AIProvider {
             }];
         }
 
+        logger.info("provider", "Google API call", { model, messages: contents.length, tools: request.tools?.length ?? 0, maxTokens: request.maxTokens ?? 8192 });
+
         const response = await fetch(
             `${this.baseUrl}/models/${model}:generateContent?key=${this.apiKey}`,
             {
@@ -77,6 +80,7 @@ export class GoogleProvider implements AIProvider {
 
         if (!response.ok) {
             const error = await response.text();
+            logger.error("provider", "Google API ERROR", { status: response.status, model, body: error.slice(0, 500) });
             throw new Error(`Google API error: ${error}`);
         }
 
@@ -103,6 +107,8 @@ export class GoogleProvider implements AIProvider {
                 name: p.functionCall!.name,
                 arguments: p.functionCall!.args,
             }));
+
+        logger.info("provider", "Google API success", { model, finish: candidate?.finishReason, inputTokens: data.usageMetadata?.promptTokenCount, outputTokens: data.usageMetadata?.candidatesTokenCount, toolCalls: functionCalls.length, contentLen: textParts.length });
 
         return {
             content: textParts,

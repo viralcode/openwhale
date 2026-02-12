@@ -15,7 +15,6 @@ export function initializeProviders(): void {
     const anthropic = createAnthropicProvider();
     if (anthropic) {
         registry.register("anthropic", anthropic);
-        console.log("✓ Anthropic provider registered");
         logger.info("provider", "Anthropic provider registered");
     }
 
@@ -23,7 +22,6 @@ export function initializeProviders(): void {
     const openai = createOpenAIProvider();
     if (openai) {
         registry.register("openai", openai);
-        console.log("✓ OpenAI provider registered");
         logger.info("provider", "OpenAI provider registered");
     }
 
@@ -31,7 +29,6 @@ export function initializeProviders(): void {
     const google = createGoogleProvider();
     if (google) {
         registry.register("google", google);
-        console.log("✓ Google/Gemini provider registered");
         logger.info("provider", "Google/Gemini provider registered");
     }
 
@@ -39,7 +36,6 @@ export function initializeProviders(): void {
     const deepseek = createDeepSeekProvider();
     if (deepseek) {
         registry.register("deepseek", deepseek);
-        console.log("✓ DeepSeek provider registered");
         logger.info("provider", "DeepSeek provider registered");
     }
 
@@ -47,7 +43,6 @@ export function initializeProviders(): void {
     const groq = createGroqProvider();
     if (groq) {
         registry.register("groq", groq);
-        console.log("✓ Groq provider registered");
         logger.info("provider", "Groq provider registered");
     }
 
@@ -55,7 +50,6 @@ export function initializeProviders(): void {
     const together = createTogetherProvider();
     if (together) {
         registry.register("together", together);
-        console.log("✓ Together AI provider registered");
         logger.info("provider", "Together AI provider registered");
     }
 
@@ -63,7 +57,6 @@ export function initializeProviders(): void {
     const ollama = createOllamaProvider();
     if (ollama) {
         registry.register("ollama", ollama);
-        console.log("✓ Ollama provider registered");
         logger.info("provider", "Ollama provider registered");
     }
 
@@ -71,13 +64,11 @@ export function initializeProviders(): void {
     const qwen = createQwenProvider();
     if (qwen) {
         registry.register("qwen", qwen);
-        console.log("✓ Qwen provider registered");
         logger.info("provider", "Qwen provider registered");
     }
 
     // Set fallback order
     registry.setFallbackOrder(["anthropic", "openai", "google", "qwen", "deepseek", "groq", "together", "ollama"]);
 
-    console.log(`Providers initialized: ${registry.listProviders().length} available`);
     logger.info("provider", `Providers initialized: ${registry.listProviders().length} available`, { providers: registry.listProviders() });
 }

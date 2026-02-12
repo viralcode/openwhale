@@ -124,23 +124,14 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
                     // Get sender info
                     const fromRaw = msg.from;
                     const fromDigits = fromRaw.replace(/[^0-9]/g, "");
-                    const isFromMe = msg.metadata?.fromMe === true;
                     const isGroup = fromRaw.includes("@g.us") || fromRaw.includes("-");
 
-                    // Determine if this is an owner message
-                    // fromMe=true means the message is from the connected WhatsApp account (the owner).
-                    // We can't match fromMe messages by phone number because WhatsApp may use
-                    // LID (Linked Identity) JIDs instead of phone numbers for linked devices.
-                    // Bot echoes are already filtered by the Baileys layer (whatsapp-baileys.ts)
-                    // which checks isMessageProcessed() BEFORE calling onMessage, and
-                    // sendWhatsAppMessage() pre-marks outbound IDs so they get caught there.
-                    const isSameAsOwner = isFromMe || (ownerNumber ? fromDigits.includes(ownerNumber) : false);
+                    // Check if sender matches the configured owner number.
+                    // Note: fromMe messages (owner's outbound) are already filtered in whatsapp-baileys.ts,
+                    // so all messages here are genuinely INCOMING from other people.
+                    const isSameAsOwner = ownerNumber ? fromDigits.includes(ownerNumber) : false;
 
-                    if (isFromMe) {
-                        logger.info("channel", "WhatsApp owner message (fromMe)", { messageId, preview: msg.content.slice(0, 50) });
-                    }
-
-                    logger.info("channel", `WhatsApp message from ${fromRaw}`, { fromMe: isFromMe, owner: isSameAsOwner, group: isGroup, preview: msg.content.slice(0, 50) });
+                    logger.info("channel", `WhatsApp message from ${fromRaw}`, { fromDigits, owner: isSameAsOwner, group: isGroup, preview: msg.content.slice(0, 50) });
 
                     // Skip group messages
                     if (isGroup) {
@@ -175,7 +166,7 @@ export async function initializeChannels(_db?: any, _config?: any): Promise<void
 
                     // Only process messages from owner if configured (extensions already ran above)
                     if (ownerNumber && !isSameAsOwner) {
-                        logger.debug("channel", "WhatsApp skipping AI, not from owner", { from: fromRaw, ownerNumber });
+                        logger.info("channel", "WhatsApp BLOCKED — not from owner", { from: fromRaw, fromDigits, ownerNumber });
                         markMessageProcessed(messageId, "inbound", fromRaw);
                         return;
                     }

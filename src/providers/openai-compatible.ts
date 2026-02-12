@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import type { AIProvider, CompletionRequest, CompletionResponse, StreamEvent, Message, Tool } from "./base.js";
+import { logger } from "../logger.js";
 
 /** Safely parse tool call arguments - LLMs sometimes return malformed JSON */
 function safeParseArgs(raw: string): Record<string, unknown> {
@@ -13,7 +14,7 @@ function safeParseArgs(raw: string): Record<string, unknown> {
                 .replace(/'/g, '"');             // single quotes
             return JSON.parse(fixed);
         } catch {
-            console.warn('[Provider] Failed to parse tool arguments, using raw string:', raw.slice(0, 200));
+            logger.warn('provider', 'Failed to parse tool arguments, using raw string', { raw: raw.slice(0, 200) });
             return { input: raw };
         }
     }
@@ -123,30 +124,53 @@ export class OpenAICompatibleProvider implements AIProvider {
 
     async complete(request: CompletionRequest): Promise<CompletionResponse> {
         const messages = this.convertMessages(request.messages, request.systemPrompt);
+        const tools = this.convertTools(request.tools);
 
-        const response = await this.client.chat.completions.create({
-            model: request.model,
-            messages,
-            max_tokens: request.maxTokens,
-            temperature: request.temperature,
-            tools: this.convertTools(request.tools),
-        });
+        logger.info("provider", `${this.name} API call`, { model: request.model, messages: messages.length, tools: tools?.length ?? 0, maxTokens: request.maxTokens ?? 'default', baseURL: this.client.baseURL });
 
-        const choice = response.choices[0];
-        const toolCalls = choice.message.tool_calls?.map(tc => ({
-            id: tc.id,
-            name: tc.function.name,
-            arguments: safeParseArgs(tc.function.arguments),
-        }));
+        try {
+            const response = await this.client.chat.completions.create({
+                model: request.model,
+                messages,
+                max_tokens: request.maxTokens,
+                temperature: request.temperature,
+                tools,
+            });
 
-        return {
-            content: choice.message.content ?? "",
-            toolCalls: toolCalls?.length ? toolCalls : undefined,
-            inputTokens: response.usage?.prompt_tokens,
-            outputTokens: response.usage?.completion_tokens,
-            model: response.model,
-            stopReason: choice.finish_reason ?? undefined,
-        };
+            const choice = response.choices[0];
+            if (!choice) {
+                logger.error("provider", `${this.name} API returned no choices`, { responseId: response.id, model: response.model });
+                return { content: "No response from AI", model: response.model || request.model };
+            }
+
+            const toolCalls = choice.message.tool_calls?.map(tc => ({
+                id: tc.id,
+                name: tc.function.name,
+                arguments: safeParseArgs(tc.function.arguments),
+            }));
+
+            logger.info("provider", `${this.name} API success`, { model: response.model, finish: choice.finish_reason, inputTokens: response.usage?.prompt_tokens, outputTokens: response.usage?.completion_tokens, toolCalls: toolCalls?.length ?? 0, contentLen: choice.message.content?.length ?? 0 });
+
+            return {
+                content: choice.message.content ?? "",
+                toolCalls: toolCalls?.length ? toolCalls : undefined,
+                inputTokens: response.usage?.prompt_tokens,
+                outputTokens: response.usage?.completion_tokens,
+                model: response.model,
+                stopReason: choice.finish_reason ?? undefined,
+            };
+        } catch (error: any) {
+            // Extract detailed error info from OpenAI SDK errors
+            const status = error?.status || error?.statusCode || 'unknown';
+            const errorType = error?.error?.type || error?.type || 'unknown';
+            const errorCode = error?.error?.code || error?.code || 'unknown';
+            const errorMessage = error?.error?.message || error?.message || String(error);
+            const requestId = error?.headers?.get?.('x-request-id') || 'unknown';
+
+            logger.error("provider", `${this.name} API ERROR`, { status, type: errorType, code: errorCode, message: errorMessage.slice(0, 500), model: request.model, requestId, baseURL: this.client.baseURL });
+
+            throw error;
+        }
     }
 
     async *stream(request: CompletionRequest): AsyncGenerator<StreamEvent> {

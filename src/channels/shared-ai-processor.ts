@@ -434,10 +434,18 @@ Current time: ${now.toLocaleString()}`;
         await sendText(reply);
 
         return { success: true, reply };
-    } catch (error) {
+    } catch (error: any) {
         const errMsg = error instanceof Error ? error.message : String(error);
-        logger.error("chat", `${channelUpper} AI error`, { error: errMsg, from });
-        await sendText(`Error: ${errMsg.slice(0, 200)}`);
+        const status = error?.status || error?.statusCode || '';
+        const errorDetail = status ? `[${status}] ${errMsg}` : errMsg;
+        logger.error("chat", `${channelUpper} AI error`, {
+            error: errorDetail,
+            model,
+            from,
+            iteration: iterations,
+            stack: error?.stack?.split('\n').slice(0, 3).join(' | ') || 'no stack',
+        });
+        await sendText(`Error: ${errorDetail.slice(0, 200)}`);
         return { success: false, error: errMsg };
     }
 }

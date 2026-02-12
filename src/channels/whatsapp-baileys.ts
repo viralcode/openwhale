@@ -143,8 +143,20 @@ export async function initWhatsApp(options: {
             }
         });
 
+        // Track when the handler was set up to skip old messages on startup
+        const handlerStartTime = Math.floor(Date.now() / 1000);
+
         // Handle incoming messages
         waSocket.ev.on("messages.upsert", async (m) => {
+            // OpenClaw pattern: only process "notify" type (real-time incoming messages).
+            // "append" = historical catch-up on reconnect, other types = history sync.
+            // This is the PRIMARY filter that prevents old message replay.
+            const upsertType = (m as any).type;
+            if (upsertType !== "notify") {
+                owLogger.debug("channel", `WhatsApp skipping upsert type=${upsertType}`, { count: m.messages?.length ?? 0 });
+                return;
+            }
+
             // Import dedup module for checking and saving messages
             const { markMessageProcessed, isMessageProcessed } = await import("../db/message-dedupe.js");
 
@@ -159,6 +171,15 @@ export async function initWhatsApp(options: {
 
                     const messageId = msg.key.id || `wa-${Date.now()}`;
 
+                    // Skip old messages replayed on startup/reconnect (older than 30s before handler start)
+                    const msgTimestamp = typeof msg.messageTimestamp === "number"
+                        ? msg.messageTimestamp
+                        : Number(msg.messageTimestamp) || 0;
+                    if (msgTimestamp > 0 && msgTimestamp < handlerStartTime - 30) {
+                        owLogger.debug("channel", "WhatsApp skipping old message (before startup)", { messageId, age: `${handlerStartTime - msgTimestamp}s` });
+                        continue;
+                    }
+
                     // Use SQLite to check if already processed (prevents infinite loops)
                     if (isMessageProcessed(messageId)) {
                         owLogger.debug("channel", "WhatsApp skipping already processed message", { messageId });
@@ -166,9 +187,24 @@ export async function initWhatsApp(options: {
                     }
 
                     const from = msg.key.remoteJid?.replace("@s.whatsapp.net", "").replace("@lid", "") || "";
-                    const msgTimestamp = typeof msg.messageTimestamp === "number"
-                        ? msg.messageTimestamp
-                        : Number(msg.messageTimestamp) || Date.now() / 1000;
+                    const effectiveTimestamp = msgTimestamp || Date.now() / 1000;
+
+                    // OpenClaw pattern (access-control.ts:120): skip fromMe ONLY for DMs to other people.
+                    // When the conversation is with yourself (self-chat), fromMe messages ARE the owner
+                    // talking to the AI — those must be processed.
+                    if (msg.key.fromMe) {
+                        const ownerNum = process.env.WHATSAPP_OWNER_NUMBER?.replace(/[^0-9]/g, "") || "";
+                        const fromDigits = from.replace(/[^0-9]/g, "");
+                        const isSelfChat = ownerNum && fromDigits.includes(ownerNum);
+
+                        if (!isSelfChat) {
+                            owLogger.debug("channel", "WhatsApp skipping outbound to other contact", { messageId, from, preview: text.slice(0, 40) });
+                            markMessageProcessed(messageId, "outbound", from, { content: text });
+                            continue;
+                        }
+                        // Self-chat fromMe: owner is talking to AI, let it through
+                        owLogger.info("channel", "WhatsApp self-chat message (owner→AI)", { messageId, from, preview: text.slice(0, 40) });
+                    }
 
                     owLogger.info("channel", `WhatsApp message received`, { from, fromMe: msg.key.fromMe, messageId, preview: text.slice(0, 60), pushName: msg.pushName || null });
 
@@ -184,7 +220,7 @@ export async function initWhatsApp(options: {
                             from,
                             content: text,
                             channel: "whatsapp",
-                            timestamp: new Date(msgTimestamp * 1000),
+                            timestamp: new Date(effectiveTimestamp * 1000),
                             metadata: {
                                 id: messageId,
                                 pushName: msg.pushName,

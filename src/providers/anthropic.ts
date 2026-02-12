@@ -1,5 +1,6 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { AIProvider, CompletionRequest, CompletionResponse, StreamEvent, Message, Tool } from "./base.js";
+import { logger } from "../logger.js";
 
 export class AnthropicProvider implements AIProvider {
     name = "Anthropic";
@@ -140,39 +141,54 @@ export class AnthropicProvider implements AIProvider {
 
     async complete(request: CompletionRequest): Promise<CompletionResponse> {
         const { system, messages } = this.convertMessages(request.messages, request.systemPrompt);
+        const tools = this.convertTools(request.tools);
 
-        const response = await this.client.messages.create({
-            model: request.model,
-            max_tokens: request.maxTokens ?? 4096,
-            temperature: request.temperature,
-            system,
-            messages,
-            tools: this.convertTools(request.tools),
-        });
+        logger.info("provider", "Anthropic API call", { model: request.model, messages: messages.length, tools: tools?.length ?? 0, maxTokens: request.maxTokens ?? 4096 });
 
-        let content = "";
-        const toolCalls: CompletionResponse["toolCalls"] = [];
+        try {
+            const response = await this.client.messages.create({
+                model: request.model,
+                max_tokens: request.maxTokens ?? 4096,
+                temperature: request.temperature,
+                system,
+                messages,
+                tools,
+            });
 
-        for (const block of response.content) {
-            if (block.type === "text") {
-                content += block.text;
-            } else if (block.type === "tool_use") {
-                toolCalls.push({
-                    id: block.id,
-                    name: block.name,
-                    arguments: block.input as Record<string, unknown>,
-                });
+            let content = "";
+            const toolCalls: CompletionResponse["toolCalls"] = [];
+
+            for (const block of response.content) {
+                if (block.type === "text") {
+                    content += block.text;
+                } else if (block.type === "tool_use") {
+                    toolCalls.push({
+                        id: block.id,
+                        name: block.name,
+                        arguments: block.input as Record<string, unknown>,
+                    });
+                }
             }
-        }
 
-        return {
-            content,
-            toolCalls: toolCalls.length ? toolCalls : undefined,
-            inputTokens: response.usage.input_tokens,
-            outputTokens: response.usage.output_tokens,
-            model: response.model,
-            stopReason: response.stop_reason ?? undefined,
-        };
+            logger.info("provider", "Anthropic API success", { model: response.model, stop: response.stop_reason, inputTokens: response.usage.input_tokens, outputTokens: response.usage.output_tokens, toolCalls: toolCalls.length, contentLen: content.length });
+
+            return {
+                content,
+                toolCalls: toolCalls.length ? toolCalls : undefined,
+                inputTokens: response.usage.input_tokens,
+                outputTokens: response.usage.output_tokens,
+                model: response.model,
+                stopReason: response.stop_reason ?? undefined,
+            };
+        } catch (error: any) {
+            const status = error?.status || error?.statusCode || 'unknown';
+            const errorType = error?.error?.type || error?.type || 'unknown';
+            const errorMessage = error?.error?.message || error?.message || String(error);
+
+            logger.error("provider", "Anthropic API ERROR", { status, type: errorType, message: errorMessage.slice(0, 500), model: request.model });
+
+            throw error;
+        }
     }
 
     async *stream(request: CompletionRequest): AsyncGenerator<StreamEvent> {
