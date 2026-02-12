@@ -277,11 +277,41 @@ taskkill /PID <PID> /F
 
 ### PowerShell execution policy errors
 
-If scripts won't run:
+If you see **"running scripts is disabled on this system"** when installing pnpm or running the installer:
+
+**Fix 1: Change the execution policy (recommended — run once, permanent fix):**
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
+
+Then retry your command (e.g. `npm install -g pnpm`).
+
+**Fix 2: Bypass for current session only (no admin needed):**
+
+```powershell
+Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process
+npm install -g pnpm
+```
+
+**Fix 3: Skip pnpm scripts entirely — use corepack instead (built into Node 22+):**
+
+```powershell
+corepack enable
+corepack prepare pnpm@latest --activate
+pnpm -v   # verify it works
+```
+
+**Fix 4: Use the batch file installer instead:**
+
+If PowerShell is giving you trouble, use `install.bat` instead — batch files are not affected by the execution policy:
+
+```cmd
+install.bat
+```
+
+> [!TIP]
+> The `install.ps1` script tries to handle this automatically by using `corepack` first. If you still hit issues, apply Fix 1 above and re-run the script.
 
 ### FFmpeg not found
 
