@@ -193,17 +193,27 @@ export async function initWhatsApp(options: {
                     // When the conversation is with yourself (self-chat), fromMe messages ARE the owner
                     // talking to the AI — those must be processed.
                     if (msg.key.fromMe) {
+                        // Primary: compare remoteJid with sock.user.id (works for both LID and phone JIDs)
+                        // Baileys knows the connected user's JID regardless of LID vs phone format.
+                        const selfJid = waSocket?.user?.id;
+                        const remoteJid = msg.key.remoteJid || "";
+                        // Normalize: strip :XX device suffix from selfJid for comparison
+                        // e.g. "14378762880:12@s.whatsapp.net" → "14378762880@s.whatsapp.net"
+                        const selfNormalized = selfJid?.replace(/:\d+@/, "@") || "";
+                        const isSelfChat = selfNormalized && remoteJid === selfNormalized;
+
+                        // Fallback: also check owner number digits in case JID formats differ
                         const ownerNum = process.env.WHATSAPP_OWNER_NUMBER?.replace(/[^0-9]/g, "") || "";
                         const fromDigits = from.replace(/[^0-9]/g, "");
-                        const isSelfChat = ownerNum && fromDigits.includes(ownerNum);
+                        const isOwnerDigitMatch = ownerNum && fromDigits.includes(ownerNum);
 
-                        if (!isSelfChat) {
+                        if (!isSelfChat && !isOwnerDigitMatch) {
                             owLogger.debug("channel", "WhatsApp skipping outbound to other contact", { messageId, from, preview: text.slice(0, 40) });
                             markMessageProcessed(messageId, "outbound", from, { content: text });
                             continue;
                         }
                         // Self-chat fromMe: owner is talking to AI, let it through
-                        owLogger.info("channel", "WhatsApp self-chat message (owner→AI)", { messageId, from, preview: text.slice(0, 40) });
+                        owLogger.info("channel", "WhatsApp self-chat message (owner→AI)", { messageId, from, selfJid: selfNormalized, isSelfChat, isOwnerDigitMatch, preview: text.slice(0, 40) });
                     }
 
                     owLogger.info("channel", `WhatsApp message received`, { from, fromMe: msg.key.fromMe, messageId, preview: text.slice(0, 60), pushName: msg.pushName || null });
