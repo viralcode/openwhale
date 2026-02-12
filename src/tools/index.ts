@@ -34,6 +34,13 @@ import { dbQueryTool } from "./db-query.js";
 import { slidesTool } from "./slides.js";
 import { logsTool } from "./logs.js";
 import { codebaseTool } from "./codebase.js";
+import { agentsListTool } from "./agents-list-tool.js";
+import { sessionsListTool } from "./sessions-list-tool.js";
+import { sessionsSendTool } from "./sessions-send-tool.js";
+import { sessionsHistoryTool } from "./sessions-history-tool.js";
+import { sessionsFanoutTool } from "./sessions-fanout-tool.js";
+import { sharedContextWriteTool, sharedContextReadTool, sharedContextDeleteTool } from "./shared-context-tools.js";
+import { fileLockTool, conflictsTool } from "./conflict-tools.js";
 
 // Register all tools
 toolRegistry.register(execTool);
@@ -77,6 +84,20 @@ toolRegistry.register(slidesTool);
 toolRegistry.register(logsTool);
 toolRegistry.register(codebaseTool);
 
+// Register multi-agent coordination tools
+toolRegistry.register(agentsListTool);
+toolRegistry.register(sessionsListTool as any);
+toolRegistry.register(sessionsSendTool as any);
+toolRegistry.register(sessionsHistoryTool as any);
+
+// Register enhancement tools — fan-out, shared context, conflict resolution
+toolRegistry.register(sessionsFanoutTool as any);
+toolRegistry.register(sharedContextWriteTool as any);
+toolRegistry.register(sharedContextReadTool as any);
+toolRegistry.register(sharedContextDeleteTool as any);
+toolRegistry.register(fileLockTool as any);
+toolRegistry.register(conflictsTool as any);
+
 export { toolRegistry } from "./base.js";
 export type { AgentTool, ToolCallContext, ToolResult, ToolRegistry } from "./base.js";
 export { execTool } from "./exec.js";
@@ -112,4 +133,10 @@ export { dbQueryTool } from "./db-query.js";
 export { slidesTool } from "./slides.js";
 export { logsTool } from "./logs.js";
 export { codebaseTool } from "./codebase.js";
-
+export { agentsListTool } from "./agents-list-tool.js";
+export { sessionsListTool } from "./sessions-list-tool.js";
+export { sessionsSendTool } from "./sessions-send-tool.js";
+export { sessionsHistoryTool } from "./sessions-history-tool.js";
+export { sessionsFanoutTool } from "./sessions-fanout-tool.js";
+export { sharedContextWriteTool, sharedContextReadTool, sharedContextDeleteTool } from "./shared-context-tools.js";
+export { fileLockTool, conflictsTool } from "./conflict-tools.js";

@@ -1,12 +1,12 @@
 /**
  * Sessions History Tool - Fetch transcript history for a session
  * 
- * Allows agents to read the conversation history of another session
- * for context and coordination.
+ * Real DB-backed implementation that queries the messages table.
  */
 
 import { z } from "zod";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
+import { db } from "../db/index.js";
 
 export const sessionsHistorySchema = z.object({
     sessionId: z.string().describe("Session key/ID to fetch history from (from sessions_list)"),
@@ -25,35 +25,69 @@ export interface HistoryMessage {
     content: string;
     timestamp: number;
     toolName?: string;
+    model?: string;
 }
 
-/**
- * Execute sessions_history tool
- */
 async function executeSessionsHistory(
     params: SessionsHistoryParams,
-    context: ToolCallContext
+    _context: ToolCallContext
 ): Promise<ToolResult> {
     try {
-        // Check if session exists (simplified - in production queries session store)
-        if (params.sessionId !== context.sessionId) {
-            // For now, only allow access to current session
-            // In production, this would query the session store
+        // Resolve session ID from key
+        const sessionRow = db.prepare(
+            "SELECT id, key, agent_id FROM sessions WHERE key = ? OR id = ?"
+        ).get(params.sessionId, params.sessionId) as any;
+
+        if (!sessionRow) {
+            return {
+                success: true,
+                content: JSON.stringify({
+                    sessionId: params.sessionId,
+                    count: 0,
+                    messages: [],
+                    note: "Session not found",
+                }),
+                metadata: { sessionId: params.sessionId, count: 0 },
+            };
         }
 
-        const messages: HistoryMessage[] = [];
+        let query = `
+            SELECT role, content, model, tool_calls, created_at 
+            FROM messages 
+            WHERE session_id = ?
+        `;
+        const queryParams: any[] = [sessionRow.id];
 
-        // In production, would fetch from session store
-        const result = {
-            sessionId: params.sessionId,
-            count: messages.length,
-            messages,
-            note: "History tool active. In production, fetches from session transcript.",
-        };
+        if (params.before) {
+            query += " AND created_at < ?";
+            queryParams.push(Math.floor(params.before / 1000));
+        }
+        if (params.after) {
+            query += " AND created_at > ?";
+            queryParams.push(Math.floor(params.after / 1000));
+        }
+
+        query += ` ORDER BY created_at DESC LIMIT ?`;
+        queryParams.push(params.limit || 20);
+
+        const rows = db.prepare(query).all(...queryParams) as any[];
+
+        const messages: HistoryMessage[] = rows.reverse().map(row => ({
+            role: row.role,
+            content: (row.content || "").slice(0, 2000),
+            timestamp: row.created_at ? row.created_at * 1000 : 0,
+            model: row.model || undefined,
+        }));
 
         return {
             success: true,
-            content: JSON.stringify(result, null, 2),
+            content: JSON.stringify({
+                sessionId: params.sessionId,
+                sessionKey: sessionRow.key,
+                agentId: sessionRow.agent_id,
+                count: messages.length,
+                messages,
+            }, null, 2),
             metadata: { sessionId: params.sessionId, count: messages.length },
         };
     } catch (error) {

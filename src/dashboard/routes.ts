@@ -2989,6 +2989,345 @@ echo "Hello from ${name}"
         }
     });
 
+    // ============== AGENTS MANAGEMENT ==============
+
+    dashboard.get("/api/agents", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const { listAgentConfigs } = await import("../agents/agent-config.js");
+            const agents = listAgentConfigs();
+            return c.json({ ok: true, agents });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    dashboard.post("/api/agents", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const body = await c.req.json();
+            const { saveAgentConfig } = await import("../agents/agent-config.js");
+
+            if (!body.id || !body.name) {
+                return c.json({ ok: false, error: "id and name are required" }, 400);
+            }
+
+            saveAgentConfig({
+                id: body.id,
+                name: body.name,
+                description: body.description || "",
+                model: body.model || undefined,
+                systemPrompt: body.systemPrompt || undefined,
+                workspace: body.workspace || undefined,
+                capabilities: body.capabilities || [],
+                isDefault: body.isDefault || false,
+                enabled: body.enabled !== false,
+                allowAgents: body.allowAgents || [],
+            });
+
+            return c.json({ ok: true });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    dashboard.put("/api/agents/:id", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const agentId = c.req.param("id");
+            const body = await c.req.json();
+            const { saveAgentConfig } = await import("../agents/agent-config.js");
+
+            saveAgentConfig({
+                id: agentId,
+                name: body.name || agentId,
+                description: body.description || "",
+                model: body.model || undefined,
+                systemPrompt: body.systemPrompt || undefined,
+                workspace: body.workspace || undefined,
+                capabilities: body.capabilities || [],
+                isDefault: body.isDefault || false,
+                enabled: body.enabled !== false,
+                allowAgents: body.allowAgents || [],
+            });
+
+            return c.json({ ok: true });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    dashboard.delete("/api/agents/:id", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const agentId = c.req.param("id");
+            const { deleteAgentConfig } = await import("../agents/agent-config.js");
+
+            if (agentId === "main") {
+                return c.json({ ok: false, error: "Cannot delete the default agent" }, 400);
+            }
+
+            const deleted = deleteAgentConfig(agentId);
+            if (!deleted) {
+                return c.json({ ok: false, error: "Agent not found or is default" }, 404);
+            }
+            return c.json({ ok: true });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // Sub-agent runs
+    dashboard.get("/api/agents/runs", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const { getAllRuns, getActiveRuns } = await import("../agents/subagent-registry.js");
+            const activeOnly = c.req.query("active") === "true";
+
+            const runs = activeOnly ? getActiveRuns() : getAllRuns({ limit: 50 });
+            return c.json({ ok: true, runs });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    dashboard.post("/api/agents/runs/:id/stop", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const runId = c.req.param("id");
+            const { stopRun } = await import("../agents/subagent-registry.js");
+            const stopped = stopRun(runId);
+            return c.json({ ok: stopped, error: stopped ? undefined : "Run not found or not active" });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    dashboard.post("/api/agents/runs/:id/pause", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const runId = c.req.param("id");
+            const { pauseRun } = await import("../agents/subagent-registry.js");
+            const paused = pauseRun(runId);
+            return c.json({ ok: paused, error: paused ? undefined : "Run not found or not running" });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // Get detailed info for a specific run (messages, tool calls)
+    dashboard.get("/api/agents/runs/:id/detail", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const runId = c.req.param("id");
+            const { getRun } = await import("../agents/subagent-registry.js");
+            const run = getRun(runId);
+
+            if (!run) {
+                // Try loading from DB directly
+                const dbRun = sqliteDb.prepare("SELECT * FROM subagent_runs WHERE run_id = ?").get(runId) as any;
+                if (!dbRun) return c.json({ ok: false, error: "Run not found" }, 404);
+
+                // Look up messages via child_session_key
+                const session = sqliteDb.prepare("SELECT id FROM sessions WHERE key = ?").get(dbRun.child_session_key) as any;
+                const messages = session
+                    ? (sqliteDb.prepare("SELECT role, content, tool_calls, tool_results, created_at FROM messages WHERE session_id = ? ORDER BY created_at ASC").all(session.id) as any[])
+                    : [];
+
+                return c.json({
+                    ok: true,
+                    run: {
+                        runId: dbRun.run_id,
+                        agentId: dbRun.agent_id,
+                        task: dbRun.task,
+                        status: dbRun.status,
+                        result: dbRun.result,
+                        error: dbRun.error,
+                        createdAt: dbRun.created_at ? dbRun.created_at * 1000 : 0,
+                        startedAt: dbRun.started_at ? dbRun.started_at * 1000 : undefined,
+                        endedAt: dbRun.ended_at ? dbRun.ended_at * 1000 : undefined,
+                    },
+                    messages: messages.map((m: any) => ({
+                        role: m.role,
+                        content: m.content?.slice(0, 2000),
+                        toolCalls: m.tool_calls ? JSON.parse(m.tool_calls) : undefined,
+                        toolResults: m.tool_results ? JSON.parse(m.tool_results) : undefined,
+                        createdAt: m.created_at ? m.created_at * 1000 : 0,
+                    })),
+                });
+            }
+
+            // For in-memory runs, look up session messages
+            const session = sqliteDb.prepare("SELECT id FROM sessions WHERE key = ?").get(run.childSessionKey) as any;
+            const messages = session
+                ? (sqliteDb.prepare("SELECT role, content, tool_calls, tool_results, created_at FROM messages WHERE session_id = ? ORDER BY created_at ASC").all(session.id) as any[])
+                : [];
+
+            return c.json({
+                ok: true,
+                run,
+                messages: messages.map((m: any) => ({
+                    role: m.role,
+                    content: m.content?.slice(0, 2000),
+                    toolCalls: m.tool_calls ? JSON.parse(m.tool_calls) : undefined,
+                    toolResults: m.tool_results ? JSON.parse(m.tool_results) : undefined,
+                    createdAt: m.created_at ? m.created_at * 1000 : 0,
+                })),
+            });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // Coordinated tasks
+    dashboard.get("/api/agents/coordinated", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const { listCoordinatedTasks } = await import("../agents/coordinator.js");
+            const tasks = listCoordinatedTasks(20);
+            return c.json({ ok: true, tasks });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    dashboard.post("/api/agents/coordinated/:id/stop", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const coordId = c.req.param("id");
+            const { stopCoordinatedTask } = await import("../agents/coordinator.js");
+            const stopped = stopCoordinatedTask(coordId);
+            return c.json({ ok: stopped });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // Shared contexts
+    dashboard.get("/api/agents/contexts", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const { listNamespaces, readNamespace } = await import("../agents/shared-context.js");
+            const ns = c.req.query("namespace");
+            if (ns) {
+                const entries = readNamespace(ns);
+                return c.json({ ok: true, entries });
+            }
+            const namespaces = listNamespaces();
+            return c.json({ ok: true, namespaces });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // Conflicts
+    dashboard.get("/api/agents/conflicts", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const { listConflicts } = await import("../agents/conflict-resolver.js");
+            const status = c.req.query("status") as any;
+            const conflicts = listConflicts(status);
+            return c.json({ ok: true, conflicts });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    dashboard.get("/api/agents/locks", async (c) => {
+        const sessionId = c.req.header("Authorization")?.replace("Bearer ", "");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        try {
+            const { listLocks } = await import("../agents/conflict-resolver.js");
+            const locks = listLocks();
+            return c.json({ ok: true, locks });
+        } catch (e) {
+            return c.json({ ok: false, error: String(e) }, 500);
+        }
+    });
+
+    // SSE for real-time agent events
+    dashboard.get("/api/agents/events", async (c) => {
+        const sessionId = c.req.query("token");
+        const user = await validateSession(sessionId);
+        if (!user) return c.json({ ok: false, error: "Not authenticated" }, 401);
+
+        return new Response(
+            new ReadableStream({
+                async start(controller) {
+                    const encoder = new TextEncoder();
+                    const send = (data: string) => {
+                        try { controller.enqueue(encoder.encode(`data: ${data}\n\n`)); } catch { }
+                    };
+
+                    // Send heartbeat every 30s
+                    const heartbeat = setInterval(() => send(JSON.stringify({ type: "heartbeat" })), 30000);
+
+                    // Import and listen to subagent events
+                    try {
+                        const { subagentEvents } = await import("../agents/subagent-registry.js");
+                        const handler = (event: any) => send(JSON.stringify(event));
+                        subagentEvents.on("event", handler);
+
+                        // Cleanup when client disconnects
+                        c.req.raw.signal.addEventListener("abort", () => {
+                            clearInterval(heartbeat);
+                            subagentEvents.off("event", handler);
+                        });
+                    } catch {
+                        clearInterval(heartbeat);
+                    }
+
+                    send(JSON.stringify({ type: "connected" }));
+                },
+            }),
+            {
+                headers: {
+                    "Content-Type": "text/event-stream",
+                    "Cache-Control": "no-cache",
+                    Connection: "keep-alive",
+                },
+            }
+        );
+    });
+
     // ============== HTML SHELL ==============
 
     dashboard.get("*", (c) => {

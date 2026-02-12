@@ -225,9 +225,11 @@ export async function processMessage(
         maxIterations?: number;
         onToolStart?: (tool: ToolCallInfo) => void;
         onToolEnd?: (tool: ToolCallInfo) => void;
+        excludeTools?: string[];
+        abortSignal?: AbortSignal;
     } = {}
 ): Promise<ChatMessage> {
-    const { model = currentModel, maxIterations = 25, onToolStart, onToolEnd } = options;
+    const { model = currentModel, maxIterations = 25, onToolStart, onToolEnd, excludeTools, abortSignal } = options;
 
     // Ensure provider is available for the selected model
     const provider = registry.getProvider(model);
@@ -257,8 +259,11 @@ export async function processMessage(
     getOrCreateSessionLegacy(sessionId, "dashboard");
     addMessage(sessionId, "user", content);
 
-    // Build tools list
-    const allTools = toolRegistry.getAll();
+    // Build tools list (optionally filtering out excluded tools for sub-agents)
+    const allToolsRaw = toolRegistry.getAll();
+    const allTools = excludeTools?.length
+        ? allToolsRaw.filter(t => !excludeTools.includes(t.name))
+        : allToolsRaw;
     const tools: Array<{ name: string; description: string; parameters: unknown }> = allTools.map((tool) => ({
         name: tool.name,
         description: tool.description,
@@ -384,6 +389,11 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
 
         // Iterative tool execution loop
         while (iterations < maxIterations) {
+            // Check abort signal before each iteration
+            if (abortSignal?.aborted) {
+                finalContent = "Agent was stopped by user.";
+                break;
+            }
             iterations++;
 
             // Compact history if it's getting too long
@@ -414,6 +424,11 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
 
             // Process tool calls
             for (const tc of response.toolCalls) {
+                // Check abort signal before each tool execution
+                if (abortSignal?.aborted) {
+                    finalContent = "Agent was stopped by user.";
+                    break;
+                }
                 const toolInfo: ToolCallInfo = {
                     id: tc.id || randomUUID(),
                     name: tc.name,
@@ -493,6 +508,12 @@ Do NOT apologize for previous errors or claim you lack access. Just execute the 
 
                 // Notify end
                 onToolEnd?.(toolInfo);
+            }
+
+            // If aborted during tool execution, stop the loop
+            if (abortSignal?.aborted) {
+                finalContent = "Agent was stopped by user.";
+                break;
             }
 
             // Add assistant response with structured tool calls

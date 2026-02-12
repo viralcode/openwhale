@@ -62,6 +62,7 @@ const ICONS = {
   alertCircle: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>',
   loader: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4"/><path d="m16.2 7.8 2.9-2.9"/><path d="M18 12h4"/><path d="m16.2 16.2 2.9 2.9"/><path d="M12 18v4"/><path d="m4.9 19.1 2.9-2.9"/><path d="M2 12h4"/><path d="m4.9 4.9 2.9 2.9"/></svg>',
   plus: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg>',
+  chevronLeft: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
   chevronRight: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg>',
   chevronDown: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>',
   externalLink: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/></svg>',
@@ -101,6 +102,12 @@ const ICONS = {
   databaseZap: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 12 22"/><path d="M21 5v6"/><path d="M3 12A9 3 0 0 0 14.59 14.87"/><path d="M21 15l-2.5 5H19l-2.5-5"/></svg>',
   presentation: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h20"/><path d="M21 3v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V3"/><path d="m7 21 5-5 5 5"/></svg>',
   square: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>',
+  users: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  gitFork: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9"/><path d="M12 12v3"/></svg>',
+  lock: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+  share2: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/></svg>',
+  rocket: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 16.5c-1.5 1.26-2 5-2 5s3.74-.5 5-2c.71-.84.7-2.13-.09-2.91a2.18 2.18 0 0 0-2.91-.09z"/><path d="m12 15-3-3a22 22 0 0 1 2-3.95A12.88 12.88 0 0 1 22 2c0 2.72-.78 7.5-6 11a22.35 22.35 0 0 1-4 2z"/><path d="M9 12H4s.55-3.03 2-4c1.62-1.08 5 0 5 0"/><path d="M12 15v5s3.03-.55 4-2c1.08-1.62 0-5 0-5"/></svg>',
+  network: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>',
 };
 
 // Icon helper function
@@ -125,6 +132,9 @@ let state = {
   providers: [],
   skills: [],
   tools: [],
+  agents: [],
+  agentRuns: [],
+  agentRunsPage: 0,
   config: {},
   isLoading: false,
   isSending: false,
@@ -167,6 +177,9 @@ let state = {
   logsFilter: { level: '', category: '', startDate: '', endDate: '', search: '' },
   logsStreamActive: false,
   logsEventSource: null,
+  // Agent events SSE
+  agentEventSource: null,
+  liveAgentRuns: {},
 };
 
 // ============================================
@@ -471,11 +484,16 @@ async function checkSetupStatus() {
 async function loadData() {
   // Disconnect log stream when leaving logs page
   if (state.view !== 'logs') disconnectLogStream();
+  // Disconnect agent event stream when leaving chat page
+  if (state.view !== 'chat') disconnectAgentEventStream();
 
   switch (state.view) {
     case 'chat':
       await loadMessages();
       await loadProviders();
+      await loadAgents();
+      await loadAgentRuns();
+      connectAgentEventStream();
       break;
     case 'channels':
       await loadChannels();
@@ -505,6 +523,11 @@ async function loadData() {
       await loadChannels();
       await loadProviders();
       await loadTools();
+      break;
+    case 'agents':
+      await loadAgents();
+      await loadAgentRuns();
+
       break;
   }
 }
@@ -1317,6 +1340,9 @@ function updateStreamingUI() {
     html += `<div class="message-content">${formatMarkdown(state.streamingContent)}</div>`;
   }
 
+  // Show multi-agent activity panel inline
+  html += renderMultiAgentPanel();
+
   // Show persistent working indicator while agent is still processing
   if (!state.streamingDone) {
     let workingLabel = 'Thinking...';
@@ -1662,6 +1688,8 @@ async function clearChat() {
   try {
     await api('/chat/history', { method: 'DELETE' });
     state.messages = [];
+    state.liveAgentRuns = {};
+    state.expandedAgentRuns = {};
     render();
     await showAlert('Conversation cleared!', 'Success');
   } catch (e) {
@@ -2203,6 +2231,7 @@ function renderSidebar() {
     { id: 'channels', iconName: 'radio', label: 'Channels' },
     { id: 'providers', iconName: 'bot', label: 'Providers' },
     { id: 'skills', iconName: 'sparkles', label: 'Skills' },
+    { id: 'agents', iconName: 'users', label: 'Agents' },
     { id: 'tools', iconName: 'zap', label: 'Tools' },
     { id: 'extensions', iconName: 'puzzle', label: 'Extensions' },
     { id: 'logs', iconName: 'fileText', label: 'Logs' },
@@ -2269,6 +2298,7 @@ function renderContent() {
     case 'channels': return renderChannels();
     case 'providers': return renderProviders();
     case 'skills': return renderSkills();
+    case 'agents': return renderAgents();
     case 'tools': return renderTools();
     case 'extensions': return renderExtensions();
     case 'logs': return renderLogs();
@@ -2305,6 +2335,32 @@ function renderChat() {
       </div>
       <div class="chat-input-container">
         <div class="chat-input-wrapper ${state.voiceMode ? 'voice-active' : ''}">
+          <div class="agent-selector-area">
+            <button class="agent-pill" id="agent-pill" onclick="toggleAgentDropdown(event)">
+              <span class="agent-pill-icon">${icon('bot', 14)}</span>
+              <span class="agent-pill-name" id="agent-pill-name">${state.selectedAgent ? ((state.agents || []).find(a => a.id === state.selectedAgent)?.name || 'OpenWhale') : 'OpenWhale'}</span>
+              <span class="agent-pill-chevron">▾</span>
+            </button>
+            <div class="agent-dropdown" id="agent-dropdown">
+              <div class="agent-dropdown-header">Select Agent</div>
+              <div class="agent-dropdown-item ${!state.selectedAgent || state.selectedAgent === 'main' ? 'active' : ''}" onclick="selectAgent('main', 'OpenWhale')">
+                <span class="agent-dot"></span>
+                <span>OpenWhale</span>
+                <span class="agent-badge">default</span>
+              </div>
+              ${(state.agents || []).filter(a => a.id !== 'main').map(a => `
+                <div class="agent-dropdown-item ${state.selectedAgent === a.id ? 'active' : ''}" onclick="selectAgent('${a.id}', '${a.name.replace(/'/g, "\\'")}')">
+                  <span class="agent-dot"></span>
+                  <span>${a.name}</span>
+                </div>
+              `).join('')}
+              <div class="agent-dropdown-divider"></div>
+              <div class="agent-dropdown-item fanout-item" onclick="selectFanOut()">
+                <span class="fanout-icon">${icon('gitFork', 14)}</span>
+                <span>Fan-Out (Multi-Agent)</span>
+              </div>
+            </div>
+          </div>
           <textarea 
             class="chat-input" 
             id="chat-input"
@@ -2312,17 +2368,19 @@ function renderChat() {
             rows="1"
             onkeydown="if(event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); sendMessage(); }"
           ></textarea>
-          <button class="voice-btn ${state.voiceMode ? 'active' : ''} ${state.isListening ? 'listening' : ''} ${state.isSpeaking ? 'speaking' : ''}" 
-            id="voice-btn" 
-            onclick="toggleVoiceMode()" 
-            title="${state.voiceMode ? 'Stop voice mode' : 'Talk to OpenWhale'}">
-            ${state.voiceMode ? icon('mic', 18) : icon('mic', 18)}
-          </button>
-          <button class="send-btn ${state.isSending ? 'stop-mode' : ''}" id="send-btn" 
-            onclick="${state.isSending ? 'stopChat()' : 'sendMessage()'}" 
-            title="${state.isSending ? 'Stop generating' : 'Send message'}">
-            ${state.isSending ? icon('square', 16) : icon('arrowUp', 20)}
-          </button>
+          <div class="chat-input-actions">
+            <button class="voice-btn ${state.voiceMode ? 'active' : ''} ${state.isListening ? 'listening' : ''} ${state.isSpeaking ? 'speaking' : ''}" 
+              id="voice-btn" 
+              onclick="toggleVoiceMode()" 
+              title="${state.voiceMode ? 'Stop voice mode' : 'Talk to OpenWhale'}">
+              ${state.voiceMode ? icon('mic', 18) : icon('mic', 18)}
+            </button>
+            <button class="send-btn ${state.isSending ? 'stop-mode' : ''}" id="send-btn" 
+              onclick="${state.isSending ? 'stopChat()' : 'sendMessage()'}" 
+              title="${state.isSending ? 'Stop generating' : 'Send message'}">
+              ${state.isSending ? icon('square', 16) : icon('arrowUp', 20)}
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -3143,6 +3201,907 @@ function switchSkillsTab(tab) {
   render();
 }
 
+
+function renderAgents() {
+  const agents = state.agents || [];
+  const runs = state.agentRuns || [];
+
+  return `
+    <div class="page-header">
+      <div>
+        <h1 class="page-title">Agents</h1>
+        <p class="page-subtitle">Configure and manage AI agents for multi-agent coordination</p>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary" onclick="showCoordinationDialog()">
+          ${icon('network', 16)}
+          <span>Coordination</span>
+        </button>
+        <button class="btn btn-primary" onclick="showCreateAgentForm()">
+          ${icon('plus', 16)}
+          <span>New Agent</span>
+        </button>
+      </div>
+    </div>
+
+
+
+    <div class="agents-grid">
+      ${agents.map(agent => `
+        <div class="agent-card ${agent.isDefault ? 'agent-default' : ''} ${!agent.enabled ? 'agent-disabled' : ''}">
+          <div class="agent-card-header">
+            <div class="agent-avatar">${agent.isDefault ? icon('whale', 20) : icon('bot', 20)}</div>
+            <div class="agent-info">
+              <div class="agent-name">${escapeHtml(agent.name)}
+                ${agent.isDefault ? '<span class="agent-badge default">Default</span>' : ''}
+                ${!agent.enabled ? '<span class="agent-badge disabled">Disabled</span>' : ''}
+              </div>
+              <div class="agent-id">${escapeHtml(agent.id)}</div>
+            </div>
+            ${!agent.isDefault ? `
+              <button class="btn btn-ghost btn-sm" onclick="deleteAgent('${escapeHtml(agent.id)}')" title="Delete agent">
+                ${icon('trash', 14)}
+              </button>
+            ` : ''}
+          </div>
+          ${agent.description ? `<div class="agent-description">${escapeHtml(agent.description)}</div>` : ''}
+          <div class="agent-details">
+            <div class="agent-detail"><span class="detail-label">Model:</span> ${agent.model || '(default)'}</div>
+            ${agent.capabilities?.length ? `<div class="agent-detail"><span class="detail-label">Capabilities:</span> ${agent.capabilities.map(c => `<span class="capability-tag">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
+            ${agent.allowAgents?.length ? `<div class="agent-detail"><span class="detail-label">Can spawn:</span> ${agent.allowAgents.join(', ')}</div>` : ''}
+          </div>
+          <div class="agent-actions">
+            <label class="toggle">
+              <input type="checkbox" ${agent.enabled ? 'checked' : ''}
+                     onchange="toggleAgent('${escapeHtml(agent.id)}', this.checked)">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+
+    ${runs.length > 0 ? (() => {
+      const perPage = 10;
+      const page = state.agentRunsPage || 0;
+      const totalPages = Math.ceil(runs.length / perPage);
+      const pageRuns = runs.slice(page * perPage, (page + 1) * perPage);
+      return `
+      <div style="margin-top: 32px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <h2 style="font-size: 18px; font-weight: 600; color: var(--text-primary); margin: 0;">Recent Agent Runs <span style="font-size: 13px; font-weight: 400; color: var(--text-muted);">(${runs.length})</span></h2>
+          ${totalPages > 1 ? `
+            <div style="display: flex; align-items: center; gap: 8px;">
+              <button class="btn btn-ghost btn-sm" ${page === 0 ? 'disabled style="opacity: 0.4; cursor: default;"' : ''} onclick="state.agentRunsPage = ${page - 1}; render();" title="Previous page">${icon('chevronLeft', 14)}</button>
+              <span style="font-size: 13px; color: var(--text-muted); min-width: 70px; text-align: center;">${page + 1} / ${totalPages}</span>
+              <button class="btn btn-ghost btn-sm" ${page >= totalPages - 1 ? 'disabled style="opacity: 0.4; cursor: default;"' : ''} onclick="state.agentRunsPage = ${page + 1}; render();" title="Next page">${icon('chevronRight', 14)}</button>
+            </div>
+          ` : ''}
+        </div>
+        <div class="runs-list">
+          ${pageRuns.map(run => `
+            <div class="run-item">
+              <div class="run-status run-status-${run.status}"></div>
+              <div class="run-info">
+                <div class="run-agent">${escapeHtml(run.agentId)}</div>
+                <div class="run-task">${escapeHtml(run.task?.slice(0, 100) || '')}</div>
+              </div>
+              <div class="run-meta">
+                <span class="run-status-badge status-${run.status}">${run.status}</span>
+                ${run.status === 'running' || run.status === 'pending' ? `
+                  <button class="btn btn-ghost btn-sm" onclick="stopAgentRun('${run.runId}')" title="Stop">
+                    ${icon('square', 12)}
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>`;
+    })() : ''}
+
+  `;
+}
+
+async function loadCoordinatedTasks() {
+  try {
+    const result = await api('/agents/coordinated');
+    const container = document.getElementById('coordinated-tasks-list');
+    if (!container) return;
+    const tasks = result.tasks || [];
+    if (tasks.length === 0) {
+      container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; padding: 16px; text-align: center;">No coordinated tasks yet. Use the Fan-Out mode to create one.</div>';
+      return;
+    }
+    container.innerHTML = tasks.map(t => {
+      const agentCount = t.tasks?.length || t.runIds?.length || 0;
+      const completedCount = (t.results || []).filter(r => r.status === 'completed').length;
+      const taskId = t.coordinationId || t.id || '?';
+      return `
+      <div class="run-item">
+        <div class="run-status run-status-${t.status}"></div>
+        <div class="run-info">
+          <div class="run-agent" style="font-weight: 600;">Task ${escapeHtml(taskId.slice(0, 8))}</div>
+          <div class="run-task">${agentCount} agents · ${escapeHtml(t.status)} · ${completedCount}/${agentCount} done</div>
+        </div>
+        <div class="run-meta">
+          <span class="run-status-badge status-${t.status === 'completed' ? 'completed' : t.status === 'running' ? 'running' : t.status === 'partial' ? 'running' : 'pending'}">${escapeHtml(t.status)}</span>
+          ${t.status === 'running' ? `<button class="btn btn-ghost btn-sm" onclick="stopCoordinatedTask('${escapeHtml(taskId)}')" title="Stop">${icon('square', 12)}</button>` : ''}
+        </div>
+      </div>
+    `;
+    }).join('');
+  } catch (e) {
+    const container = document.getElementById('coordinated-tasks-list');
+    if (container) container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; padding: 16px; text-align: center;">Could not load coordinated tasks.</div>';
+  }
+}
+
+async function stopCoordinatedTask(id) {
+  try {
+    await api(`/agents/coordinated/${id}/stop`, { method: 'POST' });
+    await loadCoordinatedTasks();
+  } catch (e) {
+    console.warn('Failed to stop coordinated task:', e);
+  }
+}
+
+async function loadSharedContexts() {
+  try {
+    const result = await api('/agents/contexts');
+    const container = document.getElementById('shared-contexts-list');
+    if (!container) return;
+    const namespaces = result.namespaces || [];
+    if (namespaces.length === 0) {
+      container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center;">No shared contexts. Agents will create them during coordination.</div>';
+      return;
+    }
+    container.innerHTML = namespaces.map(ns => `
+      <div style="padding: 8px 12px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div style="font-weight: 600; font-size: 13px; color: var(--text-primary);">${escapeHtml(ns.name || ns.namespace || ns)}</div>
+          <div style="font-size: 11px; color: var(--text-muted);">${ns.entryCount || ns.keyCount || 0} entries</div>
+        </div>
+        <span class="capability-tag">namespace</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    const container = document.getElementById('shared-contexts-list');
+    if (container) container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center;">Could not load shared contexts.</div>';
+  }
+}
+
+async function loadActiveLocks() {
+  try {
+    const result = await api('/agents/locks');
+    const container = document.getElementById('active-locks-list');
+    if (!container) return;
+    const locks = result.locks || [];
+    if (locks.length === 0) {
+      container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center;">No active file locks.</div>';
+      return;
+    }
+    container.innerHTML = locks.map(l => `
+      <div style="padding: 8px 12px; border-bottom: 1px solid var(--border-subtle);">
+        <div style="font-weight: 600; font-size: 12px; color: var(--text-primary); font-family: monospace;">${escapeHtml(l.filePath || l)}</div>
+        <div style="font-size: 11px; color: var(--text-muted);">Locked by: ${escapeHtml(l.lockedBy || l.agentId || '?')}${l.purpose ? ' · ' + escapeHtml(l.purpose) : ''}</div>
+      </div>
+    `).join('');
+  } catch (e) {
+    const container = document.getElementById('active-locks-list');
+    if (container) container.innerHTML = '<div style="color: var(--text-muted); font-size: 13px; text-align: center;">Could not load locks.</div>';
+  }
+}
+
+function renderAgentActivityPanel() {
+  // Compact version just shows count — the detailed view is now inline in chat via renderMultiAgentPanel
+  const activeRuns = (state.agentRuns || []).filter(r => ['pending', 'running', 'paused'].includes(r.status));
+  const liveRuns = Object.values(state.liveAgentRuns).filter(r => ['pending', 'running', 'paused'].includes(r.status));
+  const allActive = [...activeRuns];
+  // Merge live runs not already in agentRuns
+  for (const lr of liveRuns) {
+    if (!allActive.find(r => r.runId === lr.runId)) allActive.push(lr);
+  }
+  if (allActive.length === 0) return '';
+
+  return `
+    <div class="agent-activity-panel">
+      <div class="activity-header">
+        <span class="activity-dot"></span>
+        <span>${allActive.length} agent${allActive.length !== 1 ? 's' : ''} working</span>
+      </div>
+      ${allActive.slice(0, 3).map(run => `
+        <div class="activity-item">
+          <div class="activity-agent">${escapeHtml(run.agentId)}</div>
+          <div class="activity-task">${escapeHtml(run.task?.slice(0, 60) || '...')}</div>
+          <div class="activity-controls">
+            <span class="run-status-badge status-${run.status}">${run.status}</span>
+            <button class="agent-stop-btn" onclick="confirmStopAgentRun('${run.runId}', '${escapeHtml(run.agentId)}')" title="Stop this agent">${icon('x', 12)}</button>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+// Multi-Agent panel rendered inline in chat streaming UI
+function renderMultiAgentPanel() {
+  const liveRuns = Object.values(state.liveAgentRuns);
+  if (liveRuns.length === 0) return '';
+
+  const running = liveRuns.filter(r => r.status === 'running').length;
+  const completed = liveRuns.filter(r => r.status === 'completed').length;
+  const errored = liveRuns.filter(r => r.status === 'error').length;
+  const pending = liveRuns.filter(r => r.status === 'pending').length;
+
+  const parts = [];
+  if (running) parts.push(`${running} running`);
+  if (pending) parts.push(`${pending} pending`);
+  if (completed) parts.push(`${completed} done`);
+  if (errored) parts.push(`${errored} failed`);
+
+  let html = `<div class="multiagent-panel">`;
+  html += `
+    <div class="multiagent-panel-header">
+      ${icon('bot', 14)}
+      <span>Agent Activity</span>
+      <span class="agent-count-badge">${liveRuns.length}</span>
+      <span style="flex:1"></span>
+      <span style="font-size: 11px; font-weight: 400; color: var(--text-muted);">${parts.join(' · ')}</span>
+    </div>`;
+
+  for (const run of liveRuns) {
+    // Auto-expand by default — only collapse if user explicitly toggled off
+    const wasExplicitlyToggled = state.expandedAgentRuns && state.expandedAgentRuns.hasOwnProperty(run.runId);
+    const isExpanded = wasExplicitlyToggled ? state.expandedAgentRuns[run.runId] : true;
+    html += `
+      <div class="agent-run-card ${isExpanded ? 'expanded' : ''}">
+        <div class="agent-run-row" onclick="toggleRunDetail('${run.runId}')" style="cursor: pointer;">
+          <div class="agent-run-chevron ${isExpanded ? 'open' : ''}">${isExpanded ? '▾' : '▸'}</div>
+          <div class="agent-run-dot status-${run.status}"></div>
+          <div class="agent-run-info">
+            <div class="agent-run-name">${escapeHtml(run.agentId)}</div>
+            <div class="agent-run-task">${escapeHtml(run.task?.slice(0, 80) || '...')}</div>
+          </div>
+          <div class="agent-run-controls" onclick="event.stopPropagation()">
+            <span class="agent-run-status status-${run.status}">${run.status}</span>
+            ${['running', 'pending'].includes(run.status) ? `<button class="agent-stop-btn" onclick="confirmStopAgentRun('${run.runId}', '${escapeHtml(run.agentId)}')" title="Stop this agent">${icon('x', 12)}</button>` : ''}
+          </div>
+        </div>
+        ${isExpanded ? renderRunDetailInline(run) : ''}
+      </div>`;
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+// Track which agent runs are expanded
+if (!state.expandedAgentRuns) state.expandedAgentRuns = {};
+if (!state.runDetailCache) state.runDetailCache = {};
+
+function toggleRunDetail(runId) {
+  if (!state.expandedAgentRuns) state.expandedAgentRuns = {};
+  state.expandedAgentRuns[runId] = !state.expandedAgentRuns[runId];
+
+  if (state.expandedAgentRuns[runId]) {
+    // Fetch detail data
+    loadRunDetail(runId);
+  }
+
+  // Re-render the streaming UI to update the panel
+  updateStreamingUI();
+}
+
+async function loadRunDetail(runId) {
+  try {
+    const result = await api(`/agents/runs/${runId}/detail`);
+    if (result.ok) {
+      if (!state.runDetailCache) state.runDetailCache = {};
+      state.runDetailCache[runId] = {
+        run: result.run,
+        messages: result.messages || [],
+        loadedAt: Date.now(),
+      };
+      // Re-render after data loads
+      updateStreamingUI();
+    }
+  } catch (e) {
+    console.warn('Failed to load run detail:', e);
+  }
+}
+
+function renderRunDetailInline(run) {
+  let html = `<div class="agent-run-detail">`;
+
+  // Show real-time tool calls from SSE events (priority)
+  const liveToolCalls = run.toolCalls || [];
+  if (liveToolCalls.length > 0) {
+    html += `<div class="agent-run-detail-section">
+      <div class="detail-label">${icon('wrench', 10)} Tools (${liveToolCalls.length})</div>`;
+    for (const tc of liveToolCalls) {
+      const statusIcon = tc.status === 'running'
+        ? `<span class="detail-tool-status running spinning">${icon('loader', 10)}</span>`
+        : tc.status === 'completed'
+          ? `<span class="detail-tool-status done">${icon('check', 10)}</span>`
+          : `<span class="detail-tool-status error">${icon('x', 10)}</span>`;
+      html += `<div class="detail-tool-call">
+        ${statusIcon}
+        <span class="detail-tool-name">${escapeHtml(tc.name)}</span>
+        ${tc.result ? `<span class="detail-tool-result">${escapeHtml(tc.result.slice(0, 120))}</span>` : ''}
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // Show current progress message
+  if (run.progressMessage && run.status === 'running') {
+    html += `<div class="agent-run-detail-progress">
+      <div class="detail-content"><span class="detail-progress-dot"></span> ${escapeHtml(run.progressMessage)}</div>
+    </div>`;
+  }
+
+  // Show result when completed
+  if (run.result && run.status === 'completed') {
+    html += `<div class="agent-run-detail-result">
+      <div class="detail-label">${icon('check', 10)} Result</div>
+      <div class="detail-content">${escapeHtml(run.result.slice(0, 500))}</div>
+    </div>`;
+  }
+
+  // Show error
+  if (run.error) {
+    html += `<div class="agent-run-detail-result error">
+      <div class="detail-label">${icon('alertTriangle', 10)} Error</div>
+      <div class="detail-content">${escapeHtml(run.error.slice(0, 500))}</div>
+    </div>`;
+  }
+
+  // Show stopped state
+  if (run.status === 'stopped') {
+    html += `<div class="agent-run-detail-result stopped">
+      <div class="detail-content" style="color: var(--text-muted);">Agent was stopped</div>
+    </div>`;
+  }
+
+  // If no live tool data and no detail, show a message
+  if (liveToolCalls.length === 0 && !run.result && !run.error && run.status !== 'stopped') {
+    if (run.status === 'pending') {
+      html += `<div class="agent-run-detail-empty">Waiting to start...</div>`;
+    } else {
+      html += `<div class="agent-run-detail-empty"><span class="loading-spinner-small"></span> Working...</div>`;
+    }
+  }
+
+  html += `</div>`;
+  return html;
+}
+
+// SSE connection for real-time agent run events
+function connectAgentEventStream() {
+  disconnectAgentEventStream();
+  if (!state.sessionId) return;
+
+  try {
+    const es = new EventSource(`${API_BASE}/agents/events?token=${state.sessionId}`);
+    state.agentEventSource = es;
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleAgentEvent(data);
+      } catch { }
+    };
+
+    es.onerror = () => {
+      // Reconnect after 5s
+      disconnectAgentEventStream();
+      setTimeout(() => {
+        if (state.view === 'chat') connectAgentEventStream();
+      }, 5000);
+    };
+  } catch (e) {
+    console.warn('Failed to connect agent event stream:', e);
+  }
+}
+
+function disconnectAgentEventStream() {
+  if (state.agentEventSource) {
+    state.agentEventSource.close();
+    state.agentEventSource = null;
+  }
+}
+
+function handleAgentEvent(event) {
+  switch (event.type) {
+    case 'run_created':
+      if (event.run) {
+        state.liveAgentRuns[event.run.runId] = { ...event.run, progressMessage: '', toolCalls: [] };
+      }
+      break;
+    case 'run_started':
+      if (state.liveAgentRuns[event.runId]) {
+        state.liveAgentRuns[event.runId].status = 'running';
+      }
+      break;
+    case 'run_completed':
+      if (state.liveAgentRuns[event.runId]) {
+        state.liveAgentRuns[event.runId].status = 'completed';
+        if (event.result) state.liveAgentRuns[event.runId].result = event.result;
+      }
+      break;
+    case 'run_error':
+      if (state.liveAgentRuns[event.runId]) {
+        state.liveAgentRuns[event.runId].status = 'error';
+        if (event.error) state.liveAgentRuns[event.runId].error = event.error;
+      }
+      break;
+    case 'run_stopped':
+      if (state.liveAgentRuns[event.runId]) {
+        state.liveAgentRuns[event.runId].status = 'stopped';
+      }
+      break;
+    case 'run_paused':
+      if (state.liveAgentRuns[event.runId]) {
+        state.liveAgentRuns[event.runId].status = 'paused';
+      }
+      break;
+    case 'run_progress':
+      if (state.liveAgentRuns[event.runId]) {
+        state.liveAgentRuns[event.runId].progressMessage = event.message || '';
+      }
+      break;
+    case 'run_tool_start':
+      if (state.liveAgentRuns[event.runId]) {
+        if (!state.liveAgentRuns[event.runId].toolCalls) state.liveAgentRuns[event.runId].toolCalls = [];
+        state.liveAgentRuns[event.runId].toolCalls.push({
+          name: event.tool,
+          args: event.args || '',
+          status: 'running',
+          startedAt: Date.now(),
+        });
+      }
+      break;
+    case 'run_tool_end':
+      if (state.liveAgentRuns[event.runId]) {
+        const toolCalls = state.liveAgentRuns[event.runId].toolCalls || [];
+        // Find the last tool call with matching name that's still running
+        for (let i = toolCalls.length - 1; i >= 0; i--) {
+          if (toolCalls[i].name === event.tool && toolCalls[i].status === 'running') {
+            toolCalls[i].status = event.status || 'completed';
+            toolCalls[i].result = event.result || '';
+            break;
+          }
+        }
+      }
+      break;
+    case 'heartbeat':
+    case 'connected':
+      return; // No UI update needed
+    default:
+      return;
+  }
+
+  // Refresh the streaming UI (inline multi-agent panel)
+  if (state.isSending) {
+    updateStreamingUI();
+  }
+  scrollToBottom();
+}
+
+// Agent Selector (in-textarea pill)
+function toggleAgentDropdown(e) {
+  e.stopPropagation();
+  const dropdown = document.getElementById('agent-dropdown');
+  if (!dropdown) return;
+  const isOpen = dropdown.classList.contains('open');
+  dropdown.classList.toggle('open');
+  if (!isOpen) {
+    // Close on outside click
+    setTimeout(() => {
+      document.addEventListener('click', closeAgentDropdown, { once: true });
+    }, 0);
+  }
+}
+
+function closeAgentDropdown() {
+  const dropdown = document.getElementById('agent-dropdown');
+  if (dropdown) dropdown.classList.remove('open');
+}
+
+function selectAgent(id, name) {
+  state.selectedAgent = id;
+  const pillName = document.getElementById('agent-pill-name');
+  if (pillName) pillName.textContent = name;
+  closeAgentDropdown();
+  document.getElementById('chat-input')?.focus();
+}
+
+function selectFanOut() {
+  closeAgentDropdown();
+  showMultiAgentModal();
+}
+
+// Multi-Agent Modal
+function showMultiAgentModal() {
+  const existing = document.getElementById('multiagent-modal');
+  if (existing) existing.remove();
+
+  const agents = state.agents || [];
+  const enabledAgents = agents.filter(a => a.enabled);
+
+  // Grab text from main chat input to pre-populate
+  const chatInput = document.getElementById('chat-input');
+  const prefilledTask = chatInput?.value?.trim() || '';
+  if (chatInput) { chatInput.value = ''; chatInput.style.height = 'auto'; }
+
+  const modal = document.createElement('div');
+  modal.id = 'multiagent-modal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width: 580px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">${icon('bot', 20)} Multi-Agent Task</h3>
+        <button class="btn btn-ghost" onclick="document.getElementById('multiagent-modal').remove()">${icon('x', 16)}</button>
+      </div>
+      <div class="modal-body">
+        <p style="color: var(--text-muted); margin: 0 0 16px;">Spawn agents to work on a task. Use <strong>Fan-Out</strong> mode to split tasks across multiple agents in parallel.</p>
+        
+        <div style="display: flex; gap: 8px; margin-bottom: 16px;">
+          <button class="btn btn-secondary fanout-mode-btn active" onclick="setFanoutMode('single')" id="mode-single">Single Agent</button>
+          <button class="btn btn-secondary fanout-mode-btn" onclick="setFanoutMode('fanout')" id="mode-fanout">${icon('gitFork', 14)} Fan-Out (Multi)</button>
+        </div>
+
+        <div class="form-field" style="margin-bottom: 16px;">
+          <label style="font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; display: block;">Task Description</label>
+          <textarea id="multiagent-task" rows="3" placeholder="Describe the overall task..." 
+            style="width: 100%; resize: vertical; background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px; color: var(--text-primary);">${escapeHtml(prefilledTask)}</textarea>
+        </div>
+
+        <div id="single-agent-section">
+          <div class="form-field" style="margin-bottom: 16px;">
+            <label style="font-weight: 500; color: var(--text-secondary); margin-bottom: 6px; display: block;">Target Agent</label>
+            <select id="multiagent-target" style="width: 100%; background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px; color: var(--text-primary);">
+              ${enabledAgents.map(a => `<option value="${escapeHtml(a.id)}">${escapeHtml(a.name)} (${escapeHtml(a.id)})</option>`).join('')}
+            </select>
+          </div>
+        </div>
+
+        <div id="fanout-agent-section" style="display: none;">
+          <label style="font-weight: 500; color: var(--text-secondary); margin-bottom: 8px; display: block;">Select Agents & Sub-Tasks</label>
+          <div id="fanout-agent-list" style="display: flex; flex-direction: column; gap: 8px; max-height: 200px; overflow-y: auto;">
+            ${enabledAgents.map(a => `
+              <div class="fanout-agent-row" style="display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-elevated); border-radius: 8px; border: 1px solid var(--border-subtle);">
+                <input type="checkbox" id="fanout-${escapeHtml(a.id)}" value="${escapeHtml(a.id)}" style="flex-shrink: 0;">
+                <div style="flex-shrink: 0; min-width: 100px;">
+                  <div style="font-weight: 600; font-size: 13px; color: var(--text-primary);">${escapeHtml(a.name)}</div>
+                  <div style="font-size: 11px; color: var(--text-muted);">${escapeHtml(a.id)}</div>
+                </div>
+                <input type="text" id="fanout-label-${escapeHtml(a.id)}" placeholder="Sub-task label (optional)" 
+                  style="flex: 1; padding: 6px 10px; background: var(--bg-surface); border: 1px solid var(--border-subtle); border-radius: 6px; color: var(--text-primary); font-size: 12px;">
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('multiagent-modal').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="launchMultiAgentTask()">${icon('rocket', 14)} Launch Task</button>
+      </div>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('multiagent-task')?.focus(), 100);
+}
+
+function setFanoutMode(mode) {
+  const singleSection = document.getElementById('single-agent-section');
+  const fanoutSection = document.getElementById('fanout-agent-section');
+  const singleBtn = document.getElementById('mode-single');
+  const fanoutBtn = document.getElementById('mode-fanout');
+
+  if (mode === 'fanout') {
+    if (singleSection) singleSection.style.display = 'none';
+    if (fanoutSection) fanoutSection.style.display = 'block';
+    singleBtn?.classList.remove('active');
+    fanoutBtn?.classList.add('active');
+  } else {
+    if (singleSection) singleSection.style.display = 'block';
+    if (fanoutSection) fanoutSection.style.display = 'none';
+    singleBtn?.classList.add('active');
+    fanoutBtn?.classList.remove('active');
+  }
+}
+
+async function launchMultiAgentTask() {
+  const taskEl = document.getElementById('multiagent-task');
+  const task = taskEl?.value?.trim();
+
+  if (!task) {
+    await showAlert('Please describe the task for the agents.', '⚠️ Task Required');
+    return;
+  }
+
+  // Check if fan-out mode
+  const fanoutSection = document.getElementById('fanout-agent-section');
+  const isFanout = fanoutSection && fanoutSection.style.display !== 'none';
+
+  let directiveMessage;
+
+  if (isFanout) {
+    const checkboxes = document.querySelectorAll('#fanout-agent-list input[type="checkbox"]:checked');
+    const agentTasks = Array.from(checkboxes).map(cb => {
+      const agentId = cb.value;
+      const labelEl = document.getElementById(`fanout-label-${agentId}`);
+      const label = labelEl?.value?.trim() || agentId;
+      return { agentId, label };
+    });
+
+    if (agentTasks.length < 2) {
+      await showAlert('Select at least 2 agents for fan-out mode.', '⚠️ More Agents Needed');
+      return;
+    }
+
+    const taskListStr = agentTasks.map(t => `  - Agent "${t.agentId}" (label: "${t.label}")`).join('\n');
+    directiveMessage = `[Fan-Out Task] Use sessions_fanout to split this task across ${agentTasks.length} agents and wait for all results:\n\nOverall task: ${task}\n\nAgent assignments:\n${taskListStr}`;
+  } else {
+    const targetEl = document.getElementById('multiagent-target');
+    const targetAgent = targetEl?.value || 'main';
+    directiveMessage = `[Multi-Agent Task] Use sessions_spawn to delegate this task to agent "${targetAgent}" and wait for the result:\n\n${task}`;
+  }
+
+  // Close modal and send as a regular chat message
+  document.getElementById('multiagent-modal')?.remove();
+  sendMessage(directiveMessage);
+}
+
+
+// Agent CRUD functions
+async function loadAgents() {
+  try {
+    const result = await api('/agents');
+    if (result.ok) {
+      state.agents = result.agents || [];
+    }
+  } catch (e) {
+    console.warn('Failed to load agents:', e);
+    state.agents = [];
+  }
+}
+
+async function loadAgentRuns() {
+  try {
+    const result = await api('/agents/runs');
+    if (result.ok) {
+      state.agentRuns = result.runs || [];
+    }
+  } catch (e) {
+    console.warn('Failed to load agent runs:', e);
+    state.agentRuns = [];
+  }
+}
+
+function showCreateAgentForm() {
+  const existing = document.getElementById('create-agent-modal');
+  if (existing) existing.remove();
+
+  // Build model options from providers
+  const providers = state.providers || [];
+  const modelOptions = providers.flatMap(p => (p.models || []).map(m => ({ model: m, provider: p.name })));
+
+  const modal = document.createElement('div');
+  modal.id = 'create-agent-modal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width: 560px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">${icon('plus', 18)} Create New Agent</h3>
+        <button class="btn btn-ghost" onclick="document.getElementById('create-agent-modal').remove()">${icon('x', 16)}</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid">
+          <div class="form-field">
+            <label>Agent ID</label>
+            <input type="text" id="agent-id" placeholder="e.g. research-bot" style="width: 100%;">
+          </div>
+          <div class="form-field">
+            <label>Display Name</label>
+            <input type="text" id="agent-name" placeholder="e.g. Research Bot" style="width: 100%;">
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label>Description</label>
+            <input type="text" id="agent-description" placeholder="What does this agent do?" style="width: 100%;">
+          </div>
+          <div class="form-field">
+            <label>Model Override (optional)</label>
+            <select id="agent-model" style="width: 100%; background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 10px; color: var(--text-primary); font-size: 13px;">
+              <option value="">Use default model</option>
+              ${modelOptions.map(o => `<option value="${o.model}">${o.model} (${o.provider})</option>`).join('')}
+            </select>
+          </div>
+          <div class="form-field">
+            <label>Capabilities (comma-separated)</label>
+            <input type="text" id="agent-capabilities" placeholder="e.g. code, research, tools" style="width: 100%;">
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label>System Prompt (optional)</label>
+            <textarea id="agent-systemprompt" placeholder="Custom system prompt for this agent..." rows="3" style="width: 100%; resize: vertical;"></textarea>
+          </div>
+          <div class="form-field" style="grid-column: 1 / -1;">
+            <label>Allowed Sub-Agents (comma-separated agent IDs, or * for all)</label>
+            <input type="text" id="agent-allowagents" placeholder="e.g. main, coder or *" style="width: 100%;">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('create-agent-modal').remove()">Cancel</button>
+        <button class="btn btn-primary" onclick="createAgent()">${icon('plus', 14)} Create Agent</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  setTimeout(() => document.getElementById('agent-id')?.focus(), 100);
+}
+
+function hideCreateAgentForm() {
+  document.getElementById('create-agent-modal')?.remove();
+}
+
+function showCoordinationDialog() {
+  const existing = document.getElementById('coordination-modal');
+  if (existing) existing.remove();
+
+  const modal = document.createElement('div');
+  modal.id = 'coordination-modal';
+  modal.className = 'modal-overlay';
+  modal.innerHTML = `
+    <div class="modal-box" style="max-width: 720px;">
+      <div class="modal-header">
+        <h3 style="margin: 0; font-size: 18px; display: flex; align-items: center; gap: 8px;">${icon('network', 20)} Coordination Panels</h3>
+        <button class="btn btn-ghost" onclick="document.getElementById('coordination-modal').remove()">${icon('x', 16)}</button>
+      </div>
+      <div class="modal-body" style="max-height: 60vh; overflow-y: auto;">
+        <div style="margin-bottom: 24px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h4 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">${icon('gitFork', 16)} Coordinated Tasks</h4>
+            <button class="btn btn-ghost btn-sm" onclick="loadCoordinatedTasks()" title="Refresh">${icon('refresh', 14)}</button>
+          </div>
+          <div id="coordinated-tasks-list" class="runs-list" style="background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+            <div style="color: var(--text-muted); font-size: 13px; text-align: center;">Loading...</div>
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">${icon('share2', 16)} Shared Contexts</h4>
+              <button class="btn btn-ghost btn-sm" onclick="loadSharedContexts()" title="Refresh">${icon('refresh', 14)}</button>
+            </div>
+            <div id="shared-contexts-list" style="background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+              <div style="color: var(--text-muted); font-size: 13px; text-align: center;">Loading...</div>
+            </div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+              <h4 style="margin: 0; font-size: 15px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px;">${icon('lock', 16)} Active Locks</h4>
+              <button class="btn btn-ghost btn-sm" onclick="loadActiveLocks()" title="Refresh">${icon('refresh', 14)}</button>
+            </div>
+            <div id="active-locks-list" style="background: var(--bg-elevated); border: 1px solid var(--border-subtle); border-radius: 8px; padding: 12px;">
+              <div style="color: var(--text-muted); font-size: 13px; text-align: center;">Loading...</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="document.getElementById('coordination-modal').remove()">Close</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+  // Auto-load data
+  setTimeout(() => {
+    loadCoordinatedTasks();
+    loadSharedContexts();
+    loadActiveLocks();
+  }, 100);
+}
+
+async function createAgent() {
+  const id = document.getElementById('agent-id')?.value?.trim();
+  const name = document.getElementById('agent-name')?.value?.trim();
+  const description = document.getElementById('agent-description')?.value?.trim();
+  const model = document.getElementById('agent-model')?.value?.trim();
+  const caps = document.getElementById('agent-capabilities')?.value?.trim();
+  const systemPrompt = document.getElementById('agent-systemprompt')?.value?.trim();
+  const allowAgentsStr = document.getElementById('agent-allowagents')?.value?.trim();
+
+  if (!id || !name) {
+    await showAlert('Agent ID and Name are required.', '⚠️ Missing Fields');
+    return;
+  }
+
+  if (!/^[a-z0-9-]+$/.test(id)) {
+    await showAlert('Agent ID must be lowercase alphanumeric with hyphens only.', '⚠️ Invalid ID');
+    return;
+  }
+
+  const capabilities = caps ? caps.split(',').map(c => c.trim()).filter(Boolean) : [];
+  const allowAgents = allowAgentsStr ? allowAgentsStr.split(',').map(a => a.trim()).filter(Boolean) : [];
+
+  try {
+    const result = await api('/agents', {
+      method: 'POST',
+      body: JSON.stringify({ id, name, description, model, capabilities, systemPrompt, allowAgents, enabled: true })
+    });
+
+    if (result.ok) {
+      await showAlert(`Agent "${name}" created successfully!`, '✅ Success');
+      hideCreateAgentForm();
+      await loadAgents();
+      render();
+    } else {
+      await showAlert(`Failed: ${result.error}`, '❌ Error');
+    }
+  } catch (e) {
+    await showAlert(`Failed: ${e.message}`, '❌ Error');
+  }
+}
+
+async function deleteAgent(id) {
+  if (!confirm(`Delete agent "${id}"? This cannot be undone.`)) return;
+
+  try {
+    const result = await api(`/agents/${id}`, { method: 'DELETE' });
+    if (result.ok) {
+      await loadAgents();
+      render();
+    } else {
+      await showAlert(`Failed: ${result.error}`, '❌ Error');
+    }
+  } catch (e) {
+    await showAlert(`Failed: ${e.message}`, '❌ Error');
+  }
+}
+
+async function toggleAgent(id, enabled) {
+  try {
+    const agent = (state.agents || []).find(a => a.id === id);
+    if (!agent) return;
+
+    await api(`/agents/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ ...agent, enabled })
+    });
+    await loadAgents();
+    render();
+  } catch (e) {
+    await showAlert(`Failed: ${e.message}`, '❌ Error');
+  }
+}
+
+async function stopAgentRun(runId) {
+  try {
+    // Just send the stop request — the SSE run_stopped event will update the UI in-place
+    await api(`/agents/runs/${runId}/stop`, { method: 'POST' });
+    // Update local state immediately for responsiveness
+    if (state.liveAgentRuns[runId]) {
+      state.liveAgentRuns[runId].status = 'stopped';
+      if (state.isSending) {
+        updateStreamingUI();
+      }
+    }
+  } catch (e) {
+    await showAlert(`Failed to stop: ${e.message}`, '❌ Error');
+  }
+}
+
+async function confirmStopAgentRun(runId, agentId) {
+  const confirmed = await showConfirm(`Stop agent "${agentId}"? This will cancel its current work.`, '⏹ Stop Agent');
+  if (confirmed) {
+    await stopAgentRun(runId);
+  }
+}
 
 function renderTools() {
   const toolIcons = {

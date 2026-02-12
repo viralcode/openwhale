@@ -1,15 +1,45 @@
 /**
  * Sessions Send Tool - Send a message to another session
  * 
- * Allows agents to communicate with other sessions for coordination.
- * Supports reply-back mode for ping-pong conversations.
+ * Real cross-session messaging using EventEmitter bus.
+ * Supports reply-back mode for synchronous agent-to-agent conversations.
  */
 
 import { z } from "zod";
+import { EventEmitter } from "node:events";
 import type { AgentTool, ToolCallContext, ToolResult } from "./base.js";
+import { db } from "../db/index.js";
 
-// Event emitter for cross-session messaging
+// ============== CROSS-SESSION MESSAGE BUS ==============
+
+export const sessionBus = new EventEmitter();
+sessionBus.setMaxListeners(100);
+
+export interface CrossSessionMessage {
+    fromSessionId: string;
+    toSessionId: string;
+    content: string;
+    timestamp: number;
+    isReply?: boolean;
+    agentId?: string;
+}
+
+// Map of session handlers for direct delivery
 const sessionMessageHandlers = new Map<string, (message: CrossSessionMessage) => void>();
+
+export function registerSessionMessageHandler(
+    sessionId: string,
+    handler: (message: CrossSessionMessage) => void
+): () => void {
+    sessionMessageHandlers.set(sessionId, handler);
+    return () => sessionMessageHandlers.delete(sessionId);
+}
+
+export function getSessionMessageHandler(sessionId: string) {
+    return sessionMessageHandlers.get(sessionId);
+}
+
+// ============== SCHEMA ==============
 
 export const sessionsSendSchema = z.object({
     sessionId: z.string().describe("Target session key/ID (from sessions_list)"),
@@ -24,66 +54,50 @@ export const sessionsSendSchema = z.object({
 
 export type SessionsSendParams = z.infer<typeof sessionsSendSchema>;
 
-export interface CrossSessionMessage {
-    fromSessionId: string;
-    toSessionId: string;
-    content: string;
-    timestamp: number;
-    isReply?: boolean;
-}
+// ============== EXECUTION ==============
 
-/**
- * Register a handler for incoming cross-session messages
- */
-export function registerSessionMessageHandler(
-    sessionId: string,
-    handler: (message: CrossSessionMessage) => void
-): () => void {
-    sessionMessageHandlers.set(sessionId, handler);
-    return () => sessionMessageHandlers.delete(sessionId);
-}
-
-/**
- * Get handler for a session
- */
-export function getSessionMessageHandler(sessionId: string) {
-    return sessionMessageHandlers.get(sessionId);
-}
-
-/**
- * Execute sessions_send tool
- */
 async function executeSessionsSend(
     params: SessionsSendParams,
     context: ToolCallContext
 ): Promise<ToolResult> {
     try {
+        // Validate target session exists
+        const targetSession = db.prepare(
+            "SELECT id, key, agent_id FROM sessions WHERE key = ? OR id = ?"
+        ).get(params.sessionId, params.sessionId) as any;
+
+        const targetKey = targetSession?.key || params.sessionId;
+
         const message: CrossSessionMessage = {
             fromSessionId: context.sessionId,
-            toSessionId: params.sessionId,
+            toSessionId: targetKey,
             content: params.announce
                 ? `[Message from session: ${context.sessionId}]\n\n${params.message}`
                 : params.message,
             timestamp: Date.now(),
+            agentId: context.agentId,
         };
 
-        // Try to deliver to active handler
-        const handler = sessionMessageHandlers.get(params.sessionId);
+        // Try direct handler delivery
+        const handler = sessionMessageHandlers.get(targetKey);
         if (handler) {
             handler(message);
         }
 
+        // Also emit on the bus (for any listeners)
+        sessionBus.emit("message", message);
+        sessionBus.emit(`message:${targetKey}`, message);
+
         // If replyBack, wait for response
-        if (params.replyBack && handler) {
+        if (params.replyBack) {
             const replyPromise = new Promise<string | null>((resolve) => {
                 const timeout = setTimeout(() => {
-                    sessionMessageHandlers.delete(`${context.sessionId}:reply`);
+                    sessionBus.removeAllListeners(`reply:${context.sessionId}`);
                     resolve(null);
                 }, params.replyTimeout);
 
-                registerSessionMessageHandler(`${context.sessionId}:reply`, (reply) => {
+                sessionBus.once(`reply:${context.sessionId}`, (reply: CrossSessionMessage) => {
                     clearTimeout(timeout);
-                    sessionMessageHandlers.delete(`${context.sessionId}:reply`);
                     resolve(reply.content);
                 });
             });
@@ -94,9 +108,12 @@ async function executeSessionsSend(
                 success: true,
                 content: JSON.stringify({
                     delivered: true,
+                    targetSession: targetKey,
+                    targetAgent: targetSession?.agent_id,
                     reply: reply || undefined,
+                    timedOut: !reply,
                 }),
-                metadata: { targetSession: params.sessionId, gotReply: !!reply },
+                metadata: { targetSession: targetKey, gotReply: !!reply },
             };
         }
 
@@ -104,9 +121,15 @@ async function executeSessionsSend(
             success: true,
             content: JSON.stringify({
                 delivered: !!handler,
-                note: handler ? "Message delivered to active handler" : "Message queued (no active handler)",
+                targetSession: targetKey,
+                targetAgent: targetSession?.agent_id,
+                note: handler
+                    ? "Message delivered to active handler"
+                    : targetSession
+                        ? "Message emitted on bus (no active handler — session may be idle)"
+                        : "Target session not found in DB; message emitted on bus",
             }),
-            metadata: { targetSession: params.sessionId, delivered: !!handler },
+            metadata: { targetSession: targetKey, delivered: !!handler },
         };
     } catch (error) {
         return {
