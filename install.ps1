@@ -142,13 +142,28 @@ if (Test-CommandExists "pnpm") {
     $pnpmVersion = (pnpm -v)
     Write-Success "pnpm found: v$pnpmVersion"
 } else {
-    Write-Info "Installing pnpm globally..."
-    npm install -g pnpm
-    $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    Write-Info "Installing pnpm..."
+    # Try corepack first (built into Node 22+, avoids execution policy issues)
+    try {
+        corepack enable 2>$null
+        corepack prepare pnpm@latest --activate 2>$null
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    } catch {}
+
+    if (-not (Test-CommandExists "pnpm")) {
+        Write-Info "Corepack method unavailable, trying npm install..."
+        # Temporarily bypass execution policy for this process
+        try { Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force } catch {}
+        npm install -g pnpm
+        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+    }
+
     if (Test-CommandExists "pnpm") {
         Write-Success "pnpm installed successfully!"
     } else {
-        Write-Fail "pnpm installation failed. Try running: npm install -g pnpm"
+        Write-Fail "pnpm installation failed."
+        Write-Host "    Fix: Run this command first, then re-run the installer:" -ForegroundColor Gray
+        Write-Host "    Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser" -ForegroundColor White
         exit 1
     }
 }
