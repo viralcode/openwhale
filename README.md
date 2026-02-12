@@ -49,7 +49,11 @@ Open **http://localhost:7777/dashboard** → add your API keys → start chattin
 
 > 📖 **[Full Getting Started Guide →](docs/getting-started.md)**
 >
-> 🪟 **On Windows?** See the **[Windows Installation Guide →](docs/windows-setup.md)** for step-by-step setup with PowerShell.
+> 🪟 **On Windows?** Run the one-line installer in PowerShell — installs everything automatically:
+> ```powershell
+> irm https://raw.githubusercontent.com/viralcode/openwhale/main/install.ps1 | iex
+> ```
+> Or see the **[Windows Installation Guide →](docs/windows-setup.md)** for manual setup.
 
 ---
 

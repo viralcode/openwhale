@@ -4,6 +4,46 @@ A step-by-step guide to get OpenWhale running on Windows 10/11.
 
 ---
 
+## 🚀 One-Command Install (Recommended)
+
+The fastest way to get started — the installer handles everything automatically:
+
+### Option A: PowerShell (Recommended)
+
+Open **PowerShell** and run:
+
+```powershell
+irm https://raw.githubusercontent.com/viralcode/openwhale/main/install.ps1 | iex
+```
+
+Or if you've already downloaded the repo:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+### Option B: Batch File (Double-Click)
+
+Download and double-click **`install.bat`** — or run from Command Prompt:
+
+```cmd
+install.bat
+```
+
+Both scripts will:
+1. ✅ Check and install **Git**, **Node.js 22+**, and **pnpm** via `winget`
+2. ✅ Clone the repository to `%USERPROFILE%\openwhale`
+3. ✅ Run `pnpm install` and build native modules
+4. ✅ Create your `.env` config file
+5. ✅ Offer to start OpenWhale immediately
+
+> [!TIP]
+> Run as **Administrator** for automatic prerequisite installation. Without admin, it will tell you what to install manually.
+
+---
+
+## Manual Installation
+
 ## Prerequisites
 
 | Requirement | Version | How to Get It |
