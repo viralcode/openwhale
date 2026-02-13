@@ -92,6 +92,9 @@ export async function initWhatsApp(options: {
         // Handle credentials update
         waSocket.ev.on("creds.update", saveCreds);
 
+        // Owner's real phone number extracted from sock.user.id on connection
+        let selfPhoneNumber = "";
+
         // Handle connection updates
         waSocket.ev.on("connection.update", (update) => {
             const { connection, lastDisconnect, qr } = update;
@@ -115,7 +118,15 @@ export async function initWhatsApp(options: {
                 isConnected = true;
                 isConnecting = false;
                 currentQRCode = null; // Clear QR when connected
-                owLogger.info("channel", "WhatsApp connected successfully");
+
+                // OpenClaw pattern (monitor.ts:68-69): extract the real phone number from sock.user.id
+                // sock.user.id is always the real phone JID (e.g. "14378762880:5@s.whatsapp.net")
+                // even on linked devices where remoteJid uses LID numbers.
+                const selfJid = waSocket?.user?.id || "";
+                const selfPhoneMatch = selfJid.match(/^(\d+)(?::\d+)?@/);
+                selfPhoneNumber = selfPhoneMatch ? selfPhoneMatch[1] : "";
+
+                owLogger.info("channel", "WhatsApp connected successfully", { selfJid, selfPhoneNumber: selfPhoneNumber || "(unknown)" });
                 console.log("\n✅ WhatsApp connected successfully!");
                 options.onConnected?.();
             }
@@ -189,31 +200,22 @@ export async function initWhatsApp(options: {
                     const from = msg.key.remoteJid?.replace("@s.whatsapp.net", "").replace("@lid", "") || "";
                     const effectiveTimestamp = msgTimestamp || Date.now() / 1000;
 
-                    // OpenClaw pattern (access-control.ts:120): skip fromMe ONLY for DMs to other people.
+                    // OpenClaw pattern (access-control.ts:54): skip fromMe ONLY for DMs to other people.
                     // When the conversation is with yourself (self-chat), fromMe messages ARE the owner
                     // talking to the AI — those must be processed.
+                    // Use selfPhoneNumber (from sock.user.id) which is ALWAYS the real phone number,
+                    // even on linked devices where remoteJid uses LID numbers.
                     if (msg.key.fromMe) {
-                        // Primary: compare remoteJid with sock.user.id (works for both LID and phone JIDs)
-                        // Baileys knows the connected user's JID regardless of LID vs phone format.
-                        const selfJid = waSocket?.user?.id;
-                        const remoteJid = msg.key.remoteJid || "";
-                        // Normalize: strip :XX device suffix from selfJid for comparison
-                        // e.g. "14378762880:12@s.whatsapp.net" → "14378762880@s.whatsapp.net"
-                        const selfNormalized = selfJid?.replace(/:\d+@/, "@") || "";
-                        const isSelfChat = selfNormalized && remoteJid === selfNormalized;
-
-                        // Fallback: also check owner number digits in case JID formats differ
-                        const ownerNum = process.env.WHATSAPP_OWNER_NUMBER?.replace(/[^0-9]/g, "") || "";
                         const fromDigits = from.replace(/[^0-9]/g, "");
-                        const isOwnerDigitMatch = ownerNum && fromDigits.includes(ownerNum);
+                        const isSelfChat = selfPhoneNumber && fromDigits.includes(selfPhoneNumber);
 
-                        if (!isSelfChat && !isOwnerDigitMatch) {
-                            owLogger.debug("channel", "WhatsApp skipping outbound to other contact", { messageId, from, preview: text.slice(0, 40) });
+                        if (!isSelfChat) {
+                            owLogger.debug("channel", "WhatsApp skipping outbound to other contact", { messageId, from, selfPhoneNumber, preview: text.slice(0, 40) });
                             markMessageProcessed(messageId, "outbound", from, { content: text });
                             continue;
                         }
                         // Self-chat fromMe: owner is talking to AI, let it through
-                        owLogger.info("channel", "WhatsApp self-chat message (owner→AI)", { messageId, from, selfJid: selfNormalized, isSelfChat, isOwnerDigitMatch, preview: text.slice(0, 40) });
+                        owLogger.info("channel", "WhatsApp self-chat message (owner→AI)", { messageId, from, preview: text.slice(0, 40) });
                     }
 
                     owLogger.info("channel", `WhatsApp message received`, { from, fromMe: msg.key.fromMe, messageId, preview: text.slice(0, 60), pushName: msg.pushName || null });
