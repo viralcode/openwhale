@@ -3,7 +3,7 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 WORKDIR /app
 
 # Install build dependencies for native modules (better-sqlite3, node-llama-cpp)
-RUN apk add --no-cache python3 make g++ curl
+RUN apk add --no-cache python3 make g++ curl git
 
 # Install dependencies
 FROM base AS deps
@@ -16,6 +16,9 @@ RUN pnpm approve-builds || true
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+RUN mkdir -p drizzle extensions
+# Generate drizzle migrations before building
+RUN pnpm run db:generate || true
 RUN pnpm build
 
 # Production
@@ -26,6 +29,12 @@ ENV NODE_ENV=production
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-lock.yaml ./
+
+# Rebuild native modules for this specific Alpine/Node environment
+RUN cd /app/node_modules/.pnpm/better-sqlite3@12.8.0/node_modules/better-sqlite3 && \
+    npm rebuild better-sqlite3 --build-from-source || \
+    (npm install --ignore-scripts=false && node-pre-gyp install --fallback-to-build) || true
 
 # Copy dashboard static assets (CSS + JS served at runtime)
 COPY --from=builder /app/src/dashboard/style.css ./dist/dashboard/
@@ -33,9 +42,9 @@ COPY --from=builder /app/src/dashboard/main.js ./dist/dashboard/
 
 # Copy runtime directories
 COPY --from=builder /app/skills ./skills
-COPY --from=builder /app/extensions ./extensions
+# extensions dir may not exist - create it if needed
+RUN mkdir -p /app/extensions
 COPY --from=builder /app/.env.example ./.env.example
-COPY --from=builder /app/drizzle ./drizzle
 
 # Create data and config directories
 RUN mkdir -p /app/data /app/config /app/.openwhale

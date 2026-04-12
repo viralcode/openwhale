@@ -21,6 +21,12 @@
   <strong>☁️ Managed Hosting</strong> — Coming soon
 </p>
 
+<p align="center">
+  <a href="https://railway.com/deploy/Z0aFDq">
+    <img src="https://railway.com/button.svg" alt="Deploy on Railway" height="44" />
+  </a>
+</p>
+
 ---
 
 ## What is OpenWhale?
@@ -32,6 +38,16 @@ Other AI assistants chat. OpenWhale **does**. It deploys autonomous agent swarms
 <p align="center">
   <img src="images/mainpage.png" alt="OpenWhale Dashboard" width="800" />
 </p>
+
+---
+
+## ☁️ One-Click Cloud Deploy
+
+Deploy OpenWhale to the cloud in seconds — no local setup required:
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/Z0aFDq)
+
+After deploying, open your Railway URL + `/dashboard` → add your API keys → scan WhatsApp QR code.
 
 ---
 
